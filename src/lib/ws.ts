@@ -33,13 +33,29 @@ class RemoteClient {
   private reconnectTimer: number | null = null;
   private forceClose = false;
   private currentEndpoint: 'cloud' | 'lan' | null = null;
+  private alternateNext = false;
   private authTimer: number | null = null;
   private pending?: PairParams;
 
   // ── Public API ───────────────────────────────────────────────────
 
   async connect(): Promise<void> {
+    // Start from a clean slate — /live may call this right after /pair
+    // finished, leaving a still-open socket and a pending reconnect timer.
+    this.forceClose = true;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.ws) {
+      try { this.ws.close(); } catch { /* ignore */ }
+      this.ws = null;
+    }
     this.forceClose = false;
+    this.currentEndpoint = null;
+    this.alternateNext = false;
+    this.backoffIdx = 0;
+
     const creds = await loadCredentials();
     if (!creds) {
       connStatus.set('idle');
@@ -96,12 +112,17 @@ class RemoteClient {
   }
 
   private pickEndpoint(creds: Credentials): { host: string; kind: 'cloud' | 'lan' } | null {
-    // Prefer the one we weren't just on. Fall back to the other.
-    if (this.currentEndpoint === 'cloud' && creds.lan_host) {
-      return { host: creds.lan_host, kind: 'lan' };
-    }
-    if (this.currentEndpoint === 'lan' && creds.cloud_host) {
-      return { host: creds.cloud_host, kind: 'cloud' };
+    // Alternation is *only* valuable after a failure on the current endpoint
+    // (so we can try the other one). On a fresh connect — or after a successful
+    // one — always prefer cloud, since LAN is unreachable off-network.
+    if (this.alternateNext) {
+      this.alternateNext = false;
+      if (this.currentEndpoint === 'cloud' && creds.lan_host) {
+        return { host: creds.lan_host, kind: 'lan' };
+      }
+      if (this.currentEndpoint === 'lan' && creds.cloud_host) {
+        return { host: creds.cloud_host, kind: 'cloud' };
+      }
     }
     if (creds.cloud_host) return { host: creds.cloud_host, kind: 'cloud' };
     if (creds.lan_host) return { host: creds.lan_host, kind: 'lan' };
@@ -229,9 +250,10 @@ class RemoteClient {
     if (this.forceClose) return;
     const delay = RECONNECT_BACKOFF_MS[Math.min(this.backoffIdx, RECONNECT_BACKOFF_MS.length - 1)];
     this.backoffIdx += 1;
+    // Every other retry: try the *other* endpoint
+    this.alternateNext = this.backoffIdx % 2 === 0;
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
-      // Alternate endpoint if both are available
       loadCredentials().then((fresh) => {
         if (fresh) this.openSocket(fresh, null);
       });
