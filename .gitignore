@@ -1,0 +1,11 @@
+node_modules
+.svelte-kit
+build
+dist
+.DS_Store
+.env
+.env.*
+!.env.example
+.vercel
+.vite
+tests/__pycache__
