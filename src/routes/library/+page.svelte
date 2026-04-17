@@ -4,7 +4,7 @@
   import { base } from '$app/paths';
   import { loadCredentials } from '$lib/db';
   import { remote } from '$lib/ws';
-  import { syncNow, hydrateFromCache } from '$lib/sync';
+  import { syncNow } from '$lib/sync';
   import {
     connStatus,
     isViewOnly,
@@ -18,25 +18,29 @@
   let query = $state('');
   let searchSlides = $state(false);
   let previewSong = $state<LibrarySong | null>(null);
-  let hasLibrary = $state(false);
   let debounceTimer: number | null = null;
 
+  // Layout already calls hydrateFromCache() on startup — no need to repeat here.
   onMount(async () => {
     const creds = await loadCredentials();
     if (!creds?.device_token) {
       goto(`${base}/`);
       return;
     }
-    await hydrateFromCache();
-    hasLibrary = ($songsStore?.length ?? 0) > 0;
     await remote.connect();
   });
 
-  // Sync once the socket reaches "open".
+  // Derive from store directly so it stays accurate across tab switches.
+  const hasLibrary = $derived(($songsStore?.length ?? 0) > 0);
+
+  // Sync when connection opens, but throttle to avoid syncing on every tab visit.
+  let lastSyncAt = 0;
   $effect(() => {
-    if ($connStatus === 'open') void syncNow().then(() => {
-      hasLibrary = ($songsStore?.length ?? 0) > 0;
-    });
+    if ($connStatus !== 'open') return;
+    const now = Date.now();
+    if (now - lastSyncAt < 30_000) return;
+    lastSyncAt = now;
+    void syncNow();
   });
 
   // Debounce the input so huge libraries don't re-filter per keystroke.

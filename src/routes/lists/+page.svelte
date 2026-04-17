@@ -2,9 +2,8 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
-  import { loadCredentials, addPendingMutation } from '$lib/db';
+  import { loadCredentials, addPendingMutation, putLists } from '$lib/db';
   import { remote } from '$lib/ws';
-  import { hydrateFromCache } from '$lib/sync';
   import { get } from 'svelte/store';
   import {
     connStatus, isViewOnly, listsStore, songsStore,
@@ -18,13 +17,13 @@
   let dragFrom = $state<number | null>(null);
   let dragOver = $state<number | null>(null);
 
+  // Layout already calls hydrateFromCache() on startup — no need to repeat here.
   onMount(async () => {
     const creds = await loadCredentials();
     if (!creds?.device_token) {
       goto(`${base}/`);
       return;
     }
-    await hydrateFromCache();
     await remote.connect();
   });
 
@@ -52,21 +51,15 @@
     if (type === 'list.create') {
       listsStore.update((ls) => [...ls, { name: payload.name, songs: [] }]);
       selectedName = payload.name;
-      return true;
-    }
-    if (type === 'list.delete') {
+    } else if (type === 'list.delete') {
       listsStore.update((ls) => ls.filter((l) => l.name !== payload.name));
       if (selectedName === payload.name) selectedName = null;
-      return true;
-    }
-    if (type === 'list.rename') {
+    } else if (type === 'list.rename') {
       listsStore.update((ls) =>
         ls.map((l) => (l.name === payload.old ? { ...l, name: payload.new } : l))
       );
       if (selectedName === payload.old) selectedName = payload.new;
-      return true;
-    }
-    if (type === 'list.add_song') {
+    } else if (type === 'list.add_song') {
       const song = get(songsStore).find((s) => s.path === payload.song_path);
       if (!song) return false;
       listsStore.update((ls) =>
@@ -76,9 +69,7 @@
             : l
         )
       );
-      return true;
-    }
-    if (type === 'list.remove_song') {
+    } else if (type === 'list.remove_song') {
       listsStore.update((ls) =>
         ls.map((l) =>
           l.name === payload.list_name
@@ -86,10 +77,13 @@
             : l
         )
       );
-      return true;
+    } else {
+      // list.load_to_queue and list.reorder cannot be applied offline
+      return false;
     }
-    // list.load_to_queue and list.reorder cannot be applied offline
-    return false;
+    // Persist the updated lists to IndexedDB so changes survive tab switches and restarts.
+    void putLists(get(listsStore));
+    return true;
   }
 
   function selectList(name: string) {
