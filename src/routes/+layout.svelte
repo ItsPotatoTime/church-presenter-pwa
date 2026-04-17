@@ -3,14 +3,16 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { base } from '$app/paths';
-  import { loadCredentials } from '$lib/db';
+  import { getOrCreateDeviceId, loadCredentials } from '$lib/db';
   import { hydrateFromCache } from '$lib/sync';
+  import { myDeviceId, isViewOnly } from '$lib/stores';
 
   let { children } = $props();
   let paired = $state(false);
   let ready = $state(false);
 
   onMount(async () => {
+    myDeviceId.set(await getOrCreateDeviceId());
     const creds = await loadCredentials();
     paired = !!creds && !!creds.device_token;
     if (paired) {
@@ -32,6 +34,7 @@
     { href: `${base}/library/`, label: 'Library', icon: '🎵', key: 'library' },
     { href: `${base}/queue/`, label: 'Queue', icon: '≡', key: 'queue' },
     { href: `${base}/live/`, label: 'Live', icon: '●', key: 'live' },
+    { href: `${base}/lists/`, label: 'Lists', icon: '☰', key: 'lists' },
     { href: `${base}/settings/`, label: 'Settings', icon: '⚙', key: 'settings' },
   ];
 
@@ -41,7 +44,13 @@
   }
 </script>
 
-<main class:has-tabs={showTabs()}>
+{#if showTabs() && $isViewOnly}
+  <div class="view-only-banner" role="status">
+    View-only — another phone has exclusive control
+  </div>
+{/if}
+
+<main class:has-tabs={showTabs()} class:has-banner={showTabs() && $isViewOnly}>
   {@render children()}
 </main>
 
@@ -69,6 +78,22 @@
   }
   main.has-tabs {
     padding-bottom: calc(72px + env(safe-area-inset-bottom, 0));
+  }
+  main.has-banner {
+    padding-top: 44px;
+  }
+
+  .view-only-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 40;
+    background: var(--accent);
+    color: #fff;
+    text-align: center;
+    padding: 10px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
   }
 
   .tabbar {

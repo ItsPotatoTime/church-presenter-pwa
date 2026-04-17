@@ -7,15 +7,19 @@
   import { syncNow, hydrateFromCache } from '$lib/sync';
   import {
     connStatus,
+    isViewOnly,
     songsStore,
     syncStatus,
   } from '$lib/stores';
   import type { LibrarySong } from '$lib/protocol';
+  import { normalize } from '$lib/search';
 
+  let rawQuery = $state('');
   let query = $state('');
   let searchSlides = $state(false);
   let previewSong = $state<LibrarySong | null>(null);
   let hasLibrary = $state(false);
+  let debounceTimer: number | null = null;
 
   onMount(async () => {
     const creds = await loadCredentials();
@@ -26,7 +30,6 @@
     await hydrateFromCache();
     hasLibrary = ($songsStore?.length ?? 0) > 0;
     await remote.connect();
-    // Wait a tick for ws to open, then sync; if closed, the button lets the user retry.
   });
 
   // Sync once the socket reaches "open".
@@ -36,20 +39,57 @@
     });
   });
 
-  const filtered = $derived.by(() => {
-    const all = $songsStore;
-    const q = query.trim().toLowerCase();
-    if (!q) return all;
-    return all.filter((s) => {
-      if (s.name.toLowerCase().includes(q)) return true;
-      if (s.folder.toLowerCase().includes(q)) return true;
+  // Debounce the input so huge libraries don't re-filter per keystroke.
+  $effect(() => {
+    const v = rawQuery;
+    if (debounceTimer !== null) clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(() => { query = v; }, 120);
+    return () => {
+      if (debounceTimer !== null) clearTimeout(debounceTimer);
+    };
+  });
+
+  // Pre-normalize name/folder once per library snapshot; pre-normalize slides
+  // lazily on first use of slide search.
+  type Entry = {
+    s: LibrarySong;
+    nName: string;
+    nFolder: string;
+    nSlides: string[] | null;
+  };
+  const index = $derived.by<Entry[]>(() =>
+    $songsStore.map((s) => ({
+      s,
+      nName: normalize(s.name),
+      nFolder: normalize(s.folder),
+      nSlides: null,
+    })),
+  );
+  // Keep slide-normalization caches alive across filter runs (mutates entries — safe,
+  // not tracked as reactive state).
+  function slidesFor(e: Entry): string[] {
+    if (e.nSlides) return e.nSlides;
+    e.nSlides = (e.s.slide_texts ?? []).map(normalize);
+    return e.nSlides;
+  }
+
+  const filtered = $derived.by<LibrarySong[]>(() => {
+    const q = normalize(query);
+    if (!q) return index.map((e) => e.s);
+    const out: LibrarySong[] = [];
+    for (const e of index) {
+      if (e.nName.includes(q) || e.nFolder.includes(q)) {
+        out.push(e.s);
+        continue;
+      }
       if (searchSlides) {
-        for (const t of s.slide_texts ?? []) {
-          if (t.toLowerCase().includes(q)) return true;
+        const ns = slidesFor(e);
+        for (const t of ns) {
+          if (t.includes(q)) { out.push(e.s); break; }
         }
       }
-      return false;
-    });
+    }
+    return out;
   });
 
   const grouped = $derived.by(() => {
@@ -88,7 +128,7 @@
   <input
     type="text"
     placeholder="Search songs…"
-    bind:value={query}
+    bind:value={rawQuery}
     autocomplete="off"
     autocapitalize="off"
     autocorrect="off"
@@ -126,7 +166,7 @@
           class="add"
           aria-label="Add to queue"
           onclick={() => addToQueue(s.path)}
-          disabled={$connStatus !== 'open'}
+          disabled={$connStatus !== 'open' || $isViewOnly}
         >＋</button>
       </div>
     {/each}
@@ -164,7 +204,7 @@
       <button
         class="accent fw"
         onclick={() => { if (previewSong) addToQueue(previewSong.path); closePreview(); }}
-        disabled={$connStatus !== 'open'}
+        disabled={$connStatus !== 'open' || $isViewOnly}
       >
         ＋ Add to queue
       </button>

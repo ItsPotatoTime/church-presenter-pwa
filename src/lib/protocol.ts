@@ -24,6 +24,7 @@ export interface AuthOk {
   device_token: string; // empty string on reconnect
   server_name: string;
   version: string;
+  exclusive_device_id?: string | null;
 }
 
 export interface AuthFail {
@@ -95,6 +96,17 @@ export interface SyncDelta {
   server_ts: number;
 }
 
+// ── Lists broadcast (server → client) ───────────────────────────────
+export interface ListsState {
+  lists: LibraryList[];
+}
+
+// ── Exclusive mode (server → client) ─────────────────────────────────
+export interface ExclusiveChanged {
+  exclusive_device_id: string | null;
+  device_name: string | null;
+}
+
 // ── Commands (client → server) ───────────────────────────────────────
 export type ClientCommand =
   | { type: 'live.next' }
@@ -102,9 +114,17 @@ export type ClientCommand =
   | { type: 'live.blank' }
   | { type: 'live.freeze' }
   | { type: 'live.goto'; payload: { song_index: number; slide_index: number } }
+  | { type: 'live.follow'; payload: { enabled: boolean } }
   | { type: 'queue.add'; payload: { song_path: string; position?: number } }
   | { type: 'queue.remove'; payload: { position: number } }
   | { type: 'queue.reorder'; payload: { from: number; to: number } }
   | { type: 'queue.clear' }
+  | { type: 'list.create'; payload: { name: string } }
+  | { type: 'list.delete'; payload: { name: string } }
+  | { type: 'list.rename'; payload: { old: string; new: string } }
+  | { type: 'list.add_song'; payload: { list_name: string; song_path: string; position?: number } }
+  | { type: 'list.remove_song'; payload: { list_name: string; position: number } }
+  | { type: 'list.reorder'; payload: { list_name: string; from: number; to: number } }
+  | { type: 'list.load_to_queue'; payload: { list_name: string } }
   | { type: 'sync.request'; id?: string; payload: { since_ts: number } }
   | { type: 'device.rename'; payload: { new_name: string } };

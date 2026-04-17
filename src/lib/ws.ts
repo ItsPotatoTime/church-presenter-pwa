@@ -10,6 +10,8 @@ import type {
   AuthOk,
   ClientCommand,
   Envelope,
+  ExclusiveChanged,
+  ListsState,
   LiveState,
   QueueState,
 } from './protocol';
@@ -24,6 +26,9 @@ import {
   connEndpoint,
   connError,
   connStatus,
+  exclusiveDeviceId,
+  exclusiveDeviceName,
+  listsStore,
   liveState,
   queueState,
 } from './stores';
@@ -223,6 +228,8 @@ class RemoteClient {
           };
           void saveCredentials(finalCreds);
         }
+        exclusiveDeviceId.set(p.exclusive_device_id ?? null);
+        exclusiveDeviceName.set(null);
         connStatus.set('open');
         connError.set(null);
         this.backoffIdx = 0;
@@ -250,6 +257,19 @@ class RemoteClient {
 
       if (msg.type === 'queue.state') {
         queueState.set(msg.payload as QueueState);
+        return;
+      }
+
+      if (msg.type === 'lists.state') {
+        const p = msg.payload as ListsState;
+        listsStore.set(p?.lists ?? []);
+        return;
+      }
+
+      if (msg.type === 'device.exclusive_changed') {
+        const p = msg.payload as ExclusiveChanged;
+        exclusiveDeviceId.set(p.exclusive_device_id ?? null);
+        exclusiveDeviceName.set(p.device_name ?? null);
         return;
       }
 

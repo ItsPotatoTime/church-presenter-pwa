@@ -4,7 +4,10 @@
   import { base } from '$app/paths';
   import { loadCredentials } from '$lib/db';
   import { remote } from '$lib/ws';
-  import { connStatus, connEndpoint, connError, liveState } from '$lib/stores';
+  import {
+    connStatus, connEndpoint, connError, liveState,
+    isViewOnly, liveFollowEnabled,
+  } from '$lib/stores';
 
   let textVisible = $state(true);
   let fontBoost = $state(1.0); // local-only visual zoom
@@ -17,6 +20,24 @@
     }
     await remote.connect();
   });
+
+  // Push live.follow state to the server whenever the local toggle or
+  // connection state changes. Guard on `open` so we don't send before auth.
+  let lastSentFollow: boolean | null = null;
+  $effect(() => {
+    const enabled = $liveFollowEnabled;
+    if ($connStatus !== 'open') {
+      lastSentFollow = null;
+      return;
+    }
+    if (lastSentFollow === enabled) return;
+    lastSentFollow = enabled;
+    remote.send({ type: 'live.follow', payload: { enabled } });
+  });
+
+  function toggleFollow() {
+    liveFollowEnabled.update((v) => !v);
+  }
 
   onDestroy(() => {
     // Don't disconnect on page nav — user is still using the app.
@@ -72,6 +93,15 @@
       </div>
     </div>
     <div class="pills">
+      <button
+        class="pill follow-btn"
+        class:off={!$liveFollowEnabled}
+        onclick={toggleFollow}
+        aria-pressed={$liveFollowEnabled}
+        title={$liveFollowEnabled ? 'Following live (tap to stop)' : 'Not following (tap to follow)'}
+      >
+        {$liveFollowEnabled ? '👁 Follow' : '🚫 No follow'}
+      </button>
       <span class="pill {statusClass}">{statusLabel}</span>
       {#if $connEndpoint}<span class="pill">{$connEndpoint}</span>{/if}
     </div>
@@ -98,12 +128,12 @@
 </section>
 
 <section class="controls">
-  <button class="big" onclick={prev} aria-label="Previous">◀ Prev</button>
-  <button class="big accent" onclick={next} aria-label="Next">Next ▶</button>
+  <button class="big" onclick={prev} aria-label="Previous" disabled={$isViewOnly}>◀ Prev</button>
+  <button class="big accent" onclick={next} aria-label="Next" disabled={$isViewOnly}>Next ▶</button>
 </section>
 
 <section class="row">
-  <button onclick={blank}>⬛ Blank</button>
+  <button onclick={blank} disabled={$isViewOnly}>⬛ Blank</button>
   <button onclick={() => (textVisible = !textVisible)}>
     {textVisible ? 'Hide text' : 'Show text'}
   </button>
@@ -194,4 +224,14 @@
   .pill.ok   { color: var(--success); border-color: var(--success); }
   .pill.warn { color: var(--warning); border-color: var(--warning); }
   .pill.err  { color: var(--danger);  border-color: var(--danger); }
+  button.pill.follow-btn {
+    cursor: pointer;
+    background: transparent;
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+  button.pill.follow-btn.off {
+    color: var(--text-secondary);
+    border-color: var(--border);
+  }
 </style>

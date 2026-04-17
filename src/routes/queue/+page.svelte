@@ -4,7 +4,7 @@
   import { base } from '$app/paths';
   import { loadCredentials } from '$lib/db';
   import { remote } from '$lib/ws';
-  import { connStatus, queueState } from '$lib/stores';
+  import { connStatus, isViewOnly, queueState } from '$lib/stores';
 
   let dragFrom = $state<number | null>(null);
   let dragOver = $state<number | null>(null);
@@ -20,6 +20,7 @@
 
   function send(cmd: any) {
     if ($connStatus !== 'open') return;
+    if ($isViewOnly) return; // exclusive mode — read-only
     remote.send(cmd);
   }
 
@@ -78,8 +79,12 @@
     </div>
   </div>
   <div class="actions">
-    <a class="btn ghost" href="{base}/library/">＋ Add</a>
-    <button class="ghost" onclick={clearAll} disabled={!$queueState?.items.length}>Clear</button>
+    <a class="btn ghost" href="{base}/library/" class:disabled={$isViewOnly}>＋ Add</a>
+    <button
+      class="ghost"
+      onclick={clearAll}
+      disabled={!$queueState?.items.length || $isViewOnly}
+    >Clear</button>
   </div>
 </header>
 
@@ -91,18 +96,18 @@
         class:playing={$queueState.playing_song_index === i}
         class:current={$queueState.current_song_index === i && $queueState.playing_song_index !== i}
         class:drop={dragOver === i}
-        draggable={true}
+        draggable={!$isViewOnly}
         ondragstart={(e) => onDragStart(e, i)}
         ondragover={(e) => onDragOver(e, i)}
         ondrop={(e) => onDrop(e, i)}
         ondragend={onDragEnd}
       >
         <span class="grip" aria-hidden="true">⋮⋮</span>
-        <button class="label" onclick={() => tapJump(i)}>
+        <button class="label" onclick={() => tapJump(i)} disabled={$isViewOnly}>
           <div class="name">{item.name || 'Untitled'}</div>
           {#if item.folder}<div class="muted small">{item.folder}</div>{/if}
         </button>
-        <button class="rm" aria-label="Remove" onclick={() => remove(i)}>✕</button>
+        <button class="rm" aria-label="Remove" onclick={() => remove(i)} disabled={$isViewOnly}>✕</button>
       </li>
     {/each}
   </ul>
@@ -157,4 +162,8 @@
     background: transparent; color: var(--text-secondary); border-color: var(--border);
   }
   .rm:hover { color: var(--danger); border-color: var(--danger); }
+  a.btn.disabled {
+    pointer-events: none;
+    opacity: 0.45;
+  }
 </style>

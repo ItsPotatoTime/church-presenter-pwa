@@ -13,6 +13,10 @@
     connStatus,
     connEndpoint,
     connError,
+    exclusiveDeviceId,
+    exclusiveDeviceName,
+    isViewOnly,
+    myDeviceId,
     syncStatus,
     songsStore,
   } from '$lib/stores';
@@ -33,6 +37,13 @@
 
   async function unpair() {
     if (!confirm('Unpair this phone? You will need a new QR to reconnect.')) return;
+    await remote.unpair();
+    goto(`${base}/`);
+  }
+
+  async function repair() {
+    // Drop the current token but keep device_id, cloud_host, lan_host so the
+    // next QR can simply refresh the session without the user retyping anything.
     await remote.unpair();
     goto(`${base}/`);
   }
@@ -96,11 +107,44 @@
 </section>
 
 <section class="panel" style="margin-top:12px;">
+  <h2>Control mode</h2>
+  <div class="row">
+    <span class="muted">Exclusive</span>
+    <span>
+      {#if $exclusiveDeviceId === null}
+        Off — all phones can control
+      {:else if $exclusiveDeviceId === $myDeviceId}
+        This phone has exclusive control
+      {:else}
+        Held by {$exclusiveDeviceName ?? 'another phone'}
+      {/if}
+    </span>
+  </div>
+  <p class="muted small">
+    Exclusive mode is toggled from the desktop's Phones dialog
+    (📱 Phone Remote → Manage phones…).
+  </p>
+  {#if $isViewOnly}
+    <p class="muted small">
+      Your commands are currently blocked. You can still browse the library,
+      queue, and receive live updates.
+    </p>
+  {/if}
+</section>
+
+<section class="panel" style="margin-top:12px;">
   <h2>Device</h2>
   <div class="row">
     <span class="muted">Name</span>
     <span>{creds?.device_name ?? '—'}</span>
   </div>
+  <div class="row">
+    <span class="muted">Device ID</span>
+    <span class="mono">{$myDeviceId ?? '—'}</span>
+  </div>
+  <button class="ghost fw" onclick={repair}>
+    Re-pair (scan new QR)
+  </button>
   <button class="ghost fw" onclick={unpair}>Forget this server</button>
 </section>
 
@@ -118,6 +162,8 @@
   .row:last-of-type { border-bottom: none; }
   .row.err { color: var(--danger); }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+  .small { font-size: 12px; }
+  p.muted { margin: 6px 0 0; }
 
   button.fw { width: 100%; padding: 12px; margin-top: 12px; }
   button.ghost {
