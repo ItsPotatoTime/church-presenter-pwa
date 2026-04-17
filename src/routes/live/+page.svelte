@@ -1,0 +1,197 @@
+<script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
+  import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
+  import { loadCredentials } from '$lib/db';
+  import { remote } from '$lib/ws';
+  import { connStatus, connEndpoint, connError, liveState } from '$lib/stores';
+
+  let textVisible = $state(true);
+  let fontBoost = $state(1.0); // local-only visual zoom
+
+  onMount(async () => {
+    const creds = await loadCredentials();
+    if (!creds || !creds.device_token) {
+      goto(`${base}/`);
+      return;
+    }
+    await remote.connect();
+  });
+
+  onDestroy(() => {
+    // Don't disconnect on page nav — user is still using the app.
+  });
+
+  function next()  { remote.send({ type: 'live.next' }); }
+  function prev()  { remote.send({ type: 'live.prev' }); }
+  function blank() { remote.send({ type: 'live.blank' }); }
+
+  async function unpair() {
+    if (!confirm('Unpair this phone? You will need a new QR to reconnect.')) return;
+    await remote.unpair();
+    goto(`${base}/`);
+  }
+
+  const statusLabel = $derived(
+    ({
+      idle: 'Idle',
+      connecting: 'Connecting…',
+      authenticating: 'Authenticating…',
+      open: 'Live',
+      error: 'Error',
+      closed: 'Reconnecting…',
+    } as const)[$connStatus]
+  );
+
+  const statusClass = $derived(
+    ({
+      idle: '',
+      connecting: 'warn',
+      authenticating: 'warn',
+      open: 'ok',
+      error: 'err',
+      closed: 'warn',
+    } as const)[$connStatus]
+  );
+
+  const currentSlideText = $derived.by(() => {
+    const s = $liveState;
+    if (!s || !s.slides || s.slide_index < 0) return '';
+    return s.slides[s.slide_index] ?? '';
+  });
+</script>
+
+<header>
+  <div class="hrow">
+    <div>
+      <div class="song">{$liveState?.song_name ?? '— no song —'}</div>
+      <div class="muted idx">
+        {#if $liveState && $liveState.slide_index >= 0}
+          Slide {$liveState.slide_index + 1} / {$liveState.slides.length}
+        {/if}
+      </div>
+    </div>
+    <div class="pills">
+      <span class="pill {statusClass}">{statusLabel}</span>
+      {#if $connEndpoint}<span class="pill">{$connEndpoint}</span>{/if}
+    </div>
+  </div>
+  {#if $connError && $connStatus !== 'open'}
+    <div class="muted err">{$connError}</div>
+  {/if}
+</header>
+
+<section class="slide-box" class:blanked={$liveState?.blanked}>
+  {#if $liveState?.blanked}
+    <div class="blank-label">● BLACKED OUT</div>
+  {:else if textVisible && currentSlideText}
+    <div class="slide-text" style="font-size: {Math.round(18 * fontBoost)}px">
+      {#each currentSlideText.split('\n') as line}
+        <div>{line || '\u00A0'}</div>
+      {/each}
+    </div>
+  {:else if !textVisible}
+    <div class="muted">Text hidden on this phone</div>
+  {:else}
+    <div class="muted">Waiting for slide…</div>
+  {/if}
+</section>
+
+<section class="controls">
+  <button class="big" onclick={prev} aria-label="Previous">◀ Prev</button>
+  <button class="big accent" onclick={next} aria-label="Next">Next ▶</button>
+</section>
+
+<section class="row">
+  <button onclick={blank}>⬛ Blank</button>
+  <button onclick={() => (textVisible = !textVisible)}>
+    {textVisible ? 'Hide text' : 'Show text'}
+  </button>
+</section>
+
+<section class="row">
+  <button onclick={() => (fontBoost = Math.max(0.6, fontBoost - 0.15))}>A−</button>
+  <span class="muted" style="align-self:center; min-width:50px; text-align:center;">
+    {Math.round(fontBoost * 100)}%
+  </span>
+  <button onclick={() => (fontBoost = Math.min(2.4, fontBoost + 0.15))}>A+</button>
+</section>
+
+<footer>
+  <button class="ghost" onclick={unpair}>Unpair this phone</button>
+</footer>
+
+<style>
+  header { padding: 4px 0 10px; }
+  .hrow {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+  }
+  .song { font-size: 16px; font-weight: 600; }
+  .idx { font-size: 12px; margin-top: 2px; }
+  .pills { display: flex; gap: 6px; }
+  .err { color: var(--danger); font-size: 12px; margin-top: 4px; }
+
+  .slide-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-top: 12px;
+    min-height: 50vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    transition: background 120ms;
+  }
+  .slide-box.blanked {
+    background: #000;
+    border-color: var(--accent);
+  }
+  .blank-label { color: var(--accent); font-weight: 700; letter-spacing: 2px; }
+  .slide-text {
+    line-height: 1.5;
+    font-weight: 500;
+    color: var(--text-primary);
+    max-width: 100%;
+    word-break: break-word;
+  }
+
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .big {
+    padding: 26px 10px;
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  .row {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+  }
+  .row > button { flex: 1; }
+
+  footer { margin-top: 24px; text-align: center; }
+  button.ghost {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-secondary);
+  }
+  .pill {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  .pill.ok   { color: var(--success); border-color: var(--success); }
+  .pill.warn { color: var(--warning); border-color: var(--warning); }
+  .pill.err  { color: var(--danger);  border-color: var(--danger); }
+</style>
