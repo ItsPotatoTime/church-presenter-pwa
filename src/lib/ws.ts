@@ -53,6 +53,24 @@ class RemoteClient {
   private alternateNext = false;
   private authTimer: number | null = null;
 
+  constructor() {
+    // iOS Safari kills WebSockets when the PWA moves to background.
+    // On return to foreground, reconnect immediately instead of waiting for the backoff timer.
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState !== 'visible') return;
+        if (this.forceClose) return;
+        if (this.ws && this.ws.readyState !== WebSocket.CLOSED) return;
+        // Cancel any pending backoff timer so we reconnect now, not after the delay.
+        if (this.reconnectTimer !== null) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
+        void this.connect();
+      });
+    }
+  }
+
   // ── Public API ───────────────────────────────────────────────────
 
   async connect(): Promise<void> {
