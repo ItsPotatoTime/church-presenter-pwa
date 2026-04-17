@@ -2,9 +2,10 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
-  import { loadCredentials } from '$lib/db';
+  import { loadCredentials, addPendingMutation } from '$lib/db';
   import { remote } from '$lib/ws';
   import { hydrateFromCache } from '$lib/sync';
+  import { get } from 'svelte/store';
   import {
     connStatus, isViewOnly, listsStore, songsStore,
   } from '$lib/stores';
@@ -33,10 +34,62 @@
       : ($listsStore.find((l) => l.name === selectedName) ?? null)
   );
 
-  function send(cmd: any) {
-    if ($connStatus !== 'open') return;
+  function send(cmd: { type: string; payload?: any }) {
     if ($isViewOnly) return;
-    remote.send(cmd);
+    if ($connStatus !== 'open') {
+      if (!applyLocally(cmd)) {
+        alert('Connect to the desktop to perform this action.');
+        return;
+      }
+      void addPendingMutation(cmd);
+      return;
+    }
+    remote.send(cmd as any);
+  }
+
+  function applyLocally(cmd: { type: string; payload?: any }): boolean {
+    const { type, payload } = cmd;
+    if (type === 'list.create') {
+      listsStore.update((ls) => [...ls, { name: payload.name, songs: [] }]);
+      selectedName = payload.name;
+      return true;
+    }
+    if (type === 'list.delete') {
+      listsStore.update((ls) => ls.filter((l) => l.name !== payload.name));
+      if (selectedName === payload.name) selectedName = null;
+      return true;
+    }
+    if (type === 'list.rename') {
+      listsStore.update((ls) =>
+        ls.map((l) => (l.name === payload.old ? { ...l, name: payload.new } : l))
+      );
+      if (selectedName === payload.old) selectedName = payload.new;
+      return true;
+    }
+    if (type === 'list.add_song') {
+      const song = get(songsStore).find((s) => s.path === payload.song_path);
+      if (!song) return false;
+      listsStore.update((ls) =>
+        ls.map((l) =>
+          l.name === payload.list_name
+            ? { ...l, songs: [...l.songs, { path: song.path, name: song.name, folder: song.folder }] }
+            : l
+        )
+      );
+      return true;
+    }
+    if (type === 'list.remove_song') {
+      listsStore.update((ls) =>
+        ls.map((l) =>
+          l.name === payload.list_name
+            ? { ...l, songs: l.songs.filter((_, i) => i !== payload.position) }
+            : l
+        )
+      );
+      return true;
+    }
+    // list.load_to_queue and list.reorder cannot be applied offline
+    return false;
   }
 
   function selectList(name: string) {
@@ -177,7 +230,7 @@
     <button class="ghost" onclick={openPicker} disabled={$isViewOnly || $songsStore.length === 0}>
       ＋ Add song
     </button>
-    <button class="accent" onclick={loadToQueue} disabled={$isViewOnly || selectedList.songs.length === 0}>
+    <button class="accent" onclick={loadToQueue} disabled={$isViewOnly || $connStatus !== 'open' || selectedList.songs.length === 0}>
       ▶ Load to queue
     </button>
   </section>

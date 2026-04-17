@@ -17,6 +17,8 @@ import type {
 } from './protocol';
 import {
   clearCredentials,
+  clearPendingMutations,
+  getPendingMutations,
   getOrCreateDeviceId,
   loadCredentials,
   saveCredentials,
@@ -160,9 +162,13 @@ class RemoteClient {
   }
 
   private pickEndpoint(creds: Credentials): { host: string; kind: 'cloud' | 'lan' } | null {
+    // ws:// is mixed content on HTTPS pages and will be blocked by modern browsers.
+    // Skip LAN (ws://) entirely when the page itself is served over HTTPS.
+    const pageIsHttps = typeof location !== 'undefined' && location.protocol === 'https:';
+
     if (this.alternateNext) {
       this.alternateNext = false;
-      if (this.currentEndpoint === 'cloud' && creds.lan_host) {
+      if (this.currentEndpoint === 'cloud' && creds.lan_host && !pageIsHttps) {
         return { host: creds.lan_host, kind: 'lan' };
       }
       if (this.currentEndpoint === 'lan' && creds.cloud_host) {
@@ -170,7 +176,7 @@ class RemoteClient {
       }
     }
     if (creds.cloud_host) return { host: creds.cloud_host, kind: 'cloud' };
-    if (creds.lan_host) return { host: creds.lan_host, kind: 'lan' };
+    if (creds.lan_host && !pageIsHttps) return { host: creds.lan_host, kind: 'lan' };
     return null;
   }
 
@@ -248,9 +254,23 @@ class RemoteClient {
         }
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
         exclusiveDeviceName.set(null);
-        connStatus.set('open');
-        connError.set(null);
         this.backoffIdx = 0;
+
+        // Flush any mutations queued while offline before marking connection open.
+        // Messages arrive at server in order, so mutations precede any sync request.
+        void (async () => {
+          try {
+            const mutations = await getPendingMutations();
+            for (const m of mutations) {
+              if (!isCurrent() || ws.readyState !== WebSocket.OPEN) return;
+              ws.send(JSON.stringify({ type: m.type, payload: m.payload }));
+            }
+            await clearPendingMutations();
+          } catch { /* ignore — stale mutations are harmless */ }
+          if (!isCurrent()) return;
+          connStatus.set('open');
+          connError.set(null);
+        })();
         return;
       }
 

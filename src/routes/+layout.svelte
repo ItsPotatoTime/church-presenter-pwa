@@ -61,7 +61,8 @@
         class="tab"
         class:active={isActive(t.href)}
         href={t.href}
-        data-sveltekit-preload-data="hover"
+        data-sveltekit-preload-data="tap"
+        data-sveltekit-preload-code="eager"
       >
         <span class="icon">{t.icon}</span>
         <span class="label">{t.label}</span>

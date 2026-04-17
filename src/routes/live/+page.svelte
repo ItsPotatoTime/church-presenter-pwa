@@ -10,7 +10,7 @@
   } from '$lib/stores';
 
   let textVisible = $state(true);
-  let fontBoost = $state(1.0); // local-only visual zoom
+  let fontBoost = $state(1.0); // local preview zoom only
 
   onMount(async () => {
     const creds = await loadCredentials();
@@ -21,23 +21,19 @@
     await remote.connect();
   });
 
-  // Push live.follow state to the server whenever the local toggle or
-  // connection state changes. Guard on `open` so we don't send before auth.
-  let lastSentFollow: boolean | null = null;
+  // Re-send live.follow whenever connection opens or toggle changes.
+  // No dedup guard: server resets the flag on disconnect so we must resend on every open.
   $effect(() => {
-    const enabled = $liveFollowEnabled;
-    if ($connStatus !== 'open') {
-      lastSentFollow = null;
-      return;
-    }
-    if (lastSentFollow === enabled) return;
-    lastSentFollow = enabled;
-    remote.send({ type: 'live.follow', payload: { enabled } });
+    if ($connStatus !== 'open') return;
+    remote.send({ type: 'live.follow', payload: { enabled: $liveFollowEnabled } });
   });
 
   function toggleFollow() {
     liveFollowEnabled.update((v) => !v);
   }
+
+  // What "Follow" does: when ON, this phone auto-updates to show the live slide.
+  // When OFF, the phone display freezes so the operator can read without it jumping.
 
   onDestroy(() => {
     // Don't disconnect on page nav — user is still using the app.
@@ -46,6 +42,15 @@
   function next()  { remote.send({ type: 'live.next' }); }
   function prev()  { remote.send({ type: 'live.prev' }); }
   function blank() { remote.send({ type: 'live.blank' }); }
+
+  function togglePresenting() {
+    remote.send({ type: 'live.toggle_present' });
+  }
+
+  function adjustFont(delta: number) {
+    fontBoost = Math.max(0.6, Math.min(2.4, fontBoost + delta));
+    remote.send({ type: 'live.font_size', payload: { delta: delta > 0 ? 1 : -1 } });
+  }
 
   async function unpair() {
     if (!confirm('Unpair this phone? You will need a new QR to reconnect.')) return;
@@ -80,6 +85,8 @@
     if (!s || !s.slides || s.slide_index < 0) return '';
     return s.slides[s.slide_index] ?? '';
   });
+
+  const presenting = $derived($liveState?.presenting ?? false);
 </script>
 
 <header>
@@ -98,9 +105,11 @@
         class:off={!$liveFollowEnabled}
         onclick={toggleFollow}
         aria-pressed={$liveFollowEnabled}
-        title={$liveFollowEnabled ? 'Following live (tap to stop)' : 'Not following (tap to follow)'}
+        title={$liveFollowEnabled
+          ? 'Following live — phone updates when slide changes (tap to freeze)'
+          : 'Frozen — phone stays on current slide (tap to follow again)'}
       >
-        {$liveFollowEnabled ? '👁 Follow' : '🚫 No follow'}
+        {$liveFollowEnabled ? '👁 Follow' : '🚫 Frozen'}
       </button>
       <span class="pill {statusClass}">{statusLabel}</span>
       {#if $connEndpoint}<span class="pill">{$connEndpoint}</span>{/if}
@@ -134,17 +143,28 @@
 
 <section class="row">
   <button onclick={blank} disabled={$isViewOnly}>⬛ Blank</button>
+  <button
+    onclick={togglePresenting}
+    disabled={$isViewOnly}
+    class:present-on={presenting}
+    class:present-off={!presenting}
+  >
+    {presenting ? '⏹ Stop Show' : '▶ Start Show'}
+  </button>
+</section>
+
+<section class="row">
   <button onclick={() => (textVisible = !textVisible)}>
     {textVisible ? 'Hide text' : 'Show text'}
   </button>
 </section>
 
-<section class="row">
-  <button onclick={() => (fontBoost = Math.max(0.6, fontBoost - 0.15))}>A−</button>
+<section class="row font-row">
+  <button onclick={() => adjustFont(-0.15)} disabled={$isViewOnly}>A−</button>
   <span class="muted" style="align-self:center; min-width:50px; text-align:center;">
     {Math.round(fontBoost * 100)}%
   </span>
-  <button onclick={() => (fontBoost = Math.min(2.4, fontBoost + 0.15))}>A+</button>
+  <button onclick={() => adjustFont(+0.15)} disabled={$isViewOnly}>A+</button>
 </section>
 
 <footer>
@@ -158,7 +178,7 @@
   }
   .song { font-size: 16px; font-weight: 600; }
   .idx { font-size: 12px; margin-top: 2px; }
-  .pills { display: flex; gap: 6px; }
+  .pills { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .err { color: var(--danger); font-size: 12px; margin-top: 4px; }
 
   .slide-box {
@@ -167,7 +187,7 @@
     border-radius: 14px;
     padding: 20px;
     margin-top: 12px;
-    min-height: 50vh;
+    min-height: 40vh;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -205,6 +225,21 @@
     margin-top: 10px;
   }
   .row > button { flex: 1; }
+
+  .font-row > button { flex: 1; }
+
+  button.present-on {
+    background: var(--danger, #c0392b);
+    color: #fff;
+    border-color: var(--danger, #c0392b);
+    font-weight: 700;
+  }
+  button.present-off {
+    background: var(--success, #27ae60);
+    color: #fff;
+    border-color: var(--success, #27ae60);
+    font-weight: 700;
+  }
 
   footer { margin-top: 24px; text-align: center; }
   button.ghost {

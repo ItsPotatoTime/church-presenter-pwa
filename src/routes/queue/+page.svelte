@@ -25,6 +25,8 @@
   }
 
   function tapJump(songIdx: number) {
+    const name = $queueState?.items[songIdx]?.name || 'this song';
+    if (!confirm(`Switch to "${name}"?`)) return;
     send({ type: 'live.goto', payload: { song_index: songIdx, slide_index: 0 } });
   }
   function remove(pos: number) {

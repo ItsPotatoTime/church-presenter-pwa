@@ -127,4 +127,6 @@ export type ClientCommand =
   | { type: 'list.reorder'; payload: { list_name: string; from: number; to: number } }
   | { type: 'list.load_to_queue'; payload: { list_name: string } }
   | { type: 'sync.request'; id?: string; payload: { since_ts: number } }
-  | { type: 'device.rename'; payload: { new_name: string } };
+  | { type: 'device.rename'; payload: { new_name: string } }
+  | { type: 'live.toggle_present' }
+  | { type: 'live.font_size'; payload: { delta: number } };

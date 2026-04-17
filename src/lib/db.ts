@@ -1,18 +1,21 @@
 // IndexedDB wrapper.
 // Object stores:
-//   meta  — {key, value} rows: creds, device_id, last_sync_ts
-//   songs — keyed by song path
-//   lists — keyed by list name
+//   meta              — {key, value} rows: creds, device_id, last_sync_ts
+//   songs             — keyed by song path
+//   lists             — keyed by list name
+//   pending_mutations — offline-queued list commands, replayed on reconnect
 //
 // Version 2 adds `songs` + `lists` stores (Phase 2).
+// Version 3 adds `pending_mutations` (Phase 5 offline list editing).
 
 import type { LibrarySong, LibraryList } from './protocol';
 
 const DB_NAME = 'church-remote';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const STORE_META = 'meta';
 const STORE_SONGS = 'songs';
 const STORE_LISTS = 'lists';
+const STORE_PENDING = 'pending_mutations';
 
 export interface Credentials {
   device_id: string;
@@ -37,6 +40,9 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_LISTS)) {
         db.createObjectStore(STORE_LISTS, { keyPath: 'name' });
+      }
+      if (!db.objectStoreNames.contains(STORE_PENDING)) {
+        db.createObjectStore(STORE_PENDING, { keyPath: 'id', autoIncrement: true });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -84,16 +90,23 @@ async function deleteMeta(key: string): Promise<void> {
 }
 
 // ── Credentials ────────────────────────────────────────────────────
+// In-memory cache so tab-switch onMount reads are instant after first load.
+let _credCache: Credentials | null | undefined = undefined;
 
 export async function loadCredentials(): Promise<Credentials | null> {
-  return getRow<Credentials>('creds');
+  if (_credCache !== undefined) return _credCache;
+  const result = await getRow<Credentials>('creds');
+  _credCache = result;
+  return result;
 }
 
 export async function saveCredentials(c: Credentials): Promise<void> {
+  _credCache = c;
   await setMeta('creds', c);
 }
 
 export async function clearCredentials(): Promise<void> {
+  _credCache = null;
   await deleteMeta('creds');
 }
 
@@ -192,5 +205,45 @@ export async function loadAllLists(): Promise<LibraryList[]> {
     const req = tx.objectStore(STORE_LISTS).getAll();
     req.onsuccess = () => resolve((req.result ?? []) as LibraryList[]);
     req.onerror = () => reject(req.error);
+  });
+}
+
+// ── Pending offline mutations ──────────────────────────────────────
+// Commands queued while disconnected; flushed to server on reconnect.
+
+export interface PendingMutation {
+  id?: number;
+  type: string;
+  payload?: unknown;
+  created_at: number;
+}
+
+export async function addPendingMutation(cmd: { type: string; payload?: unknown }): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PENDING, 'readwrite');
+    tx.objectStore(STORE_PENDING).add({ type: cmd.type, payload: cmd.payload, created_at: Date.now() });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function getPendingMutations(): Promise<PendingMutation[]> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PENDING, 'readonly');
+    const req = tx.objectStore(STORE_PENDING).getAll();
+    req.onsuccess = () => resolve((req.result ?? []) as PendingMutation[]);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clearPendingMutations(): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PENDING, 'readwrite');
+    tx.objectStore(STORE_PENDING).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
