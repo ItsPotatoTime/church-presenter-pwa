@@ -1,6 +1,9 @@
 // WebSocket client with cloud-first / LAN-fallback reconnect.
 // Authenticates via pair_token (first pair) or device_token (reconnect).
 // Pushes updates into stores.ts.
+//
+// Each open socket gets a generation id; every handler is guarded so that a
+// late event from a previous socket can never corrupt the current state.
 
 import type {
   AuthFail,
@@ -29,35 +32,20 @@ export type PairParams = {
 
 class RemoteClient {
   private ws: WebSocket | null = null;
+  private gen = 0; // incremented every time we (re)create a socket
   private backoffIdx = 0;
   private reconnectTimer: number | null = null;
   private forceClose = false;
   private currentEndpoint: 'cloud' | 'lan' | null = null;
   private alternateNext = false;
   private authTimer: number | null = null;
-  private pending?: PairParams;
 
   // ── Public API ───────────────────────────────────────────────────
 
   async connect(): Promise<void> {
-    // Start from a clean slate — /live may call this right after /pair
-    // finished, leaving a still-open socket and a pending reconnect timer.
-    this.forceClose = true;
-    if (this.reconnectTimer !== null) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    if (this.ws) {
-      try { this.ws.close(); } catch { /* ignore */ }
-      this.ws = null;
-    }
-    this.forceClose = false;
-    this.currentEndpoint = null;
-    this.alternateNext = false;
-    this.backoffIdx = 0;
-
+    this.tearDown();
     const creds = await loadCredentials();
-    if (!creds) {
+    if (!creds || !creds.device_token) {
       connStatus.set('idle');
       return;
     }
@@ -65,10 +53,8 @@ class RemoteClient {
   }
 
   async pair(params: PairParams, deviceName: string): Promise<void> {
-    this.forceClose = false;
-    this.pending = params;
+    this.tearDown();
     const device_id = await getOrCreateDeviceId();
-    // We don't have permanent creds yet; use pending pair params as endpoints.
     const provisional: Credentials = {
       device_id,
       device_token: '',
@@ -80,15 +66,7 @@ class RemoteClient {
   }
 
   disconnect(): void {
-    this.forceClose = true;
-    if (this.reconnectTimer !== null) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-    if (this.ws) {
-      try { this.ws.close(); } catch { /* ignore */ }
-      this.ws = null;
-    }
+    this.tearDown();
     connStatus.set('closed');
   }
 
@@ -105,6 +83,28 @@ class RemoteClient {
 
   // ── Internal ─────────────────────────────────────────────────────
 
+  /** Fully reset state and kill any live socket/timer. Safe to call any time. */
+  private tearDown(): void {
+    this.gen += 1; // invalidate any in-flight handlers from the previous socket
+    this.forceClose = true;
+    if (this.reconnectTimer !== null) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    if (this.authTimer !== null) {
+      clearTimeout(this.authTimer);
+      this.authTimer = null;
+    }
+    if (this.ws) {
+      try { this.ws.close(); } catch { /* ignore */ }
+      this.ws = null;
+    }
+    this.forceClose = false;
+    this.currentEndpoint = null;
+    this.alternateNext = false;
+    this.backoffIdx = 0;
+  }
+
   private buildUrl(host: string, endpoint: 'cloud' | 'lan'): string {
     // cloud = wss (Cloudflare terminates TLS). lan = ws (plain origin).
     const scheme = endpoint === 'cloud' ? 'wss' : 'ws';
@@ -112,9 +112,6 @@ class RemoteClient {
   }
 
   private pickEndpoint(creds: Credentials): { host: string; kind: 'cloud' | 'lan' } | null {
-    // Alternation is *only* valuable after a failure on the current endpoint
-    // (so we can try the other one). On a fresh connect — or after a successful
-    // one — always prefer cloud, since LAN is unreachable off-network.
     if (this.alternateNext) {
       this.alternateNext = false;
       if (this.currentEndpoint === 'cloud' && creds.lan_host) {
@@ -137,6 +134,8 @@ class RemoteClient {
       return;
     }
 
+    // Each socket carries a generation id; all handlers bail out if gen bumped.
+    const myGen = ++this.gen;
     this.currentEndpoint = pick.kind;
     connEndpoint.set(pick.kind);
     connStatus.set('connecting');
@@ -148,13 +147,15 @@ class RemoteClient {
     } catch (e: any) {
       connStatus.set('error');
       connError.set(e?.message ?? 'WebSocket failed to open');
-      this.scheduleReconnect(creds);
+      this.scheduleReconnect(creds, myGen);
       return;
     }
 
     this.ws = ws;
+    const isCurrent = () => this.gen === myGen && this.ws === ws;
 
     ws.onopen = () => {
+      if (!isCurrent()) return;
       connStatus.set('authenticating');
       const payload = pairToken
         ? {
@@ -167,16 +168,17 @@ class RemoteClient {
             device_id: creds.device_id,
             device_token: creds.device_token,
           };
-      ws.send(JSON.stringify({ type: 'auth', payload }));
+      try { ws.send(JSON.stringify({ type: 'auth', payload })); } catch { /* ignore */ }
+      if (this.authTimer !== null) clearTimeout(this.authTimer);
       this.authTimer = window.setTimeout(() => {
-        if (this.ws === ws) {
-          connError.set('Auth timed out');
-          try { ws.close(); } catch { /* ignore */ }
-        }
+        if (!isCurrent()) return;
+        connError.set('Auth timed out');
+        try { ws.close(); } catch { /* ignore */ }
       }, AUTH_TIMEOUT_MS);
     };
 
     ws.onmessage = (ev) => {
+      if (!isCurrent()) return;
       let msg: Envelope;
       try {
         msg = JSON.parse(typeof ev.data === 'string' ? ev.data : '');
@@ -187,7 +189,6 @@ class RemoteClient {
       if (msg.type === 'auth.ok') {
         if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
         const p = (msg.payload ?? {}) as AuthOk;
-        // If we were pairing, persist the new device_token.
         if (pairToken) {
           const finalCreds: Credentials = {
             ...creds,
@@ -208,6 +209,7 @@ class RemoteClient {
         const p = (msg.payload ?? {}) as AuthFail;
         connError.set(`auth.fail: ${p.reason}`);
         connStatus.set('error');
+        // Block reconnects for this socket
         this.forceClose = true;
         try { ws.close(); } catch { /* ignore */ }
         if (p.reason === 'revoked' || p.reason === 'bad_token') {
@@ -231,10 +233,13 @@ class RemoteClient {
     };
 
     ws.onerror = () => {
+      if (!isCurrent()) return;
       connError.set('Connection error');
     };
 
     ws.onclose = () => {
+      // Stale close (from a previous socket we superseded): ignore completely.
+      if (!isCurrent()) return;
       if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
       this.ws = null;
       if (this.forceClose) {
@@ -242,20 +247,22 @@ class RemoteClient {
         return;
       }
       connStatus.set('closed');
-      this.scheduleReconnect(creds);
+      this.scheduleReconnect(creds, myGen);
     };
   }
 
-  private scheduleReconnect(creds: Credentials): void {
+  private scheduleReconnect(creds: Credentials, myGen: number): void {
     if (this.forceClose) return;
+    if (this.gen !== myGen) return; // superseded; do nothing
     const delay = RECONNECT_BACKOFF_MS[Math.min(this.backoffIdx, RECONNECT_BACKOFF_MS.length - 1)];
     this.backoffIdx += 1;
-    // Every other retry: try the *other* endpoint
     this.alternateNext = this.backoffIdx % 2 === 0;
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
+      if (this.gen !== myGen) return;
       loadCredentials().then((fresh) => {
-        if (fresh) this.openSocket(fresh, null);
+        if (this.gen !== myGen) return;
+        if (fresh && fresh.device_token) this.openSocket(fresh, null);
       });
     }, delay);
   }
