@@ -1,17 +1,111 @@
 <script lang="ts">
   import '../app.css';
+  import { onMount } from 'svelte';
+  import { page } from '$app/stores';
+  import { base } from '$app/paths';
+  import { loadCredentials } from '$lib/db';
+  import { hydrateFromCache } from '$lib/sync';
 
   let { children } = $props();
+  let paired = $state(false);
+  let ready = $state(false);
+
+  onMount(async () => {
+    const creds = await loadCredentials();
+    paired = !!creds && !!creds.device_token;
+    if (paired) {
+      // Load library cache so Library/Queue show something even offline.
+      await hydrateFromCache();
+    }
+    ready = true;
+  });
+
+  // Hide the tab bar during first-run screens (/, /pair) to keep focus on setup.
+  const showTabs = $derived(() => {
+    if (!ready || !paired) return false;
+    const p = $page.url.pathname;
+    if (p.endsWith('/pair/') || p.endsWith('/pair')) return false;
+    return true;
+  });
+
+  const tabs = [
+    { href: `${base}/library/`, label: 'Library', icon: '🎵', key: 'library' },
+    { href: `${base}/queue/`, label: 'Queue', icon: '≡', key: 'queue' },
+    { href: `${base}/live/`, label: 'Live', icon: '●', key: 'live' },
+    { href: `${base}/settings/`, label: 'Settings', icon: '⚙', key: 'settings' },
+  ];
+
+  function isActive(href: string) {
+    const p = $page.url.pathname;
+    return p === href || p === href.replace(/\/$/, '');
+  }
 </script>
 
-<main>
+<main class:has-tabs={showTabs()}>
   {@render children()}
 </main>
+
+{#if showTabs()}
+  <nav class="tabbar">
+    {#each tabs as t (t.key)}
+      <a
+        class="tab"
+        class:active={isActive(t.href)}
+        href={t.href}
+        data-sveltekit-preload-data="hover"
+      >
+        <span class="icon">{t.icon}</span>
+        <span class="label">{t.label}</span>
+      </a>
+    {/each}
+  </nav>
+{/if}
 
 <style>
   main {
     max-width: 720px;
     margin: 0 auto;
     padding: 20px 16px 40px;
+  }
+  main.has-tabs {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0));
+  }
+
+  .tabbar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    display: flex;
+    justify-content: space-around;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0));
+    backdrop-filter: blur(6px);
+  }
+
+  .tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 4px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .tab.active {
+    color: var(--accent);
+  }
+
+  .tab .icon {
+    font-size: 20px;
+    line-height: 1;
   }
 </style>

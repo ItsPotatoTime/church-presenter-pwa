@@ -11,6 +11,7 @@ import type {
   ClientCommand,
   Envelope,
   LiveState,
+  QueueState,
 } from './protocol';
 import {
   clearCredentials,
@@ -19,7 +20,14 @@ import {
   saveCredentials,
   type Credentials,
 } from './db';
-import { connEndpoint, connError, connStatus, liveState } from './stores';
+import {
+  connEndpoint,
+  connError,
+  connStatus,
+  liveState,
+  queueState,
+} from './stores';
+import { handleSyncMessage } from './sync';
 
 const RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000];
 const AUTH_TIMEOUT_MS = 8000;
@@ -43,6 +51,11 @@ class RemoteClient {
   // ── Public API ───────────────────────────────────────────────────
 
   async connect(): Promise<void> {
+    // Idempotent: if we're already connected or connecting, keep the live socket
+    // so tab switches don't churn the connection. Only tear down when fully closed.
+    if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
+      return;
+    }
     this.tearDown();
     const creds = await loadCredentials();
     if (!creds || !creds.device_token) {
@@ -79,6 +92,18 @@ class RemoteClient {
   send(cmd: ClientCommand): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     this.ws.send(JSON.stringify(cmd));
+  }
+
+  /** Low-level send for request/response envelopes (used by sync.ts). */
+  sendRaw(envelope: { type: string; id?: string; payload?: unknown }): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error('WebSocket is not open');
+    }
+    this.ws.send(JSON.stringify(envelope));
+  }
+
+  isOpen(): boolean {
+    return !!this.ws && this.ws.readyState === WebSocket.OPEN;
   }
 
   // ── Internal ─────────────────────────────────────────────────────
@@ -220,6 +245,16 @@ class RemoteClient {
 
       if (msg.type === 'live.state') {
         liveState.set(msg.payload as LiveState);
+        return;
+      }
+
+      if (msg.type === 'queue.state') {
+        queueState.set(msg.payload as QueueState);
+        return;
+      }
+
+      if (msg.type === 'sync.full' || msg.type === 'sync.delta') {
+        handleSyncMessage(msg as any);
         return;
       }
 

@@ -1,16 +1,25 @@
-// IndexedDB wrapper for persisting phone credentials.
-// One object store: `meta` holding {key, value} rows.
+// IndexedDB wrapper.
+// Object stores:
+//   meta  — {key, value} rows: creds, device_id, last_sync_ts
+//   songs — keyed by song path
+//   lists — keyed by list name
+//
+// Version 2 adds `songs` + `lists` stores (Phase 2).
+
+import type { LibrarySong, LibraryList } from './protocol';
 
 const DB_NAME = 'church-remote';
-const DB_VERSION = 1;
-const STORE = 'meta';
+const DB_VERSION = 2;
+const STORE_META = 'meta';
+const STORE_SONGS = 'songs';
+const STORE_LISTS = 'lists';
 
 export interface Credentials {
   device_id: string;
   device_token: string;
   device_name: string;
-  cloud_host: string | null; // e.g. "funny-horse.trycloudflare.com"
-  lan_host: string | null;   // e.g. "192.168.1.12:8765"
+  cloud_host: string | null;
+  lan_host: string | null;
   server_name?: string;
   paired_at?: number;
 }
@@ -18,10 +27,16 @@ export interface Credentials {
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (ev) => {
       const db = req.result;
-      if (!db.objectStoreNames.contains(STORE)) {
-        db.createObjectStore(STORE, { keyPath: 'key' });
+      if (!db.objectStoreNames.contains(STORE_META)) {
+        db.createObjectStore(STORE_META, { keyPath: 'key' });
+      }
+      if (!db.objectStoreNames.contains(STORE_SONGS)) {
+        db.createObjectStore(STORE_SONGS, { keyPath: 'path' });
+      }
+      if (!db.objectStoreNames.contains(STORE_LISTS)) {
+        db.createObjectStore(STORE_LISTS, { keyPath: 'name' });
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -29,58 +44,153 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-async function getRow<T>(key: string): Promise<T | null> {
+async function getRow<T>(key: string, store = STORE_META): Promise<T | null> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readonly');
-    const req = tx.objectStore(STORE).get(key);
+    const tx = db.transaction(store, 'readonly');
+    const req = tx.objectStore(store).get(key);
     req.onsuccess = () => {
-      const row = req.result as { key: string; value: T } | undefined;
-      resolve(row ? row.value : null);
+      const row = req.result as { key: string; value: T } | T | undefined;
+      if (!row) return resolve(null);
+      // meta store uses {key, value}; songs/lists store whole object
+      if (store === STORE_META && (row as any).value !== undefined) {
+        resolve((row as any).value as T);
+      } else {
+        resolve(row as T);
+      }
     };
     req.onerror = () => reject(req.error);
   });
 }
 
-async function setRow<T>(key: string, value: T): Promise<void> {
+async function setMeta<T>(key: string, value: T): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).put({ key, value });
+    const tx = db.transaction(STORE_META, 'readwrite');
+    tx.objectStore(STORE_META).put({ key, value });
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-async function deleteRow(key: string): Promise<void> {
+async function deleteMeta(key: string): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite');
-    tx.objectStore(STORE).delete(key);
+    const tx = db.transaction(STORE_META, 'readwrite');
+    tx.objectStore(STORE_META).delete(key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-// ── Public API ──────────────────────────────────────────────────────
+// ── Credentials ────────────────────────────────────────────────────
 
 export async function loadCredentials(): Promise<Credentials | null> {
   return getRow<Credentials>('creds');
 }
 
 export async function saveCredentials(c: Credentials): Promise<void> {
-  await setRow('creds', c);
+  await setMeta('creds', c);
 }
 
 export async function clearCredentials(): Promise<void> {
-  await deleteRow('creds');
+  await deleteMeta('creds');
 }
 
-// Generate a stable, persistent device_id the first time we run.
 export async function getOrCreateDeviceId(): Promise<string> {
   const existing = await getRow<string>('device_id');
   if (existing) return existing;
   const id = crypto.randomUUID();
-  await setRow('device_id', id);
+  await setMeta('device_id', id);
   return id;
+}
+
+// ── Sync bookkeeping ───────────────────────────────────────────────
+
+export async function getLastSyncTs(): Promise<number> {
+  return (await getRow<number>('last_sync_ts')) ?? 0;
+}
+
+export async function setLastSyncTs(ts: number): Promise<void> {
+  await setMeta('last_sync_ts', ts);
+}
+
+// ── Songs ──────────────────────────────────────────────────────────
+
+export async function putSongs(songs: LibrarySong[]): Promise<void> {
+  if (!songs.length) return;
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SONGS, 'readwrite');
+    const store = tx.objectStore(STORE_SONGS);
+    for (const s of songs) store.put(s);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function deleteSongsByPath(paths: string[]): Promise<void> {
+  if (!paths.length) return;
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SONGS, 'readwrite');
+    const store = tx.objectStore(STORE_SONGS);
+    for (const p of paths) store.delete(p);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function clearSongs(): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SONGS, 'readwrite');
+    tx.objectStore(STORE_SONGS).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function loadAllSongs(): Promise<LibrarySong[]> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SONGS, 'readonly');
+    const req = tx.objectStore(STORE_SONGS).getAll();
+    req.onsuccess = () => resolve((req.result ?? []) as LibrarySong[]);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getAllSongPaths(): Promise<string[]> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SONGS, 'readonly');
+    const req = tx.objectStore(STORE_SONGS).getAllKeys();
+    req.onsuccess = () => resolve((req.result ?? []) as string[]);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// ── Lists ──────────────────────────────────────────────────────────
+
+export async function putLists(lists: LibraryList[]): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_LISTS, 'readwrite');
+    const store = tx.objectStore(STORE_LISTS);
+    store.clear();
+    for (const l of lists) store.put(l);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function loadAllLists(): Promise<LibraryList[]> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_LISTS, 'readonly');
+    const req = tx.objectStore(STORE_LISTS).getAll();
+    req.onsuccess = () => resolve((req.result ?? []) as LibraryList[]);
+    req.onerror = () => reject(req.error);
+  });
 }

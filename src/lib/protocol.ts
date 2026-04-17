@@ -46,6 +46,55 @@ export interface LiveState {
   presenting: boolean;
 }
 
+// ── Queue state broadcast ────────────────────────────────────────────
+export interface QueueItem {
+  path: string;
+  name: string;
+  folder: string;
+}
+
+export interface QueueState {
+  items: QueueItem[];
+  current_song_index: number;
+  playing_song_index: number;
+  current_slide_index: number;
+}
+
+// ── Library song (shape used in sync payloads + IndexedDB) ──────────
+export interface LibrarySong {
+  path: string;
+  name: string;
+  folder: string;
+  slide_texts: string[];
+  chorus_index?: number;
+  modified_ts?: number;
+}
+
+export interface LibraryList {
+  name: string;
+  songs: { path: string; name: string; folder: string }[];
+}
+
+// ── Sync (client → server) ───────────────────────────────────────────
+export interface SyncRequest {
+  since_ts: number; // 0 → force full resync
+}
+
+// ── Sync (server → client) ───────────────────────────────────────────
+export interface SyncFull {
+  songs: LibrarySong[];
+  lists: LibraryList[];
+  server_ts: number;
+}
+
+export interface SyncDelta {
+  songs_changed: LibrarySong[];
+  all_song_paths: string[];    // every current path — drives removal detection
+  lists: LibraryList[] | null; // null means no list changes
+  all_list_names: string[];
+  server_ts: number;
+}
+
 // ── Commands (client → server) ───────────────────────────────────────
 export type ClientCommand =
   | { type: 'live.next' }
@@ -53,4 +102,9 @@ export type ClientCommand =
   | { type: 'live.blank' }
   | { type: 'live.freeze' }
   | { type: 'live.goto'; payload: { song_index: number; slide_index: number } }
+  | { type: 'queue.add'; payload: { song_path: string; position?: number } }
+  | { type: 'queue.remove'; payload: { position: number } }
+  | { type: 'queue.reorder'; payload: { from: number; to: number } }
+  | { type: 'queue.clear' }
+  | { type: 'sync.request'; id?: string; payload: { since_ts: number } }
   | { type: 'device.rename'; payload: { new_name: string } };
