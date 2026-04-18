@@ -27,11 +27,15 @@ html, body {
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden; /* prevent horizontal overflow on narrow screens */
 }
 
 body {
   min-height: 100vh;
   min-height: 100dvh;
+  /* Prevent content from overflowing under the Dynamic Island or notch */
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
 }
 
 button {

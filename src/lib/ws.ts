@@ -36,7 +36,7 @@ import {
 } from './stores';
 import { handleSyncMessage } from './sync';
 
-const RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000];
+const RECONNECT_BACKOFF_MS = [500, 1000, 2000, 4000, 8000, 15000];
 const AUTH_TIMEOUT_MS = 8000;
 
 export type PairParams = {
@@ -68,6 +68,20 @@ class RemoteClient {
           clearTimeout(this.reconnectTimer);
           this.reconnectTimer = null;
         }
+        this.backoffIdx = 0; // reset backoff on foreground
+        void this.connect();
+      });
+    }
+    // When the device regains network access, reconnect immediately.
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', () => {
+        if (this.forceClose) return;
+        if (this.ws && this.ws.readyState !== WebSocket.CLOSED) return;
+        if (this.reconnectTimer !== null) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
+        this.backoffIdx = 0; // reset backoff on network restore
         void this.connect();
       });
     }
@@ -277,13 +291,20 @@ class RemoteClient {
       if (msg.type === 'auth.fail') {
         if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
         const p = (msg.payload ?? {}) as AuthFail;
-        connError.set(`auth.fail: ${p.reason}`);
         connStatus.set('error');
         // Block reconnects for this socket
         this.forceClose = true;
         try { ws.close(); } catch { /* ignore */ }
-        if (p.reason === 'revoked' || p.reason === 'bad_token') {
+        if (p.reason === 'revoked') {
+          // Server explicitly kicked this device — clear everything
           void clearCredentials();
+          connError.set('Device revoked by server');
+        } else if (p.reason === 'bad_token') {
+          // Token mismatch — likely a different laptop at the same tunnel URL.
+          // Keep credentials so the user can switch back; just prompt re-pair.
+          connError.set('Different server — scan a new QR code to re-pair');
+        } else {
+          connError.set(`Auth failed: ${p.reason}`);
         }
         return;
       }

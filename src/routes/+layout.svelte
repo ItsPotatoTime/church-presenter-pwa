@@ -89,13 +89,14 @@
   main {
     max-width: 720px;
     margin: 0 auto;
-    padding: 20px 16px 40px;
+    padding: calc(20px + env(safe-area-inset-top, 0)) 16px 40px;
   }
   main.has-tabs {
     padding-bottom: calc(72px + env(safe-area-inset-bottom, 0));
   }
   main.has-banner {
-    padding-top: 44px;
+    /* banner height = 10px + safe-area-inset-top + 10px + font ~16px ≈ 44px + inset */
+    padding-top: calc(44px + env(safe-area-inset-top, 0));
   }
 
   .view-only-banner {
@@ -105,7 +106,7 @@
     background: var(--accent);
     color: #fff;
     text-align: center;
-    padding: 10px 12px;
+    padding: calc(10px + env(safe-area-inset-top, 0)) 12px 10px;
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.4px;

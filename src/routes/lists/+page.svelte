@@ -19,6 +19,7 @@
 
   let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
   let promptDialog = $state<{ title: string; initial: string; value: string; resolve: (v: string | null) => void } | null>(null);
+  let pickerSearchSlides = $state(false);
 
   function showConfirm(message: string): Promise<boolean> {
     return new Promise((resolve) => { confirmDialog = { message, resolve }; });
@@ -174,14 +175,19 @@
   const pickerFiltered = $derived.by<LibrarySong[]>(() => {
     const q = normalize(pickerQuery);
     if (!q) return $songsStore;
-    return $songsStore.filter((s) =>
-      normalize(s.name).includes(q) || normalize(s.folder).includes(q)
-    );
+    return $songsStore.filter((s) => {
+      if (normalize(s.name).includes(q) || normalize(s.folder).includes(q)) return true;
+      if (pickerSearchSlides && s.slide_texts) {
+        return s.slide_texts.some((t) => normalize(t).includes(q));
+      }
+      return false;
+    });
   });
 
   function openPicker() {
     if (!selectedList) return;
     pickerQuery = '';
+    pickerSearchSlides = false;
     showPicker = true;
   }
   function closePicker() { showPicker = false; }
@@ -293,14 +299,20 @@
         <div class="modal-title">Add song</div>
         <button class="ghost" onclick={closePicker}>Close</button>
       </div>
-      <input
-        type="text"
-        placeholder="Search songs…"
-        bind:value={pickerQuery}
-        autocomplete="off"
-        autocapitalize="off"
-        autocorrect="off"
-      />
+      <div class="picker-search-row">
+        <input
+          type="text"
+          placeholder="Search songs…"
+          bind:value={pickerQuery}
+          autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+        />
+        <label class="slides-toggle">
+          <input type="checkbox" bind:checked={pickerSearchSlides} />
+          Slides
+        </label>
+      </div>
       <div class="picker-list">
         {#each pickerFiltered as s (s.path)}
           <button class="picker-item" onclick={() => addSong(s)}>
@@ -341,7 +353,7 @@
 
 {#if promptDialog}
   <div
-    class="modal-back"
+    class="modal-back modal-back-top"
     role="button"
     tabindex="-1"
     aria-label="Cancel"
@@ -451,6 +463,16 @@
     align-items: flex-end;
     justify-content: center;
   }
+  /* Dialogs with text input: align to top so the keyboard doesn't cover them */
+  .modal-back-top {
+    align-items: flex-start;
+    padding-top: calc(env(safe-area-inset-top, 0) + 60px);
+  }
+  .modal-back-top .modal-dialog {
+    border-radius: 14px;
+    width: calc(100% - 32px);
+    max-width: 480px;
+  }
   .modal {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -466,7 +488,7 @@
     margin-bottom: 10px;
   }
   .modal-title { font-weight: 700; font-size: 18px; margin-bottom: 12px; }
-  .modal input {
+  .modal input[type="text"] {
     width: 100%;
     padding: 10px 12px;
     background: var(--elevated);
@@ -474,6 +496,15 @@
     border-radius: 8px;
     color: var(--text-primary);
     margin-bottom: 10px;
+  }
+
+  .picker-search-row {
+    display: flex; gap: 8px; align-items: center; margin-bottom: 10px;
+  }
+  .picker-search-row input[type="text"] { flex: 1; margin-bottom: 0; }
+  .slides-toggle {
+    display: inline-flex; gap: 4px; align-items: center;
+    font-size: 12px; color: var(--text-secondary); white-space: nowrap;
   }
 
   .picker-list { display: flex; flex-direction: column; gap: 4px; }

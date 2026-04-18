@@ -53,12 +53,6 @@
     remote.send({ type: 'live.font_size', payload: { delta: delta > 0 ? 1 : -1 } });
   }
 
-  async function unpair() {
-    if (!confirm('Unpair this phone? You will need a new QR to reconnect.')) return;
-    await remote.unpair();
-    goto(`${base}/`);
-  }
-
   const statusLabel = $derived(
     ({
       idle: 'Idle',
@@ -168,10 +162,6 @@
   <button onclick={() => adjustFont(+0.15)} disabled={$isViewOnly}>A+</button>
 </section>
 
-<footer>
-  <button class="ghost" onclick={unpair}>Unpair this phone</button>
-</footer>
-
 <style>
   header { padding: 4px 0 10px; }
   .hrow {
@@ -242,12 +232,6 @@
     font-weight: 700;
   }
 
-  footer { margin-top: 24px; text-align: center; }
-  button.ghost {
-    background: transparent;
-    border-color: var(--border);
-    color: var(--text-secondary);
-  }
   .pill {
     display: inline-block;
     padding: 3px 10px;
