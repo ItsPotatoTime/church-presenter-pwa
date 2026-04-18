@@ -11,6 +11,7 @@
 const PUNCT_RE = /[^\p{L}\p{N}\s]+/gu;
 const WS_RE = /\s+/g;
 const MN_RE = /\p{Mn}+/gu;
+const BOLD_RE = /\*\*(.+?)\*\*/g;
 
 export function normalize(s: string): string {
   if (!s) return '';
@@ -21,4 +22,15 @@ export function normalize(s: string): string {
     .replace(PUNCT_RE, ' ')
     .replace(WS_RE, ' ')
     .trim();
+}
+
+/** Convert **bold** markers to <b>bold</b>. Input is HTML-escaped first so it is XSS-safe. */
+export function renderMarkdown(text: string): string {
+  if (!text) return '';
+  if (!text.includes('**')) return text;
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(BOLD_RE, '<b>$1</b>');
 }

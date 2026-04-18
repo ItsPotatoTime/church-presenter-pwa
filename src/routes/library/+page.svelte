@@ -12,15 +12,17 @@
     syncStatus,
   } from '$lib/stores';
   import type { LibrarySong } from '$lib/protocol';
-  import { normalize } from '$lib/search';
+  import { normalize, renderMarkdown } from '$lib/search';
 
   let rawQuery = $state('');
   let query = $state('');
   let searchSlides = $state(false);
   let previewSong = $state<LibrarySong | null>(null);
   let debounceTimer: number | null = null;
+  // Progressive rendering — only mount up to renderCount song nodes at a time.
+  let renderCount = $state(300);
+  let sentinel = $state<Element | null>(null);
 
-  // Layout already calls hydrateFromCache() on startup — no need to repeat here.
   onMount(async () => {
     const creds = await loadCredentials();
     if (!creds?.device_token) {
@@ -30,10 +32,8 @@
     await remote.connect();
   });
 
-  // Derive from store directly so it stays accurate across tab switches.
   const hasLibrary = $derived(($songsStore?.length ?? 0) > 0);
 
-  // Sync when connection opens, but throttle to avoid syncing on every tab visit.
   let lastSyncAt = 0;
   $effect(() => {
     if ($connStatus !== 'open') return;
@@ -43,7 +43,6 @@
     void syncNow();
   });
 
-  // Debounce the input so huge libraries don't re-filter per keystroke.
   $effect(() => {
     const v = rawQuery;
     if (debounceTimer !== null) clearTimeout(debounceTimer);
@@ -53,14 +52,30 @@
     };
   });
 
-  // Pre-normalize name/folder once per library snapshot; pre-normalize slides
-  // lazily on first use of slide search.
+  // IntersectionObserver: load the next chunk when the sentinel scrolls into view.
+  $effect(() => {
+    const el = sentinel;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          renderCount = Math.min(renderCount + 200, $songsStore.length);
+        }
+      },
+      { rootMargin: '400px' },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  });
+
   type Entry = {
     s: LibrarySong;
     nName: string;
     nFolder: string;
     nSlides: string[] | null;
   };
+
+  // Pre-normalise name/folder once per library snapshot.
   const index = $derived.by<Entry[]>(() =>
     $songsStore.map((s) => ({
       s,
@@ -69,41 +84,63 @@
       nSlides: null,
     })),
   );
-  // Keep slide-normalization caches alive across filter runs (mutates entries — safe,
-  // not tracked as reactive state).
+
+  // Lazy slide-normalisation — only computed when slide search is active.
   function slidesFor(e: Entry): string[] {
     if (e.nSlides) return e.nSlides;
     e.nSlides = (e.s.slide_texts ?? []).map(normalize);
     return e.nSlides;
   }
 
-  const filtered = $derived.by<LibrarySong[]>(() => {
-    const q = normalize(query);
-    if (!q) return index.map((e) => e.s);
-    const out: LibrarySong[] = [];
-    for (const e of index) {
-      if (e.nName.includes(q) || e.nFolder.includes(q)) {
-        out.push(e.s);
-        continue;
-      }
-      if (searchSlides) {
-        const ns = slidesFor(e);
-        for (const t of ns) {
-          if (t.includes(q)) { out.push(e.s); break; }
-        }
-      }
-    }
-    return out;
-  });
+  const hasQuery = $derived(normalize(query).length > 0);
+
+  // ── Browse mode (no query) — grouped + progressive ──────────────────
+  const browseSongs = $derived<LibrarySong[]>(
+    hasQuery ? [] : index.slice(0, renderCount).map((e) => e.s),
+  );
 
   const grouped = $derived.by(() => {
     const groups = new Map<string, LibrarySong[]>();
-    for (const s of filtered) {
+    for (const s of browseSongs) {
       const k = s.folder || '—';
       if (!groups.has(k)) groups.set(k, []);
       groups.get(k)!.push(s);
     }
     return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  });
+
+  // ── Search mode (query present) — scored + ranked ────────────────────
+  type SR = { s: LibrarySong; score: number; snippet: string };
+
+  const searchResults = $derived.by<SR[]>(() => {
+    const q = normalize(query);
+    if (!q) return [];
+    const out: SR[] = [];
+    for (const e of index) {
+      if (e.nName.includes(q)) {
+        out.push({ s: e.s, score: 3, snippet: '' });
+      } else if (e.nFolder.includes(q)) {
+        out.push({ s: e.s, score: 2, snippet: '' });
+      } else if (searchSlides) {
+        const ns = slidesFor(e);
+        for (let si = 0; si < ns.length; si++) {
+          if (ns[si].includes(q)) {
+            const nIdx = ns[si].indexOf(q);
+            const raw = e.s.slide_texts[si] ?? '';
+            const start = Math.max(0, nIdx - 20);
+            const end = Math.min(raw.length, nIdx + q.length + 40);
+            const snip =
+              (start > 0 ? '…' : '') +
+              raw.slice(start, end).trim() +
+              (end < raw.length ? '…' : '');
+            out.push({ s: e.s, score: 1, snippet: snip });
+            break;
+          }
+        }
+      }
+    }
+    out.sort((a, b) => b.score - a.score);
+    return out;
   });
 
   function addToQueue(path: string) {
@@ -124,6 +161,7 @@
   <div class="muted small">
     {#if $syncStatus === 'syncing'}Syncing…
     {:else if $syncStatus === 'error'}Sync failed — tap refresh
+    {:else if hasQuery}{searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
     {:else}{$songsStore.length} songs{/if}
   </div>
 </header>
@@ -153,29 +191,64 @@
   <section class="panel muted" style="margin-top:12px;">
     No songs cached yet. Pull once the desktop is connected.
   </section>
-{/if}
 
-{#each grouped as [folder, songs] (folder)}
-  <section class="group">
-    <div class="group-head">{folder}</div>
-    {#each songs as s (s.path)}
+{:else if hasQuery}
+  <!-- ── Search results — flat, sorted by relevance ─────────────── -->
+  {#if searchResults.length === 0}
+    <section class="panel muted" style="margin-top:12px;">
+      No songs match "{query}".
+    </section>
+  {:else}
+    {#each searchResults as r (r.s.path)}
       <div class="song">
-        <button class="song-main" onclick={() => openPreview(s)}>
-          <div class="song-name">{s.name}</div>
-          {#if s.slide_texts?.length}
-            <div class="muted small">{s.slide_texts.length} slides</div>
+        <button class="song-main" onclick={() => openPreview(r.s)}>
+          <div class="song-name">{r.s.name}</div>
+          <div class="muted small">{r.s.folder || '—'}</div>
+          {#if r.snippet}
+            <div class="snippet muted">{@html renderMarkdown(r.snippet)}</div>
           {/if}
         </button>
         <button
           class="add"
           aria-label="Add to queue"
-          onclick={() => addToQueue(s.path)}
+          onclick={() => addToQueue(r.s.path)}
           disabled={$connStatus !== 'open' || $isViewOnly}
         >＋</button>
       </div>
     {/each}
-  </section>
-{/each}
+  {/if}
+
+{:else}
+  <!-- ── Browse — grouped by folder, progressive rendering ──────── -->
+  {#each grouped as [folder, songs] (folder)}
+    <section class="group">
+      <div class="group-head">{folder}</div>
+      {#each songs as s (s.path)}
+        <div class="song">
+          <button class="song-main" onclick={() => openPreview(s)}>
+            <div class="song-name">{s.name}</div>
+            {#if s.slide_texts?.length}
+              <div class="muted small">{s.slide_texts.length} slides</div>
+            {/if}
+          </button>
+          <button
+            class="add"
+            aria-label="Add to queue"
+            onclick={() => addToQueue(s.path)}
+            disabled={$connStatus !== 'open' || $isViewOnly}
+          >＋</button>
+        </div>
+      {/each}
+    </section>
+  {/each}
+
+  {#if renderCount < $songsStore.length}
+    <div bind:this={sentinel} class="sentinel" aria-hidden="true"></div>
+    <p class="muted small load-hint">
+      Showing {Math.min(renderCount, $songsStore.length)} of {$songsStore.length} — scroll for more
+    </p>
+  {/if}
+{/if}
 
 {#if previewSong}
   <div
@@ -201,7 +274,7 @@
       {#each previewSong.slide_texts as slide, i (i)}
         <div class="slide-prev" class:chorus={previewSong.chorus_index === i}>
           {#each slide.split('\n') as line}
-            <div>{line || '\u00A0'}</div>
+            <div>{@html renderMarkdown(line) || '\u00A0'}</div>
           {/each}
         </div>
       {/each}
@@ -265,6 +338,15 @@
     border-radius: 8px;
   }
   .song-name { font-weight: 600; }
+  .snippet {
+    font-size: 11px;
+    font-style: italic;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 240px;
+  }
   .add {
     width: 52px;
     font-size: 20px;
@@ -272,6 +354,9 @@
     color: var(--accent);
     border-color: var(--border);
   }
+
+  .sentinel { height: 1px; }
+  .load-hint { text-align: center; padding: 6px 0 10px; margin: 0; }
 
   .modal-back {
     position: fixed; inset: 0;

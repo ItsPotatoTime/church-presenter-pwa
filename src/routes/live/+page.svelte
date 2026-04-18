@@ -4,6 +4,7 @@
   import { base } from '$app/paths';
   import { loadCredentials } from '$lib/db';
   import { remote } from '$lib/ws';
+  import { renderMarkdown } from '$lib/search';
   import {
     connStatus, connEndpoint, connError, liveState,
     isViewOnly, liveFollowEnabled,
@@ -126,7 +127,7 @@
   {:else if textVisible && currentSlideText}
     <div class="slide-text" style="font-size: {Math.round(18 * fontBoost)}px">
       {#each currentSlideText.split('\n') as line}
-        <div>{line || '\u00A0'}</div>
+        <div>{@html renderMarkdown(line) || '\u00A0'}</div>
       {/each}
     </div>
   {:else if !textVisible}
