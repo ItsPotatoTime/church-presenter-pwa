@@ -125,6 +125,7 @@
         <div class="server-info">
           <div class="server-name">{s.server_name ?? '(unknown)'}</div>
           <div class="muted small">{s.cloud_host ?? s.lan_host ?? '—'}</div>
+          <div class="muted small mono" style="opacity:0.5;">id: {s.server_key.slice(0, 8)}</div>
         </div>
         <div class="server-actions">
           {#if s.server_key === creds?.server_key}
