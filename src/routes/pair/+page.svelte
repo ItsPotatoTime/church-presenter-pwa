@@ -37,7 +37,7 @@
     }
 
     if (!pairToken || (!cloudHost && !lanHost)) {
-      error = 'QR link is missing required fields (pt, c/l). Scan a fresh code.';
+      // No QR params — user navigated here manually. Show instructions instead of an error.
       return;
     }
 
@@ -114,6 +114,15 @@
     <button class="accent fw" onclick={copyLink}>
       {copied ? '✓ Link copied' : 'Copy pair link'}
     </button>
+  </section>
+{:else if !pairToken && !cloudHost && !lanHost}
+  <section class="panel">
+    <b>Scan a QR code</b>
+    <p class="muted">
+      Open the <b>ChurchPresenter</b> desktop app, go to <b>Settings → Remote</b>,
+      and scan the QR code shown there. The link will open this page with the
+      pairing information filled in automatically.
+    </p>
   </section>
 {:else if error}
   <section class="panel err">
