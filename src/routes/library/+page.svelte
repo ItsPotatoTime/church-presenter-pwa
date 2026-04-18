@@ -4,7 +4,7 @@
   import { base } from '$app/paths';
   import { loadCredentials } from '$lib/db';
   import { remote } from '$lib/ws';
-  import { syncFull, syncNow } from '$lib/sync';
+  import { syncFull } from '$lib/sync';
   import {
     connStatus,
     isViewOnly,
@@ -40,7 +40,8 @@
     const now = Date.now();
     if (now - lastSyncAt < 30_000) return;
     lastSyncAt = now;
-    void syncNow();
+    // Always full sync so slide_texts are never stale from an old IndexedDB snapshot.
+    void syncFull();
   });
 
   $effect(() => {
