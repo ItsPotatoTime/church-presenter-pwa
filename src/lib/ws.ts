@@ -20,8 +20,10 @@ import {
   clearPendingMutations,
   getPendingMutations,
   getOrCreateDeviceId,
+  loadAllServers,
   loadCredentials,
   saveCredentials,
+  switchServer,
   type Credentials,
 } from './db';
 import {
@@ -54,6 +56,9 @@ class RemoteClient {
   private currentEndpoint: 'cloud' | 'lan' | null = null;
   private alternateNext = false;
   private authTimer: number | null = null;
+  // Tracks server_key values tried in the current connection cycle.
+  // Prevents infinite loops when all paired servers reject us.
+  private _triedServerKeys = new Set<string>();
 
   constructor() {
     // iOS Safari kills WebSockets when the PWA moves to background.
@@ -167,6 +172,7 @@ class RemoteClient {
     this.currentEndpoint = null;
     this.alternateNext = false;
     this.backoffIdx = 0;
+    this._triedServerKeys.clear();
   }
 
   private buildUrl(host: string, endpoint: 'cloud' | 'lan'): string {
@@ -257,15 +263,14 @@ class RemoteClient {
       if (msg.type === 'auth.ok') {
         if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
         const p = (msg.payload ?? {}) as AuthOk;
-        if (pairToken) {
-          const finalCreds: Credentials = {
-            ...creds,
-            device_token: p.device_token,
-            server_name: p.server_name,
-            paired_at: Date.now(),
-          };
-          void saveCredentials(finalCreds);
-        }
+        const finalCreds: Credentials = {
+          ...creds,
+          device_token: pairToken ? p.device_token : creds.device_token,
+          server_name: p.server_name,
+          paired_at: creds.paired_at ?? Date.now(),
+        };
+        void saveCredentials(finalCreds);
+        this._triedServerKeys.clear(); // successful auth — reset cycling state
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
         exclusiveDeviceName.set(null);
         this.backoffIdx = 0;
@@ -291,19 +296,48 @@ class RemoteClient {
       if (msg.type === 'auth.fail') {
         if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
         const p = (msg.payload ?? {}) as AuthFail;
-        connStatus.set('error');
-        // Block reconnects for this socket
-        this.forceClose = true;
-        try { ws.close(); } catch { /* ignore */ }
         if (p.reason === 'revoked') {
-          // Server explicitly kicked this device — clear everything
+          // Server explicitly kicked this device — remove this server entry
+          connStatus.set('error');
+          this.forceClose = true;
+          try { ws.close(); } catch { /* ignore */ }
           void clearCredentials();
           connError.set('Device revoked by server');
         } else if (p.reason === 'bad_token') {
-          // Token mismatch — likely a different laptop at the same tunnel URL.
-          // Keep credentials so the user can switch back; just prompt re-pair.
-          connError.set('Different server — scan a new QR code to re-pair');
+          // Token mismatch — could be a different laptop at the same tunnel URL.
+          // Try other stored server credentials before giving up.
+          this.forceClose = true;
+          try { ws.close(); } catch { /* ignore */ }
+          void (async () => {
+            if (!isCurrent()) return;
+            const currentKey = creds.server_key ?? '';
+            if (currentKey) this._triedServerKeys.add(currentKey);
+            const all = await loadAllServers();
+            const cloudHost = creds.cloud_host;
+            // Find a server we haven't tried yet (same cloud host preferred)
+            const next = all.find(
+              (s) => !this._triedServerKeys.has(s.server_key) &&
+                     (cloudHost === null || s.cloud_host === cloudHost),
+            ) ?? all.find((s) => !this._triedServerKeys.has(s.server_key));
+            if (next) {
+              connStatus.set('connecting');
+              connError.set(null);
+              const switched = await switchServer(next.server_key);
+              if (switched && isCurrent()) {
+                this.forceClose = false;
+                this.openSocket(switched, null);
+              }
+            } else {
+              // Tried every stored server — ask user to re-pair
+              this._triedServerKeys.clear();
+              connStatus.set('error');
+              connError.set('Different server — scan a new QR code to re-pair');
+            }
+          })();
         } else {
+          connStatus.set('error');
+          this.forceClose = true;
+          try { ws.close(); } catch { /* ignore */ }
           connError.set(`Auth failed: ${p.reason}`);
         }
         return;

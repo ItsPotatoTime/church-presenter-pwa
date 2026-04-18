@@ -1,21 +1,26 @@
 // IndexedDB wrapper.
 // Object stores:
-//   meta              — {key, value} rows: creds, device_id, last_sync_ts
+//   meta              — {key, value} rows: device_id, last_sync_ts, active_server_key
 //   songs             — keyed by song path
 //   lists             — keyed by list name
 //   pending_mutations — offline-queued list commands, replayed on reconnect
+//   servers           — one entry per paired server (added in v4)
 //
 // Version 2 adds `songs` + `lists` stores (Phase 2).
 // Version 3 adds `pending_mutations` (Phase 5 offline list editing).
+// Version 4 adds `servers` for multi-device pairing support.
 
 import type { LibrarySong, LibraryList } from './protocol';
 
 const DB_NAME = 'church-remote';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const STORE_META = 'meta';
 const STORE_SONGS = 'songs';
 const STORE_LISTS = 'lists';
 const STORE_PENDING = 'pending_mutations';
+const STORE_SERVERS = 'servers';
+
+// ── Public types ───────────────────────────────────────────────────
 
 export interface Credentials {
   device_id: string;
@@ -25,13 +30,31 @@ export interface Credentials {
   lan_host: string | null;
   server_name?: string;
   paired_at?: number;
+  // Present when loaded from the servers store (multi-device support)
+  server_key?: string;
 }
+
+export interface ServerEntry {
+  server_key: string; // UUID — IndexedDB key for STORE_SERVERS
+  device_id: string;
+  device_token: string;
+  device_name: string;
+  cloud_host: string | null;
+  lan_host: string | null;
+  server_name?: string;
+  paired_at?: number;
+  last_used?: number;
+}
+
+// ── DB open / upgrade ──────────────────────────────────────────────
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (ev) => {
       const db = req.result;
+      const tx = (ev.target as IDBOpenDBRequest).transaction!;
+
       if (!db.objectStoreNames.contains(STORE_META)) {
         db.createObjectStore(STORE_META, { keyPath: 'key' });
       }
@@ -44,11 +67,42 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_PENDING)) {
         db.createObjectStore(STORE_PENDING, { keyPath: 'id', autoIncrement: true });
       }
+      if (!db.objectStoreNames.contains(STORE_SERVERS)) {
+        db.createObjectStore(STORE_SERVERS, { keyPath: 'server_key' });
+      }
+
+      // Migration v3 → v4: move meta['creds'] into STORE_SERVERS
+      if (ev.oldVersion < 4 && db.objectStoreNames.contains(STORE_META)) {
+        const metaStore = tx.objectStore(STORE_META);
+        const serversStore = tx.objectStore(STORE_SERVERS);
+        const getReq = metaStore.get('creds');
+        getReq.onsuccess = () => {
+          const row = getReq.result as { key: string; value: Credentials } | undefined;
+          if (!row?.value) return;
+          const creds = row.value;
+          const serverKey = crypto.randomUUID();
+          const entry: ServerEntry = {
+            server_key: serverKey,
+            device_id: creds.device_id,
+            device_token: creds.device_token,
+            device_name: creds.device_name,
+            cloud_host: creds.cloud_host,
+            lan_host: creds.lan_host,
+            server_name: creds.server_name,
+            paired_at: creds.paired_at,
+            last_used: Date.now(),
+          };
+          serversStore.put(entry);
+          metaStore.put({ key: 'active_server_key', value: serverKey });
+        };
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
+
+// ── Low-level helpers ──────────────────────────────────────────────
 
 async function getRow<T>(key: string, store = STORE_META): Promise<T | null> {
   const db = await openDb();
@@ -58,7 +112,6 @@ async function getRow<T>(key: string, store = STORE_META): Promise<T | null> {
     req.onsuccess = () => {
       const row = req.result as { key: string; value: T } | T | undefined;
       if (!row) return resolve(null);
-      // meta store uses {key, value}; songs/lists store whole object
       if (store === STORE_META && (row as any).value !== undefined) {
         resolve((row as any).value as T);
       } else {
@@ -89,26 +142,217 @@ async function deleteMeta(key: string): Promise<void> {
   });
 }
 
-// ── Credentials ────────────────────────────────────────────────────
-// In-memory cache so tab-switch onMount reads are instant after first load.
+// ── Credentials (single-server shim — delegates to servers store) ──
+// In-memory cache so tab-switch onMount reads are instant.
 let _credCache: Credentials | null | undefined = undefined;
 
 export async function loadCredentials(): Promise<Credentials | null> {
   if (_credCache !== undefined) return _credCache;
-  const result = await getRow<Credentials>('creds');
-  _credCache = result;
-  return result;
+
+  // Try the active server first
+  const activeKey = await getRow<string>('active_server_key');
+  if (activeKey) {
+    const entry = await _getServerByKey(activeKey);
+    if (entry) {
+      _credCache = _entryToCredentials(entry);
+      return _credCache;
+    }
+  }
+
+  // No active key or stale key — pick the most recently used server
+  const all = await _loadAllServers();
+  if (all.length > 0) {
+    const best = all.sort((a, b) => (b.last_used ?? 0) - (a.last_used ?? 0))[0];
+    await setMeta('active_server_key', best.server_key);
+    _credCache = _entryToCredentials(best);
+    return _credCache;
+  }
+
+  // Legacy fallback: meta['creds'] (pre-v4 data that didn't migrate in onupgradeneeded)
+  const legacy = await getRow<Credentials>('creds');
+  if (legacy) {
+    const serverKey = crypto.randomUUID();
+    const entry: ServerEntry = {
+      server_key: serverKey,
+      device_id: legacy.device_id,
+      device_token: legacy.device_token,
+      device_name: legacy.device_name,
+      cloud_host: legacy.cloud_host,
+      lan_host: legacy.lan_host,
+      server_name: legacy.server_name,
+      paired_at: legacy.paired_at,
+      last_used: Date.now(),
+    };
+    await _saveServer(entry);
+    await setMeta('active_server_key', serverKey);
+    _credCache = _entryToCredentials(entry);
+    return _credCache;
+  }
+
+  _credCache = null;
+  return null;
 }
 
 export async function saveCredentials(c: Credentials): Promise<void> {
-  _credCache = c;
-  await setMeta('creds', c);
+  // If there's an active server, update it in-place (preserves server_key).
+  const activeKey = (c.server_key) || (await getRow<string>('active_server_key'));
+  if (activeKey) {
+    const existing = await _getServerByKey(activeKey);
+    if (existing) {
+      const updated: ServerEntry = {
+        ...existing,
+        device_id: c.device_id,
+        device_token: c.device_token,
+        device_name: c.device_name,
+        cloud_host: c.cloud_host,
+        lan_host: c.lan_host,
+        server_name: c.server_name ?? existing.server_name,
+        paired_at: c.paired_at ?? existing.paired_at,
+        last_used: Date.now(),
+      };
+      await _saveServer(updated);
+      _credCache = _entryToCredentials(updated);
+      return;
+    }
+  }
+  // No active server — create a new one.
+  const serverKey = c.server_key ?? crypto.randomUUID();
+  const entry: ServerEntry = {
+    server_key: serverKey,
+    device_id: c.device_id,
+    device_token: c.device_token,
+    device_name: c.device_name,
+    cloud_host: c.cloud_host,
+    lan_host: c.lan_host,
+    server_name: c.server_name,
+    paired_at: c.paired_at,
+    last_used: Date.now(),
+  };
+  await _saveServer(entry);
+  await setMeta('active_server_key', serverKey);
+  _credCache = _entryToCredentials(entry);
 }
 
 export async function clearCredentials(): Promise<void> {
+  const activeKey = await getRow<string>('active_server_key');
+  if (activeKey) {
+    await _removeServer(activeKey);
+  }
   _credCache = null;
+  // Remove legacy entry too
   await deleteMeta('creds');
+
+  // If other servers remain, keep the most recent as active (don't auto-connect;
+  // caller decides whether to reconnect or go to pair page).
+  const remaining = await _loadAllServers();
+  if (remaining.length > 0) {
+    const next = remaining.sort((a, b) => (b.last_used ?? 0) - (a.last_used ?? 0))[0];
+    await setMeta('active_server_key', next.server_key);
+  } else {
+    await deleteMeta('active_server_key');
+  }
 }
+
+// ── Multi-server API ───────────────────────────────────────────────
+
+/** Load all stored server credentials. */
+export async function loadAllServers(): Promise<ServerEntry[]> {
+  return _loadAllServers();
+}
+
+/**
+ * Add or replace a server entry.
+ * If an entry with the same server_key already exists it is overwritten.
+ */
+export async function saveServer(entry: ServerEntry): Promise<void> {
+  await _saveServer(entry);
+}
+
+/** Remove a specific server pairing by its key. */
+export async function removeServer(serverKey: string): Promise<void> {
+  const activeKey = await getRow<string>('active_server_key');
+  await _removeServer(serverKey);
+  if (activeKey === serverKey) {
+    // Pick another server or clear active
+    const remaining = await _loadAllServers();
+    if (remaining.length > 0) {
+      const next = remaining.sort((a, b) => (b.last_used ?? 0) - (a.last_used ?? 0))[0];
+      await setMeta('active_server_key', next.server_key);
+      _credCache = _entryToCredentials(next);
+    } else {
+      await deleteMeta('active_server_key');
+      _credCache = null;
+    }
+  }
+}
+
+/** Switch to a different stored server as the active one. */
+export async function switchServer(serverKey: string): Promise<Credentials | null> {
+  const entry = await _getServerByKey(serverKey);
+  if (!entry) return null;
+  const updated: ServerEntry = { ...entry, last_used: Date.now() };
+  await _saveServer(updated);
+  await setMeta('active_server_key', serverKey);
+  _credCache = _entryToCredentials(updated);
+  return _credCache;
+}
+
+// ── Internal helpers ───────────────────────────────────────────────
+
+function _entryToCredentials(e: ServerEntry): Credentials {
+  return {
+    device_id: e.device_id,
+    device_token: e.device_token,
+    device_name: e.device_name,
+    cloud_host: e.cloud_host,
+    lan_host: e.lan_host,
+    server_name: e.server_name,
+    paired_at: e.paired_at,
+    server_key: e.server_key,
+  };
+}
+
+async function _getServerByKey(key: string): Promise<ServerEntry | null> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVERS, 'readonly');
+    const req = tx.objectStore(STORE_SERVERS).get(key);
+    req.onsuccess = () => resolve((req.result as ServerEntry) ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function _loadAllServers(): Promise<ServerEntry[]> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVERS, 'readonly');
+    const req = tx.objectStore(STORE_SERVERS).getAll();
+    req.onsuccess = () => resolve((req.result ?? []) as ServerEntry[]);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function _saveServer(entry: ServerEntry): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVERS, 'readwrite');
+    tx.objectStore(STORE_SERVERS).put(entry);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function _removeServer(key: string): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVERS, 'readwrite');
+    tx.objectStore(STORE_SERVERS).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ── Device ID ──────────────────────────────────────────────────────
 
 export async function getOrCreateDeviceId(): Promise<string> {
   const existing = await getRow<string>('device_id');
@@ -209,7 +453,6 @@ export async function loadAllLists(): Promise<LibraryList[]> {
 }
 
 // ── Pending offline mutations ──────────────────────────────────────
-// Commands queued while disconnected; flushed to server on reconnect.
 
 export interface PendingMutation {
   id?: number;

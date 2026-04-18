@@ -280,7 +280,7 @@
 
 {#if showPicker}
   <div
-    class="modal-back"
+    class="modal-back modal-back-top"
     role="button"
     tabindex="-1"
     aria-label="Close picker"
@@ -468,7 +468,8 @@
     align-items: flex-start;
     padding-top: calc(env(safe-area-inset-top, 0) + 60px);
   }
-  .modal-back-top .modal-dialog {
+  .modal-back-top .modal-dialog,
+  .modal-back-top .modal {
     border-radius: 14px;
     width: calc(100% - 32px);
     max-width: 480px;

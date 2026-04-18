@@ -4,7 +4,7 @@
   import { base } from '$app/paths';
   import { loadCredentials } from '$lib/db';
   import { remote } from '$lib/ws';
-  import { syncNow } from '$lib/sync';
+  import { syncFull, syncNow } from '$lib/sync';
   import {
     connStatus,
     isViewOnly,
@@ -197,7 +197,7 @@
   <button
     class="refresh"
     aria-label="Refresh"
-    onclick={() => void syncNow()}
+    onclick={() => void syncFull()}
     disabled={$syncStatus === 'syncing' || $connStatus !== 'open'}
   >↻</button>
 </section>

@@ -58,11 +58,19 @@ function requestSync(sinceTs: number): Promise<{ type: string; payload: any }> {
   });
 }
 
+/** Force a full resync regardless of cached timestamp — use when slides look stale. */
+export async function syncFull(): Promise<void> {
+  return _doSync(0);
+}
+
 /** Perform a delta or full sync against the desktop and update IndexedDB + stores. */
 export async function syncNow(): Promise<void> {
+  return _doSync(await getLastSyncTs());
+}
+
+async function _doSync(since: number): Promise<void> {
   syncStatus.set('syncing');
   try {
-    const since = await getLastSyncTs();
     const resp = await requestSync(since);
 
     if (resp.type === 'sync.full') {
