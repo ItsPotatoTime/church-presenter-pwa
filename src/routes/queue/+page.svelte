@@ -34,7 +34,9 @@
     if (!await showConfirm(`Switch to "${name}"?`)) return;
     send({ type: 'live.goto', payload: { song_index: songIdx, slide_index: 0 } });
   }
-  function remove(pos: number) {
+  async function remove(pos: number) {
+    const name = $queueState?.items[pos]?.name || 'this song';
+    if (!await showConfirm(`Remove "${name}" from queue?`)) return;
     send({ type: 'queue.remove', payload: { position: pos } });
   }
   async function clearAll() {
@@ -43,12 +45,11 @@
     }
   }
 
-  // ── Drag reorder (HTML5 DnD — works in mobile Safari/Chrome with long-press) ──
+  // ── Drag reorder (HTML5 DnD + touch for mobile) ─────────────────
   function onDragStart(e: DragEvent, i: number) {
     dragFrom = i;
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
-      // Safari refuses drag without setData
       e.dataTransfer.setData('text/plain', String(i));
     }
   }
@@ -68,6 +69,58 @@
   function onDragEnd() {
     dragFrom = null;
     dragOver = null;
+  }
+
+  // ── Touch drag (mobile — HTML5 DnD doesn't fire touch events) ──
+  let touchStartY = 0;
+  let touchActive = false;
+  let longPressTimer: number | null = null;
+  let touchIdx = -1;
+
+  function onTouchStart(e: TouchEvent, i: number) {
+    if ($isViewOnly) return;
+    touchIdx = i;
+    touchStartY = e.touches[0].clientY;
+    longPressTimer = window.setTimeout(() => {
+      touchActive = true;
+      dragFrom = i;
+      dragOver = i;
+    }, 300);
+  }
+
+  function onTouchMove(e: TouchEvent) {
+    if (!touchActive) {
+      if (longPressTimer !== null && Math.abs(e.touches[0].clientY - touchStartY) > 10) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+      return;
+    }
+    e.preventDefault();
+    const touch = e.touches[0];
+    const els = document.querySelectorAll('.qitem');
+    for (let j = 0; j < els.length; j++) {
+      const rect = els[j].getBoundingClientRect();
+      if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
+        dragOver = j;
+        break;
+      }
+    }
+  }
+
+  function onTouchEnd() {
+    if (longPressTimer !== null) {
+      clearTimeout(longPressTimer);
+      longPressTimer = null;
+    }
+    if (!touchActive) return;
+    touchActive = false;
+    const from = dragFrom;
+    const to = dragOver;
+    dragFrom = null;
+    dragOver = null;
+    if (from === null || to === null || from === to) return;
+    send({ type: 'queue.reorder', payload: { from, to } });
   }
 </script>
 
@@ -103,11 +156,15 @@
         class:playing={$queueState.playing_song_index === i}
         class:current={$queueState.current_song_index === i && $queueState.playing_song_index !== i}
         class:drop={dragOver === i}
+        class:dragging={dragFrom === i && touchActive}
         draggable={!$isViewOnly}
         ondragstart={(e) => onDragStart(e, i)}
         ondragover={(e) => onDragOver(e, i)}
         ondrop={(e) => onDrop(e, i)}
         ondragend={onDragEnd}
+        ontouchstart={(e) => onTouchStart(e, i)}
+        ontouchmove={(e) => onTouchMove(e)}
+        ontouchend={onTouchEnd}
       >
         <span class="grip" aria-hidden="true">⋮⋮</span>
         <button class="label" onclick={() => tapJump(i)} disabled={$isViewOnly}>
@@ -183,6 +240,7 @@
   .qitem.playing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
   .qitem.current { border-color: var(--border-light); }
   .qitem.drop { border-color: var(--accent); background: var(--elevated); }
+  .qitem.dragging { opacity: 0.5; transform: scale(0.97); }
 
   .grip { color: var(--text-secondary); font-size: 14px; cursor: grab; }
   .label {

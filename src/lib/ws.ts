@@ -16,6 +16,7 @@ import type {
   QueueState,
 } from './protocol';
 import {
+  cacheQueueState,
   clearCredentials,
   clearPendingMutations,
   getPendingMutations,
@@ -349,7 +350,9 @@ class RemoteClient {
       }
 
       if (msg.type === 'queue.state') {
-        queueState.set(msg.payload as QueueState);
+        const qs = msg.payload as QueueState;
+        queueState.set(qs);
+        void cacheQueueState(qs);
         return;
       }
 

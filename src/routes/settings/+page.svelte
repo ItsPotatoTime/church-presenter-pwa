@@ -8,11 +8,15 @@
     removeServer,
     switchServer,
     getLastSyncTs,
+    exportBackup,
+    compareBackup,
+    importBackup,
     type Credentials,
     type ServerEntry,
+    type BackupData,
   } from '$lib/db';
   import { remote } from '$lib/ws';
-  import { syncFull } from '$lib/sync';
+  import { syncFull, hydrateFromCache } from '$lib/sync';
   import {
     connStatus,
     connEndpoint,
@@ -79,6 +83,8 @@
     if (!newCreds) return;
     creds = newCreds;
     servers = await loadAllServers();
+    await hydrateFromCache();
+    lastSyncTs = await getLastSyncTs();
     remote.disconnect();
     await remote.connect();
   }
@@ -88,6 +94,62 @@
     const d = new Date(lastSyncTs * 1000);
     return d.toLocaleString();
   });
+
+  let importDialog = $state<{ comparison: any; data: BackupData; resolve: (v: boolean) => void } | null>(null);
+
+  async function doBackup() {
+    try {
+      const data = await exportBackup();
+      const json = JSON.stringify(data);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const d = new Date().toISOString().slice(0, 10);
+      a.download = `ChurchPresenter_PWA_backup_${d}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert('Backup failed: ' + (e?.message ?? e));
+    }
+  }
+
+  async function doImport() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text) as BackupData;
+        if (!data.version || !data.songs || !data.servers) {
+          alert('Invalid backup file.');
+          return;
+        }
+        const comparison = await compareBackup(data);
+        const confirmed = await new Promise<boolean>((resolve) => {
+          importDialog = { comparison, data, resolve };
+        });
+        importDialog = null;
+        if (!confirmed) return;
+        await importBackup(data);
+        servers = await loadAllServers();
+        creds = await loadCredentials();
+        await hydrateFromCache();
+        lastSyncTs = await getLastSyncTs();
+        if (creds?.device_token) {
+          remote.disconnect();
+          await remote.connect();
+        }
+        alert('Import complete!');
+      } catch (e: any) {
+        alert('Import failed: ' + (e?.message ?? e));
+      }
+    };
+    input.click();
+  }
 </script>
 
 <header>
@@ -204,6 +266,70 @@
   <button class="ghost fw" onclick={unpair}>Forget this server</button>
 </section>
 
+<section class="panel" style="margin-top:12px;">
+  <h2>Backup &amp; Import</h2>
+  <p class="muted small" style="margin:0 0 10px;">
+    Export all cached songs, lists, and server pairings as a file.
+  </p>
+  <button class="ghost fw" onclick={doBackup}>Export Backup</button>
+  <button class="ghost fw" onclick={doImport}>Import Backup</button>
+</section>
+
+{#if importDialog}
+  <div
+    class="modal-back"
+    role="button"
+    tabindex="-1"
+    aria-label="Cancel"
+    onclick={() => { importDialog?.resolve(false); importDialog = null; }}
+    onkeydown={(e) => { if (e.key === 'Escape') { importDialog?.resolve(false); importDialog = null; } }}
+  >
+    <div
+      class="modal"
+      role="alertdialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <h3 style="margin:0 0 12px; font-size:17px;">Import Backup</h3>
+
+      <div class="compare-grid">
+        <div class="compare-col">
+          <div class="compare-head">Current</div>
+          <div>Songs: {importDialog.comparison.current.songs}</div>
+          <div>Lists: {importDialog.comparison.current.lists}</div>
+          <div>Servers: {importDialog.comparison.current.servers}</div>
+        </div>
+        <div class="compare-col">
+          <div class="compare-head">Backup</div>
+          <div>Songs: {importDialog.comparison.backup.songs}</div>
+          <div>Lists: {importDialog.comparison.backup.lists}</div>
+          <div>Servers: {importDialog.comparison.backup.servers}</div>
+          <div class="muted small">
+            Exported: {new Date(importDialog.comparison.backup.exported_at).toLocaleString()}
+          </div>
+        </div>
+      </div>
+
+      {#if importDialog.comparison.backupIsOlder}
+        <div class="warn">Warning: this backup is older than your current data.</div>
+      {/if}
+      {#if importDialog.comparison.backupHasLess}
+        <div class="warn">Warning: this backup has fewer songs than you currently have.</div>
+      {/if}
+
+      <p class="muted small" style="margin:10px 0 0;">
+        This will replace all current data. Continue?
+      </p>
+      <div class="modal-btns" style="margin-top:14px;">
+        <button class="ghost" onclick={() => { importDialog?.resolve(false); importDialog = null; }}>Cancel</button>
+        <button class="accent" onclick={() => { importDialog?.resolve(true); importDialog = null; }}>Import</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   header { padding: 4px 0 12px; }
   h1 { margin: 0; font-size: 22px; font-weight: 700; }
@@ -255,4 +381,45 @@
   button.sm { padding: 6px 10px; font-size: 13px; margin-top: 0; width: auto; }
   button.danger { color: var(--danger); border-color: var(--danger); }
   button.ghost:hover { color: var(--text-primary); }
+
+  .modal-back {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
+    width: 100%;
+    max-width: 720px;
+    padding: 20px 16px 24px;
+  }
+  .modal-btns { display: flex; gap: 10px; }
+  .modal-btns button { flex: 1; padding: 13px; font-size: 15px; }
+  button.accent {
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: #fff;
+    border-radius: 8px;
+  }
+
+  .compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    font-size: 14px;
+    margin: 8px 0;
+  }
+  .compare-col { background: var(--elevated); border-radius: 8px; padding: 10px; }
+  .compare-head { font-weight: 700; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary); }
+  .warn {
+    color: var(--danger, #ff6b6b);
+    font-size: 13px;
+    font-weight: 600;
+    margin-top: 8px;
+  }
 </style>

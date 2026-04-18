@@ -10,7 +10,7 @@
 // Version 3 adds `pending_mutations` (Phase 5 offline list editing).
 // Version 4 adds `servers` for multi-device pairing support.
 
-import type { LibrarySong, LibraryList } from './protocol';
+import type { LibrarySong, LibraryList, QueueState } from './protocol';
 
 const DB_NAME = 'church-remote';
 const DB_VERSION = 4;
@@ -44,6 +44,10 @@ export interface ServerEntry {
   server_name?: string;
   paired_at?: number;
   last_used?: number;
+  cached_songs?: LibrarySong[];
+  cached_lists?: LibraryList[];
+  cached_queue?: QueueState | null;
+  last_sync_ts?: number;
 }
 
 // ── DB open / upgrade ──────────────────────────────────────────────
@@ -286,14 +290,22 @@ export async function removeServer(serverKey: string): Promise<void> {
   }
 }
 
-/** Switch to a different stored server as the active one. */
+/** Switch to a different stored server as the active one.
+ *  Snapshots current server's data, restores target server's cached data. */
 export async function switchServer(serverKey: string): Promise<Credentials | null> {
+  const currentKey = await getRow<string>('active_server_key');
+  if (currentKey && currentKey !== serverKey) {
+    await snapshotServerData(currentKey);
+  }
+
   const entry = await _getServerByKey(serverKey);
   if (!entry) return null;
   const updated: ServerEntry = { ...entry, last_used: Date.now() };
   await _saveServer(updated);
   await setMeta('active_server_key', serverKey);
   _credCache = _entryToCredentials(updated);
+
+  await restoreServerData(serverKey);
   return _credCache;
 }
 
@@ -362,14 +374,27 @@ export async function getOrCreateDeviceId(): Promise<string> {
   return id;
 }
 
-// ── Sync bookkeeping ───────────────────────────────────────────────
+// ── Sync bookkeeping (per-server) ─────────────────────────────────
 
 export async function getLastSyncTs(): Promise<number> {
+  const sk = await getRow<string>('active_server_key');
+  if (sk) {
+    const entry = await _getServerByKey(sk);
+    if (entry?.last_sync_ts) return entry.last_sync_ts;
+  }
   return (await getRow<number>('last_sync_ts')) ?? 0;
 }
 
 export async function setLastSyncTs(ts: number): Promise<void> {
   await setMeta('last_sync_ts', ts);
+  const sk = await getRow<string>('active_server_key');
+  if (sk) {
+    const entry = await _getServerByKey(sk);
+    if (entry) {
+      entry.last_sync_ts = ts;
+      await _saveServer(entry);
+    }
+  }
 }
 
 // ── Songs ──────────────────────────────────────────────────────────
@@ -452,6 +477,52 @@ export async function loadAllLists(): Promise<LibraryList[]> {
   });
 }
 
+// ── Per-server data cache (snapshot/restore on server switch) ──────
+
+export async function snapshotServerData(serverKey: string): Promise<void> {
+  const entry = await _getServerByKey(serverKey);
+  if (!entry) return;
+  entry.cached_songs = await loadAllSongs();
+  entry.cached_lists = await loadAllLists();
+  entry.last_sync_ts = (await getRow<number>('last_sync_ts')) ?? 0;
+  await _saveServer(entry);
+}
+
+export async function restoreServerData(serverKey: string): Promise<void> {
+  const entry = await _getServerByKey(serverKey);
+  await clearSongs();
+  await clearLists();
+  if (entry?.cached_songs?.length) await putSongs(entry.cached_songs);
+  if (entry?.cached_lists?.length) await putLists(entry.cached_lists);
+  await setMeta('last_sync_ts', entry?.last_sync_ts ?? 0);
+}
+
+export async function cacheQueueState(queue: QueueState | null): Promise<void> {
+  const sk = await getRow<string>('active_server_key');
+  if (!sk) return;
+  const entry = await _getServerByKey(sk);
+  if (!entry) return;
+  entry.cached_queue = queue;
+  await _saveServer(entry);
+}
+
+export async function getCachedQueueState(): Promise<QueueState | null> {
+  const sk = await getRow<string>('active_server_key');
+  if (!sk) return null;
+  const entry = await _getServerByKey(sk);
+  return entry?.cached_queue ?? null;
+}
+
+export async function clearLists(): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_LISTS, 'readwrite');
+    tx.objectStore(STORE_LISTS).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 // ── Pending offline mutations ──────────────────────────────────────
 
 export interface PendingMutation {
@@ -489,4 +560,72 @@ export async function clearPendingMutations(): Promise<void> {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+// ── Backup / Import ───────────────────────────────────────────────
+
+export interface BackupData {
+  version: number;
+  exported_at: number;
+  songs: LibrarySong[];
+  lists: LibraryList[];
+  servers: ServerEntry[];
+  active_server_key: string | null;
+  device_id: string | null;
+}
+
+export async function exportBackup(): Promise<BackupData> {
+  const songs = await loadAllSongs();
+  const lists = await loadAllLists();
+  const servers = await _loadAllServers();
+  const activeKey = await getRow<string>('active_server_key');
+  const deviceId = await getRow<string>('device_id');
+  return {
+    version: DB_VERSION,
+    exported_at: Date.now(),
+    songs,
+    lists,
+    servers,
+    active_server_key: activeKey,
+    device_id: deviceId,
+  };
+}
+
+export interface BackupComparison {
+  current: { songs: number; lists: number; servers: number };
+  backup: { songs: number; lists: number; servers: number; exported_at: number };
+  backupIsOlder: boolean;
+  backupHasLess: boolean;
+}
+
+export async function compareBackup(data: BackupData): Promise<BackupComparison> {
+  const currentSongs = await loadAllSongs();
+  const currentLists = await loadAllLists();
+  const currentServers = await _loadAllServers();
+  return {
+    current: { songs: currentSongs.length, lists: currentLists.length, servers: currentServers.length },
+    backup: { songs: data.songs.length, lists: data.lists.length, servers: data.servers.length, exported_at: data.exported_at },
+    backupIsOlder: data.exported_at < Date.now() - 60_000,
+    backupHasLess: data.songs.length < currentSongs.length,
+  };
+}
+
+export async function importBackup(data: BackupData): Promise<void> {
+  await clearSongs();
+  await clearLists();
+  if (data.songs.length) await putSongs(data.songs);
+  if (data.lists.length) await putLists(data.lists);
+  // Restore servers
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVERS, 'readwrite');
+    const store = tx.objectStore(STORE_SERVERS);
+    store.clear();
+    for (const s of data.servers) store.put(s);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+  if (data.active_server_key) await setMeta('active_server_key', data.active_server_key);
+  if (data.device_id) await setMeta('device_id', data.device_id);
+  _credCache = undefined;
 }

@@ -6,6 +6,7 @@ import { remote } from './ws';
 import {
   deleteSongsByPath,
   getAllSongPaths,
+  getCachedQueueState,
   getLastSyncTs,
   loadAllLists,
   loadAllSongs,
@@ -14,7 +15,7 @@ import {
   setLastSyncTs,
 } from './db';
 import type { SyncDelta, SyncFull } from './protocol';
-import { listsStore, songsStore, syncStatus } from './stores';
+import { listsStore, queueState, songsStore, syncStatus } from './stores';
 
 type PendingResolver = (msg: { type: string; payload: any }) => void;
 
@@ -108,7 +109,12 @@ async function _doSync(since: number): Promise<void> {
 
 /** Load whatever is in IndexedDB into the Svelte stores (for offline UI). */
 export async function hydrateFromCache(): Promise<void> {
-  const [songs, lists] = await Promise.all([loadAllSongs(), loadAllLists()]);
+  const [songs, lists, cachedQueue] = await Promise.all([
+    loadAllSongs(),
+    loadAllLists(),
+    getCachedQueueState(),
+  ]);
   songsStore.set(songs);
   listsStore.set(lists);
+  if (cachedQueue) queueState.set(cachedQueue);
 }
