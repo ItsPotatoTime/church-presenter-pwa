@@ -246,14 +246,18 @@ export async function clearCredentials(): Promise<void> {
   // Remove legacy entry too
   await deleteMeta('creds');
 
-  // If other servers remain, keep the most recent as active (don't auto-connect;
-  // caller decides whether to reconnect or go to pair page).
+  // If other servers remain, keep the most recent as active and restore its
+  // cached data so IndexedDB doesn't still hold the removed server's songs.
   const remaining = await _loadAllServers();
   if (remaining.length > 0) {
     const next = remaining.sort((a, b) => (b.last_used ?? 0) - (a.last_used ?? 0))[0];
     await setMeta('active_server_key', next.server_key);
+    await restoreServerData(next.server_key);
   } else {
     await deleteMeta('active_server_key');
+    // No servers left — wipe stale song/list data from IndexedDB.
+    await clearSongs();
+    await clearLists();
   }
 }
 
@@ -277,15 +281,18 @@ export async function removeServer(serverKey: string): Promise<void> {
   const activeKey = await getRow<string>('active_server_key');
   await _removeServer(serverKey);
   if (activeKey === serverKey) {
-    // Pick another server or clear active
+    // Pick another server or clear active, and restore its cached data.
     const remaining = await _loadAllServers();
     if (remaining.length > 0) {
       const next = remaining.sort((a, b) => (b.last_used ?? 0) - (a.last_used ?? 0))[0];
       await setMeta('active_server_key', next.server_key);
       _credCache = _entryToCredentials(next);
+      await restoreServerData(next.server_key);
     } else {
       await deleteMeta('active_server_key');
       _credCache = null;
+      await clearSongs();
+      await clearLists();
     }
   }
 }
@@ -372,6 +379,12 @@ export async function getOrCreateDeviceId(): Promise<string> {
   const id = crypto.randomUUID();
   await setMeta('device_id', id);
   return id;
+}
+
+// ── Active server key accessor ────────────────────────────────────
+
+export async function getActiveServerKey(): Promise<string | null> {
+  return (await getRow<string>('active_server_key')) ?? null;
 }
 
 // ── Sync bookkeeping (per-server) ─────────────────────────────────
