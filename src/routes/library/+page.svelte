@@ -46,7 +46,7 @@
   $effect(() => {
     const v = rawQuery;
     if (debounceTimer !== null) clearTimeout(debounceTimer);
-    debounceTimer = window.setTimeout(() => { query = v; }, 120);
+    debounceTimer = window.setTimeout(() => { query = v; }, 200);
     return () => {
       if (debounceTimer !== null) clearTimeout(debounceTimer);
     };
@@ -109,18 +109,30 @@
     return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   });
 
-  // ── Search mode (query present) — scored + ranked ────────────────────
+  // ── Search mode (query present) — scored + ranked, capped at MAX_RESULTS ──
   type SR = { s: LibrarySong; score: number; snippet: string };
+  const MAX_RESULTS = 200;
 
-  const searchResults = $derived.by<SR[]>(() => {
+  // Collects results in priority order (name > folder > slides) with an early-exit
+  // cap so we never build or render more than MAX_RESULTS DOM nodes.
+  // No sort needed — priority buckets are merged in order.
+  const searchData = $derived.by<{ items: SR[]; overflow: boolean }>(() => {
     const q = normalize(query);
-    if (!q) return [];
-    const out: SR[] = [];
+    if (!q) return { items: [], overflow: false };
+    const names: SR[] = [];
+    const folders: SR[] = [];
+    const slideHits: SR[] = [];
+    let overflow = false;
+
     for (const e of index) {
+      if (names.length + folders.length + slideHits.length >= MAX_RESULTS) {
+        overflow = true;
+        break;
+      }
       if (e.nName.includes(q)) {
-        out.push({ s: e.s, score: 3, snippet: '' });
+        names.push({ s: e.s, score: 3, snippet: '' });
       } else if (e.nFolder.includes(q)) {
-        out.push({ s: e.s, score: 2, snippet: '' });
+        folders.push({ s: e.s, score: 2, snippet: '' });
       } else if (searchSlides) {
         const ns = slidesFor(e);
         for (let si = 0; si < ns.length; si++) {
@@ -133,15 +145,18 @@
               (start > 0 ? '…' : '') +
               raw.slice(start, end).trim() +
               (end < raw.length ? '…' : '');
-            out.push({ s: e.s, score: 1, snippet: snip });
+            slideHits.push({ s: e.s, score: 1, snippet: snip });
             break;
           }
         }
       }
     }
-    out.sort((a, b) => b.score - a.score);
-    return out;
+
+    return { items: [...names, ...folders, ...slideHits], overflow };
   });
+
+  const searchResults = $derived(searchData.items);
+  const searchOverflow = $derived(searchData.overflow);
 
   function addToQueue(path: string) {
     remote.send({ type: 'queue.add', payload: { song_path: path } });
@@ -161,7 +176,7 @@
   <div class="muted small">
     {#if $syncStatus === 'syncing'}Syncing…
     {:else if $syncStatus === 'error'}Sync failed — tap refresh
-    {:else if hasQuery}{searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+    {:else if hasQuery}{searchResults.length}{searchOverflow ? '+' : ''} result{searchResults.length !== 1 ? 's' : ''}
     {:else}{$songsStore.length} songs{/if}
   </div>
 </header>
@@ -216,6 +231,9 @@
         >＋</button>
       </div>
     {/each}
+    {#if searchOverflow}
+      <p class="muted small load-hint">Showing first {MAX_RESULTS} — type more to narrow results</p>
+    {/if}
   {/if}
 
 {:else}
