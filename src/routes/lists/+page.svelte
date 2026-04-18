@@ -17,6 +17,16 @@
   let dragFrom = $state<number | null>(null);
   let dragOver = $state<number | null>(null);
 
+  let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
+  let promptDialog = $state<{ title: string; initial: string; value: string; resolve: (v: string | null) => void } | null>(null);
+
+  function showConfirm(message: string): Promise<boolean> {
+    return new Promise((resolve) => { confirmDialog = { message, resolve }; });
+  }
+  function showPrompt(title: string, initial = ''): Promise<string | null> {
+    return new Promise((resolve) => { promptDialog = { title, initial, value: initial, resolve }; });
+  }
+
   // Layout already calls hydrateFromCache() on startup — no need to repeat here.
   onMount(async () => {
     const creds = await loadCredentials();
@@ -90,21 +100,21 @@
     selectedName = name;
   }
 
-  function createList() {
-    const name = prompt('New list name:');
+  async function createList() {
+    const name = await showPrompt('New list name:');
     if (!name || !name.trim()) return;
     const clean = name.trim().slice(0, 80);
     if ($listsStore.some((l) => l.name === clean)) {
-      alert('A list with that name already exists.');
+      await showConfirm(`"${clean}" already exists.`);
       return;
     }
     send({ type: 'list.create', payload: { name: clean } });
     selectedName = clean;
   }
 
-  function renameList() {
+  async function renameList() {
     if (!selectedList) return;
-    const next = prompt('Rename list:', selectedList.name);
+    const next = await showPrompt('Rename list:', selectedList.name);
     if (!next || !next.trim()) return;
     const clean = next.trim().slice(0, 80);
     if (clean === selectedList.name) return;
@@ -112,17 +122,17 @@
     selectedName = clean;
   }
 
-  function deleteList() {
+  async function deleteList() {
     if (!selectedList) return;
-    if (!confirm(`Delete list "${selectedList.name}"?`)) return;
+    if (!await showConfirm(`Delete list "${selectedList.name}"?`)) return;
     send({ type: 'list.delete', payload: { name: selectedList.name } });
     selectedName = null;
   }
 
-  function loadToQueue() {
+  async function loadToQueue() {
     if (!selectedList) return;
-    if (!selectedList.songs.length) { alert('List is empty.'); return; }
-    if (!confirm(`Replace queue with ${selectedList.songs.length} song(s) from "${selectedList.name}"?`)) return;
+    if (!selectedList.songs.length) { await showConfirm('This list is empty.'); return; }
+    if (!await showConfirm(`Replace queue with ${selectedList.songs.length} song(s) from "${selectedList.name}"?`)) return;
     send({ type: 'list.load_to_queue', payload: { list_name: selectedList.name } });
   }
 
@@ -303,6 +313,68 @@
   </div>
 {/if}
 
+{#if confirmDialog}
+  <div
+    class="modal-back"
+    role="button"
+    tabindex="-1"
+    aria-label="Cancel"
+    onclick={() => { confirmDialog?.resolve(false); confirmDialog = null; }}
+    onkeydown={(e) => { if (e.key === 'Escape') { confirmDialog?.resolve(false); confirmDialog = null; } }}
+  >
+    <div
+      class="modal modal-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <div class="dialog-msg">{confirmDialog.message}</div>
+      <div class="dialog-btns">
+        <button class="ghost" onclick={() => { confirmDialog?.resolve(false); confirmDialog = null; }}>Cancel</button>
+        <button class="accent" onclick={() => { confirmDialog?.resolve(true); confirmDialog = null; }}>Confirm</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if promptDialog}
+  <div
+    class="modal-back"
+    role="button"
+    tabindex="-1"
+    aria-label="Cancel"
+    onclick={() => { promptDialog?.resolve(null); promptDialog = null; }}
+    onkeydown={(e) => { if (e.key === 'Escape') { promptDialog?.resolve(null); promptDialog = null; } }}
+  >
+    <div
+      class="modal modal-dialog"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <div class="modal-title">{promptDialog.title}</div>
+      <input
+        type="text"
+        bind:value={promptDialog.value}
+        autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
+        onkeydown={(e) => {
+          if (e.key === 'Enter') { const v = promptDialog?.value ?? null; promptDialog?.resolve(v); promptDialog = null; }
+        }}
+      />
+      <div class="dialog-btns" style="margin-top:12px;">
+        <button class="ghost" onclick={() => { promptDialog?.resolve(null); promptDialog = null; }}>Cancel</button>
+        <button class="accent" onclick={() => { const v = promptDialog?.value ?? null; promptDialog?.resolve(v); promptDialog = null; }}>OK</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .hdr { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 4px 0 10px; }
   h1 { margin: 0; font-size: 22px; font-weight: 700; }
@@ -393,7 +465,7 @@
     display: flex; align-items: center; justify-content: space-between;
     margin-bottom: 10px;
   }
-  .modal-title { font-weight: 700; font-size: 18px; }
+  .modal-title { font-weight: 700; font-size: 18px; margin-bottom: 12px; }
   .modal input {
     width: 100%;
     padding: 10px 12px;
@@ -412,5 +484,26 @@
     border-radius: 8px;
     padding: 10px 12px;
     color: var(--text-primary);
+  }
+
+  .modal-dialog {
+    max-height: none;
+    overflow-y: visible;
+    padding: 20px 16px 24px;
+  }
+  .dialog-msg {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 18px;
+    text-align: center;
+  }
+  .dialog-btns {
+    display: flex;
+    gap: 10px;
+  }
+  .dialog-btns button {
+    flex: 1;
+    padding: 13px;
+    font-size: 15px;
   }
 </style>

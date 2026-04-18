@@ -5,11 +5,12 @@
   import { base } from '$app/paths';
   import { getOrCreateDeviceId, loadCredentials } from '$lib/db';
   import { hydrateFromCache } from '$lib/sync';
-  import { myDeviceId, isViewOnly } from '$lib/stores';
+  import { myDeviceId, isViewOnly, connStatus } from '$lib/stores';
 
   let { children } = $props();
   let paired = $state(false);
   let ready = $state(false);
+  let hasHydrated = $state(false);
 
   onMount(async () => {
     myDeviceId.set(await getOrCreateDeviceId());
@@ -18,8 +19,21 @@
     if (paired) {
       // Load library cache so Library/Queue show something even offline.
       await hydrateFromCache();
+      hasHydrated = true;
     }
     ready = true;
+  });
+
+  // After first QR pairing, connStatus becomes 'open' before layout re-mounts.
+  // Update paired reactively so the tab bar appears without a page refresh.
+  $effect(() => {
+    if ($connStatus === 'open' && !paired) {
+      paired = true;
+      if (!hasHydrated) {
+        hasHydrated = true;
+        void hydrateFromCache();
+      }
+    }
   });
 
   // Hide the tab bar during first-run screens (/, /pair) to keep focus on setup.

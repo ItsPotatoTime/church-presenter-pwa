@@ -8,6 +8,11 @@
 
   let dragFrom = $state<number | null>(null);
   let dragOver = $state<number | null>(null);
+  let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
+
+  function showConfirm(message: string): Promise<boolean> {
+    return new Promise((resolve) => { confirmDialog = { message, resolve }; });
+  }
 
   onMount(async () => {
     const creds = await loadCredentials();
@@ -24,16 +29,16 @@
     remote.send(cmd);
   }
 
-  function tapJump(songIdx: number) {
+  async function tapJump(songIdx: number) {
     const name = $queueState?.items[songIdx]?.name || 'this song';
-    if (!confirm(`Switch to "${name}"?`)) return;
+    if (!await showConfirm(`Switch to "${name}"?`)) return;
     send({ type: 'live.goto', payload: { song_index: songIdx, slide_index: 0 } });
   }
   function remove(pos: number) {
     send({ type: 'queue.remove', payload: { position: pos } });
   }
-  function clearAll() {
-    if (confirm('Clear the entire queue?')) {
+  async function clearAll() {
+    if (await showConfirm('Clear the entire queue?')) {
       send({ type: 'queue.clear' });
     }
   }
@@ -119,6 +124,32 @@
   </section>
 {/if}
 
+{#if confirmDialog}
+  <div
+    class="modal-back"
+    role="button"
+    tabindex="-1"
+    aria-label="Cancel"
+    onclick={() => { confirmDialog?.resolve(false); confirmDialog = null; }}
+    onkeydown={(e) => { if (e.key === 'Escape') { confirmDialog?.resolve(false); confirmDialog = null; } }}
+  >
+    <div
+      class="modal"
+      role="alertdialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <div class="modal-msg">{confirmDialog.message}</div>
+      <div class="modal-btns">
+        <button class="ghost" onclick={() => { confirmDialog?.resolve(false); confirmDialog = null; }}>Cancel</button>
+        <button class="accent" onclick={() => { confirmDialog?.resolve(true); confirmDialog = null; }}>Confirm</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .hdr {
     display: flex; justify-content: space-between; align-items: flex-end;
@@ -167,5 +198,42 @@
   a.btn.disabled {
     pointer-events: none;
     opacity: 0.45;
+  }
+
+  .modal-back {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 100;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px 14px 0 0;
+    width: 100%;
+    max-width: 720px;
+    padding: 20px 16px 24px;
+  }
+  .modal-msg {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 18px;
+    text-align: center;
+  }
+  .modal-btns {
+    display: flex;
+    gap: 10px;
+  }
+  .modal-btns button {
+    flex: 1;
+    padding: 13px;
+    font-size: 15px;
+  }
+  button.ghost {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-primary);
   }
 </style>
