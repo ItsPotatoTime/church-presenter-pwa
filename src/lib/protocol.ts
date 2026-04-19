@@ -52,6 +52,7 @@ export interface QueueItem {
   path: string;
   name: string;
   folder: string;
+  is_merged?: boolean;
 }
 
 export interface QueueState {

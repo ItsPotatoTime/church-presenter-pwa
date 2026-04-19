@@ -47,7 +47,7 @@
   let dragging = $state<number | null>(null);
   let insertAt = $state<number | null>(null);
   let ghostStyle = $state('');
-  let ghostItem = $state<{ name: string; folder?: string } | null>(null);
+  let ghostItem = $state<{ name: string; folder?: string; is_merged?: boolean } | null>(null);
 
   // Cached at drag-start (viewport-relative, before any drag transforms).
   let _tops: number[] = [];
@@ -83,7 +83,8 @@
 
     dragging  = i;
     insertAt  = i;
-    ghostItem = { name: $queueState?.items[i]?.name ?? '', folder: $queueState?.items[i]?.folder };
+    const qi = $queueState?.items[i];
+    ghostItem = { name: qi?.name ?? '', folder: qi?.folder, is_merged: qi?.is_merged };
     ghostStyle = `top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;height:${rect.height}px`;
 
     window.addEventListener('pointermove', onDragMove, { passive: false });
@@ -169,7 +170,11 @@
         >⋮⋮</span>
         <button class="label" onclick={() => tapJump(i)} disabled={$isViewOnly}>
           <div class="name">{item.name || 'Untitled'}</div>
-          {#if item.folder}<div class="muted small">{item.folder}</div>{/if}
+          {#if item.is_merged}
+            <div class="muted small merged-tag">🔀 merged</div>
+          {:else if item.folder}
+            <div class="muted small">{item.folder}</div>
+          {/if}
         </button>
         <button class="rm" aria-label="Remove" onclick={() => remove(i)} disabled={$isViewOnly}>✕</button>
       </li>
@@ -187,7 +192,11 @@
     <span class="grip">⋮⋮</span>
     <div class="ghost-label">
       <div class="name">{ghostItem.name || 'Untitled'}</div>
-      {#if ghostItem.folder}<div class="muted small">{ghostItem.folder}</div>{/if}
+      {#if ghostItem.is_merged}
+        <div class="muted small">🔀 merged</div>
+      {:else if ghostItem.folder}
+        <div class="muted small">{ghostItem.folder}</div>
+      {/if}
     </div>
   </div>
 {/if}
