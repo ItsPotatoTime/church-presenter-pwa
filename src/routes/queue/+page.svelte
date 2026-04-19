@@ -1,127 +1,131 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { loadCredentials } from '$lib/db';
   import { remote } from '$lib/ws';
   import { connStatus, isViewOnly, queueState } from '$lib/stores';
 
-  let dragFrom = $state<number | null>(null);
-  let dragOver = $state<number | null>(null);
   let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
 
-  function showConfirm(message: string): Promise<boolean> {
-    return new Promise((resolve) => { confirmDialog = { message, resolve }; });
+  function showConfirm(msg: string): Promise<boolean> {
+    return new Promise(resolve => { confirmDialog = { message: msg, resolve }; });
   }
 
   onMount(async () => {
     const creds = await loadCredentials();
-    if (!creds?.device_token) {
-      goto(`${base}/`);
-      return;
-    }
+    if (!creds?.device_token) { goto(`${base}/`); return; }
     await remote.connect();
   });
 
   function send(cmd: any) {
-    if ($connStatus !== 'open') return;
-    if ($isViewOnly) return; // exclusive mode — read-only
+    if ($connStatus !== 'open' || $isViewOnly) return;
     remote.send(cmd);
   }
 
-  async function tapJump(songIdx: number) {
-    const name = $queueState?.items[songIdx]?.name || 'this song';
+  async function tapJump(i: number) {
+    if (dragging !== null) return; // swallow taps that end a drag
+    const name = $queueState?.items[i]?.name || 'this song';
     if (!await showConfirm(`Switch to "${name}"?`)) return;
-    send({ type: 'live.goto', payload: { song_index: songIdx, slide_index: 0 } });
+    send({ type: 'live.goto', payload: { song_index: i, slide_index: 0 } });
   }
+
   async function remove(pos: number) {
     const name = $queueState?.items[pos]?.name || 'this song';
     if (!await showConfirm(`Remove "${name}" from queue?`)) return;
     send({ type: 'queue.remove', payload: { position: pos } });
   }
+
   async function clearAll() {
-    if (await showConfirm('Clear the entire queue?')) {
-      send({ type: 'queue.clear' });
-    }
+    if (await showConfirm('Clear the entire queue?')) send({ type: 'queue.clear' });
   }
 
-  // ── Drag reorder (HTML5 DnD + touch for mobile) ─────────────────
-  function onDragStart(e: DragEvent, i: number) {
-    dragFrom = i;
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', String(i));
-    }
-  }
-  function onDragOver(e: DragEvent, i: number) {
-    e.preventDefault();
-    dragOver = i;
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-  }
-  function onDrop(e: DragEvent, i: number) {
-    e.preventDefault();
-    const from = dragFrom;
-    dragFrom = null;
-    dragOver = null;
-    if (from === null || from === i) return;
-    send({ type: 'queue.reorder', payload: { from, to: i } });
-  }
-  function onDragEnd() {
-    dragFrom = null;
-    dragOver = null;
+  // ─── Animated drag-to-reorder ─────────────────────────────────────────────
+  // Items stay in DOM order; we use CSS translateY to shift them visually.
+  // A floating ghost clone follows the pointer.
+
+  let dragging = $state<number | null>(null);
+  let insertAt = $state<number | null>(null);
+  let ghostStyle = $state('');
+  let ghostItem = $state<{ name: string; folder?: string } | null>(null);
+
+  // Cached at drag-start (viewport-relative, before any drag transforms).
+  let _tops: number[] = [];
+  let _heights: number[] = [];
+  let _pointerOffsetY = 0;
+  let _ghostLeft = 0;
+  let _ghostWidth = 0;
+
+  /** How many pixels item i should shift to make room for the dragged item. */
+  function itemShift(i: number): string {
+    if (dragging === null || insertAt === null || i === dragging) return 'translateY(0)';
+    const d = dragging, t = insertAt;
+    const step = (_heights[d] ?? 60) + 8; // item height + gap
+    if (t < d && i >= t && i < d) return `translateY(${step}px)`;
+    if (t > d && i > d && i <= t) return `translateY(${-step}px)`;
+    return 'translateY(0)';
   }
 
-  // ── Touch drag (mobile — HTML5 DnD doesn't fire touch events) ──
-  let touchStartY = 0;
-  let touchActive = false;
-  let longPressTimer: number | null = null;
-  let touchIdx = -1;
-
-  function onTouchStart(e: TouchEvent, i: number) {
+  function onGripDown(e: PointerEvent, i: number) {
     if ($isViewOnly) return;
-    touchIdx = i;
-    touchStartY = e.touches[0].clientY;
-    longPressTimer = window.setTimeout(() => {
-      touchActive = true;
-      dragFrom = i;
-      dragOver = i;
-    }, 300);
-  }
-
-  function onTouchMove(e: TouchEvent) {
-    if (!touchActive) {
-      if (longPressTimer !== null && Math.abs(e.touches[0].clientY - touchStartY) > 10) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-      return;
-    }
     e.preventDefault();
-    const touch = e.touches[0];
-    const els = document.querySelectorAll('.qitem');
-    for (let j = 0; j < els.length; j++) {
-      const rect = els[j].getBoundingClientRect();
-      if (touch.clientY >= rect.top && touch.clientY <= rect.bottom) {
-        dragOver = j;
-        break;
-      }
+
+    const els = document.querySelectorAll<HTMLElement>('.qitem');
+    const el = els[i];
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    _tops    = Array.from(els, el => el.getBoundingClientRect().top);
+    _heights = Array.from(els, el => el.getBoundingClientRect().height);
+    _pointerOffsetY = e.clientY - rect.top;
+    _ghostLeft  = rect.left;
+    _ghostWidth = rect.width;
+
+    dragging  = i;
+    insertAt  = i;
+    ghostItem = { name: $queueState?.items[i]?.name ?? '', folder: $queueState?.items[i]?.folder };
+    ghostStyle = `top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;height:${rect.height}px`;
+
+    window.addEventListener('pointermove', onDragMove, { passive: false });
+    window.addEventListener('pointerup',     onDragEnd);
+    window.addEventListener('pointercancel', onDragEnd);
+  }
+
+  function onDragMove(e: PointerEvent) {
+    if (dragging === null) return;
+    e.preventDefault();
+
+    ghostStyle = `top:${e.clientY - _pointerOffsetY}px;left:${_ghostLeft}px;width:${_ghostWidth}px`;
+
+    // Count items (excluding dragged) whose midpoint is above the pointer.
+    let rank = 0;
+    for (let j = 0; j < _tops.length; j++) {
+      if (j === dragging) continue;
+      if (_tops[j] + _heights[j] / 2 < e.clientY) rank++;
+    }
+    insertAt = rank;
+  }
+
+  function onDragEnd() {
+    window.removeEventListener('pointermove', onDragMove);
+    window.removeEventListener('pointerup',     onDragEnd);
+    window.removeEventListener('pointercancel', onDragEnd);
+
+    const from = dragging, to = insertAt;
+    dragging  = null;
+    insertAt  = null;
+    ghostItem = null;
+
+    if (from !== null && to !== null && from !== to) {
+      send({ type: 'queue.reorder', payload: { from, to } });
     }
   }
 
-  function onTouchEnd() {
-    if (longPressTimer !== null) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
-    if (!touchActive) return;
-    touchActive = false;
-    const from = dragFrom;
-    const to = dragOver;
-    dragFrom = null;
-    dragOver = null;
-    if (from === null || to === null || from === to) return;
-    send({ type: 'queue.reorder', payload: { from, to } });
-  }
+  onDestroy(() => {
+    window.removeEventListener('pointermove', onDragMove);
+    window.removeEventListener('pointerup',     onDragEnd);
+    window.removeEventListener('pointercancel', onDragEnd);
+  });
 </script>
 
 <header class="hdr">
@@ -155,18 +159,14 @@
         class="qitem"
         class:playing={$queueState.playing_song_index === i}
         class:current={$queueState.current_song_index === i && $queueState.playing_song_index !== i}
-        class:drop={dragOver === i}
-        class:dragging={dragFrom === i && touchActive}
-        draggable={!$isViewOnly}
-        ondragstart={(e) => onDragStart(e, i)}
-        ondragover={(e) => onDragOver(e, i)}
-        ondrop={(e) => onDrop(e, i)}
-        ondragend={onDragEnd}
-        ontouchstart={(e) => onTouchStart(e, i)}
-        ontouchmove={(e) => onTouchMove(e)}
-        ontouchend={onTouchEnd}
+        class:drag-src={dragging === i}
+        style="transform:{itemShift(i)};transition:transform 220ms cubic-bezier(0.2,0,0,1)"
       >
-        <span class="grip" aria-hidden="true">⋮⋮</span>
+        <span
+          class="grip"
+          aria-hidden="true"
+          onpointerdown={(e) => onGripDown(e, i)}
+        >⋮⋮</span>
         <button class="label" onclick={() => tapJump(i)} disabled={$isViewOnly}>
           <div class="name">{item.name || 'Untitled'}</div>
           {#if item.folder}<div class="muted small">{item.folder}</div>{/if}
@@ -179,6 +179,17 @@
   <section class="panel muted" style="margin-top:12px;">
     Queue is empty. Add songs from the Library tab.
   </section>
+{/if}
+
+<!-- Floating ghost — follows the pointer, elevated above everything -->
+{#if dragging !== null && ghostItem}
+  <div class="drag-ghost" style={ghostStyle}>
+    <span class="grip">⋮⋮</span>
+    <div class="ghost-label">
+      <div class="name">{ghostItem.name || 'Untitled'}</div>
+      {#if ghostItem.folder}<div class="muted small">{ghostItem.folder}</div>{/if}
+    </div>
+  </div>
 {/if}
 
 {#if confirmDialog}
@@ -228,7 +239,7 @@
   .qlist { list-style: none; padding: 0; margin: 0; }
   .qitem {
     display: grid;
-    grid-template-columns: 24px 1fr 44px;
+    grid-template-columns: 36px 1fr 44px;
     gap: 8px;
     align-items: center;
     background: var(--surface);
@@ -236,13 +247,30 @@
     border-radius: 10px;
     padding: 4px 10px;
     margin-bottom: 8px;
+    will-change: transform;
+    box-sizing: border-box;
   }
   .qitem.playing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
   .qitem.current { border-color: var(--border-light); }
-  .qitem.drop { border-color: var(--accent); background: var(--elevated); }
-  .qitem.dragging { opacity: 0.5; transform: scale(0.97); }
+  /* Source item is invisible during drag — ghost takes its visual place */
+  .qitem.drag-src { opacity: 0; }
 
-  .grip { color: var(--text-secondary); font-size: 14px; cursor: grab; }
+  .grip {
+    color: var(--text-secondary);
+    font-size: 14px;
+    cursor: grab;
+    /* Prevent browser scroll / text-select from hijacking touch on the handle */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    /* Larger touch target without changing visual footprint */
+    padding: 12px 6px;
+    margin: -12px -6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .label {
     text-align: left; background: transparent; border: none;
     padding: 10px 4px; color: var(--text-primary); border-radius: 6px;
@@ -253,11 +281,32 @@
     background: transparent; color: var(--text-secondary); border-color: var(--border);
   }
   .rm:hover { color: var(--danger); border-color: var(--danger); }
-  a.btn.disabled {
-    pointer-events: none;
-    opacity: 0.45;
-  }
+  a.btn.disabled { pointer-events: none; opacity: 0.45; }
 
+  /* ── Floating drag ghost ──────────────────────────────────────────── */
+  .drag-ghost {
+    position: fixed;
+    z-index: 9999;
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 10px;
+    border-radius: 10px;
+    background: var(--elevated, #2a2a2a);
+    border: 1px solid var(--accent);
+    box-shadow:
+      0 12px 40px rgba(0, 0, 0, 0.5),
+      0 4px 12px rgba(0, 0, 0, 0.35);
+    transform: scale(1.04);
+    pointer-events: none;
+    box-sizing: border-box;
+    /* GPU-composited so it tracks the finger with zero jank */
+    will-change: top, left;
+  }
+  .ghost-label .name { font-weight: 600; }
+
+  /* ── Confirm modal ─────────────────────────────────────────────────── */
   .modal-back {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.6);
@@ -280,15 +329,8 @@
     margin-bottom: 18px;
     text-align: center;
   }
-  .modal-btns {
-    display: flex;
-    gap: 10px;
-  }
-  .modal-btns button {
-    flex: 1;
-    padding: 13px;
-    font-size: 15px;
-  }
+  .modal-btns { display: flex; gap: 10px; }
+  .modal-btns button { flex: 1; padding: 13px; font-size: 15px; }
   button.ghost {
     background: transparent;
     border: 1px solid var(--border);
