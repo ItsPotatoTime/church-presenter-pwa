@@ -270,15 +270,18 @@ class RemoteClient {
           server_name: p.server_name,
           paired_at: creds.paired_at ?? Date.now(),
         };
-        void saveCredentials(finalCreds);
         this._triedServerKeys.clear(); // successful auth — reset cycling state
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
         exclusiveDeviceName.set(null);
         this.backoffIdx = 0;
 
-        // Flush any mutations queued while offline before marking connection open.
-        // Messages arrive at server in order, so mutations precede any sync request.
+        // Persist credentials first, THEN flush mutations, THEN mark open.
+        // Keeping this sequential ensures credentials survive a page reload
+        // triggered by a service-worker update between auth.ok and navigation.
         void (async () => {
+          try {
+            await saveCredentials(finalCreds);
+          } catch { /* ignore — non-fatal; reconnect will retry */ }
           try {
             const mutations = await getPendingMutations();
             for (const m of mutations) {
