@@ -30,6 +30,8 @@ export const exclusiveDeviceName: Writable<string | null> = writable(null);
 // Our own device id (from IndexedDB). Hydrated once on app startup.
 export const myDeviceId: Writable<string | null> = writable(null);
 
+export const serverName: Writable<string> = writable('ChurchPresenter');
+
 // Phone-local toggle: when false, phone sends `live.follow {enabled:false}` so
 // the desktop skips pushing `live.state` to us.
 export const liveFollowEnabled: Writable<boolean> = writable(true);

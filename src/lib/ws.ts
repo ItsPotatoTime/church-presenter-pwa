@@ -28,18 +28,16 @@ import {
   type Credentials,
 } from './db';
 import {
+  connStatus,
   connEndpoint,
   connError,
-  connStatus,
   exclusiveDeviceId,
   exclusiveDeviceName,
-  listsStore,
-  liveState,
-  queueState,
+  serverName,
 } from './stores';
 import { handleSyncMessage } from './sync';
 
-const RECONNECT_BACKOFF_MS = [500, 1000, 2000, 4000, 8000, 15000];
+const RECONNECT_BACKOFF_MS = [250, 500, 1000, 2000, 4000, 8000, 15000];
 const AUTH_TIMEOUT_MS = 8000;
 
 export type PairParams = {
@@ -273,6 +271,7 @@ class RemoteClient {
         this._triedServerKeys.clear(); // successful auth — reset cycling state
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
         exclusiveDeviceName.set(null);
+        serverName.set(p.server_name || 'ChurchPresenter');
         this.backoffIdx = 0;
 
         // Persist credentials first, THEN flush mutations, THEN mark open.
@@ -382,6 +381,20 @@ class RemoteClient {
         void clearCredentials();
         connError.set('Device revoked from desktop');
         connStatus.set('error');
+        return;
+      }
+
+      if (msg.type === 'server.url_changed') {
+        const p = msg.payload as { cloud_host?: string };
+        if (p?.cloud_host && isCurrent()) {
+          void (async () => {
+            const c = await loadCredentials();
+            if (c && isCurrent()) {
+              c.cloud_host = p.cloud_host;
+              await saveCredentials(c);
+            }
+          })();
+        }
         return;
       }
     };

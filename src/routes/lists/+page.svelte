@@ -9,7 +9,8 @@
     connStatus, isViewOnly, listsStore, songsStore,
   } from '$lib/stores';
   import type { LibraryList, LibrarySong } from '$lib/protocol';
-  import { normalize } from '$lib/search';
+  import { normalize, filterSongs, renderMarkdown } from '$lib/search';
+  import type { ScoredResult } from '$lib/search';
 
   let selectedName = $state<string | null>(null);
   let showPicker = $state(false);
@@ -172,16 +173,10 @@
   function onDragEnd() { dragFrom = null; dragOver = null; }
 
   // ── Song picker (adds song(s) to current list) ──
-  const pickerFiltered = $derived.by<LibrarySong[]>(() => {
-    const q = normalize(pickerQuery);
-    if (!q) return $songsStore;
-    return $songsStore.filter((s) => {
-      if (normalize(s.name).includes(q) || normalize(s.folder).includes(q)) return true;
-      if (pickerSearchSlides && s.slide_texts) {
-        return s.slide_texts.some((t) => normalize(t).includes(q));
-      }
-      return false;
-    });
+  const pickerFiltered = $derived.by<ScoredResult<LibrarySong>[]>(() => {
+    const q = pickerQuery.trim();
+    if (!q) return $songsStore.map((s) => ({ item: s, score: 0, snippet: '' }));
+    return filterSongs(q, $songsStore, pickerSearchSlides);
   });
 
   function openPicker() {
@@ -314,10 +309,11 @@
         </label>
       </div>
       <div class="picker-list">
-        {#each pickerFiltered as s (s.path)}
-          <button class="picker-item" onclick={() => addSong(s)}>
-            <div class="name">{s.name}</div>
-            {#if s.folder}<div class="muted small">{s.folder}</div>{/if}
+        {#each pickerFiltered as sr (sr.item.path)}
+          <button class="picker-item" onclick={() => addSong(sr.item)}>
+            <div class="name">{sr.item.name}</div>
+            {#if sr.item.folder}<div class="muted small">{sr.item.folder}</div>{/if}
+            {#if sr.snippet}<div class="snippet">{@html renderMarkdown(sr.snippet)}</div>{/if}
           </button>
         {/each}
       </div>
@@ -516,6 +512,12 @@
     border-radius: 8px;
     padding: 10px 12px;
     color: var(--text-primary);
+  }
+  .snippet {
+    margin-top: 4px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.3;
   }
 
   .modal-dialog {

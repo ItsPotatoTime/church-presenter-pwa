@@ -119,7 +119,7 @@
   <section class="panel">
     <b>Scan a QR code</b>
     <p class="muted">
-      Open the <b>ChurchPresenter</b> desktop app, go to <b>Settings → Remote</b>,
+      Open the desktop app, go to <b>Settings → Remote</b>,
       and scan the QR code shown there. The link will open this page with the
       pairing information filled in automatically.
     </p>

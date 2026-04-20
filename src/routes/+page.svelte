@@ -3,6 +3,7 @@
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { loadCredentials } from '$lib/db';
+  import { serverName } from '$lib/stores';
 
   let checked = $state(false);
   let paired = $state(false);
@@ -156,7 +157,7 @@
 </script>
 
 <header>
-  <h1>Church Presenter Remote</h1>
+  <h1>{$serverName} Remote</h1>
   <p class="muted">Companion remote for the desktop presenter.</p>
 </header>
 
