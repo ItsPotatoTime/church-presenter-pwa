@@ -33,6 +33,9 @@ import {
   connError,
   exclusiveDeviceId,
   exclusiveDeviceName,
+  listsStore,
+  liveState,
+  queueState,
   serverName,
 } from './stores';
 import { handleSyncMessage } from './sync';
