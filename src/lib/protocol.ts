@@ -45,14 +45,25 @@ export interface LiveState {
   slides: string[];
   blanked: boolean;
   presenting: boolean;
+  is_bible?: boolean;
+  bible_refs?: BibleRef[];
+  bible_ref_display?: string;
 }
 
 // ── Queue state broadcast ────────────────────────────────────────────
+export interface BibleRef {
+  book: string;
+  chapter: number;
+  verse: number;
+}
+
 export interface QueueItem {
   path: string;
   name: string;
   folder: string;
   is_merged?: boolean;
+  is_bible?: boolean;
+  bible_refs?: BibleRef[];
 }
 
 export interface QueueState {

@@ -84,7 +84,7 @@
     dragging  = i;
     insertAt  = i;
     const qi = $queueState?.items[i];
-    ghostItem = { name: qi?.name ?? '', folder: qi?.folder, is_merged: qi?.is_merged };
+    ghostItem = { name: qi?.name ?? '', folder: qi?.folder, is_merged: qi?.is_merged, is_bible: qi?.is_bible };
     ghostStyle = `top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;height:${rect.height}px`;
 
     window.addEventListener('pointermove', onDragMove, { passive: false });
@@ -170,7 +170,9 @@
         >⋮⋮</span>
         <button class="label" onclick={() => tapJump(i)} disabled={$isViewOnly}>
           <div class="name">{item.name || 'Untitled'}</div>
-          {#if item.is_merged}
+          {#if item.is_bible}
+            <div class="muted small bible-tag">📖 {item.bible_refs?.length ?? 0} verse{((item.bible_refs?.length ?? 0) !== 1) ? 's' : ''}</div>
+          {:else if item.is_merged}
             <div class="muted small merged-tag">🔀 merged</div>
           {:else if item.folder}
             <div class="muted small">{item.folder}</div>
@@ -192,7 +194,9 @@
     <span class="grip">⋮⋮</span>
     <div class="ghost-label">
       <div class="name">{ghostItem.name || 'Untitled'}</div>
-      {#if ghostItem.is_merged}
+      {#if ghostItem.is_bible}
+        <div class="muted small">📖 Bible</div>
+      {:else if ghostItem.is_merged}
         <div class="muted small">🔀 merged</div>
       {:else if ghostItem.folder}
         <div class="muted small">{ghostItem.folder}</div>
@@ -314,6 +318,7 @@
     will-change: top, left;
   }
   .ghost-label .name { font-weight: 600; }
+  .bible-tag { color: var(--accent); }
 
   /* ── Confirm modal ─────────────────────────────────────────────────── */
   .modal-back {

@@ -124,6 +124,9 @@
         <div>{@html renderMarkdown(line) || '\u00A0'}</div>
       {/each}
     </div>
+    {#if $liveState?.bible_ref_display}
+      <div class="bible-ref">{$liveState.bible_ref_display}</div>
+    {/if}
   {:else if !textVisible}
     <div class="muted">Text hidden on this phone</div>
   {:else}
@@ -184,12 +187,18 @@
     justify-content: center;
     text-align: center;
     transition: background 120ms;
+    position: relative;
   }
   .slide-box.blanked {
     background: #000;
     border-color: var(--accent);
   }
   .blank-label { color: var(--accent); font-weight: 700; letter-spacing: 2px; }
+  .bible-ref {
+    position: absolute; bottom: 12px; right: 16px;
+    font-size: 12px; color: var(--text-secondary); opacity: 0.8;
+    font-style: italic;
+  }
   .slide-text {
     line-height: 1.5;
     font-weight: 500;
