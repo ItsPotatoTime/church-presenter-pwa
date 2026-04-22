@@ -108,7 +108,7 @@
     </p>
     <ol class="steps">
       <li>Tap <b>Share</b> ⇧ → <b>Add to Home Screen</b>.</li>
-      <li>Open <b>Church Remote</b> from your home screen.</li>
+      <li>Open <b>Remote</b> from your home screen.</li>
       <li>Back here: copy this link and paste it in the app, or scan the QR again from inside the app.</li>
     </ol>
     <button class="accent fw" onclick={copyLink}>

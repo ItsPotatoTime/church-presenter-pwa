@@ -1,6 +1,6 @@
 {
-  "name": "Church Presenter Remote",
-  "short_name": "Church Remote",
+  "name": "Remote",
+  "short_name": "Remote",
   "description": "Phone remote for ChurchPresenter desktop.",
   "start_url": "./",
   "scope": "./",

@@ -180,7 +180,7 @@
       <ol class="steps">
         <li>Tap the <b>Share</b> icon ⇧ at the bottom of Safari.</li>
         <li>Choose <b>Add to Home Screen</b>.</li>
-        <li>Open <b>Church Remote</b> from your home screen.</li>
+        <li>Open <b>Remote</b> from your home screen.</li>
         <li>Come back here and scan or paste the QR link below.</li>
       </ol>
     </section>
