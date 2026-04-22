@@ -4,7 +4,7 @@
   import { base } from '$app/paths';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
-  import { loadCredentials } from '$lib/db';
+  import { loadCredentials, saveServer, switchServer, getOrCreateDeviceId, type ServerEntry } from '$lib/db';
   import { remote } from '$lib/ws';
   import { connStatus, connError } from '$lib/stores';
 
@@ -62,8 +62,20 @@
     error = null;
     phase = 'pairing';
 
+    const device_id = await getOrCreateDeviceId();
     const serverKey = crypto.randomUUID();
     const finalName = deviceName.trim() || 'Phone';
+    const provisional: ServerEntry = {
+      server_key: serverKey,
+      device_id,
+      device_token: '',
+      device_name: finalName,
+      cloud_host: cloudHost,
+      lan_host: lanHost,
+      last_used: Date.now(),
+    };
+    await saveServer(provisional);
+    await switchServer(serverKey);
 
     const unsub = connStatus.subscribe((s) => {
       if (s === 'open') {

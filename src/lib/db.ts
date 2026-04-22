@@ -162,48 +162,30 @@ async function deleteMeta(key: string): Promise<void> {
 // In-memory cache so tab-switch onMount reads are instant.
 let _credCache: Credentials | null | undefined = undefined;
 
-function _isCompleteServerEntry(entry: ServerEntry | null | undefined): boolean {
-  return !!entry?.device_id && !!entry.device_token;
-}
-
-async function _pruneIncompleteServers(): Promise<void> {
-  const all = await _loadAllServers();
-  const activeKey = await getRow<string>('active_server_key');
-  let removedActive = false;
-  for (const entry of all) {
-    if (_isCompleteServerEntry(entry)) continue;
-    await _removeServer(entry.server_key);
-    if (activeKey === entry.server_key) {
-      removedActive = true;
-    }
-  }
-  if (removedActive) {
-    await deleteMeta('active_server_key');
-  }
-}
-
 export async function loadCredentials(): Promise<Credentials | null> {
   if (_credCache !== undefined) return _credCache;
-
-  await _pruneIncompleteServers();
 
   // Try the active server first
   const activeKey = await getRow<string>('active_server_key');
   if (activeKey) {
     const entry = await _getServerByKey(activeKey);
-    if (entry && _isCompleteServerEntry(entry)) {
+    if (entry?.device_token) {
       _credCache = _entryToCredentials(entry);
       return _credCache;
     }
   }
 
-  // No active key or stale key — pick the most recently used server
-  const all = await _loadAllServers();
+  // No active key or stale/incomplete key — pick the most recently used complete server
+  const all = (await _loadAllServers()).filter((entry) => !!entry.device_token);
   if (all.length > 0) {
     const best = all.sort((a, b) => (b.last_used ?? 0) - (a.last_used ?? 0))[0];
     await setMeta('active_server_key', best.server_key);
     _credCache = _entryToCredentials(best);
     return _credCache;
+  }
+
+  if (activeKey) {
+    await deleteMeta('active_server_key');
   }
 
   // Legacy fallback: meta['creds'] (pre-v4 data that didn't migrate in onupgradeneeded)
@@ -302,8 +284,8 @@ export async function clearCredentials(): Promise<void> {
 
 /** Load all stored server credentials. */
 export async function loadAllServers(): Promise<ServerEntry[]> {
-  await _pruneIncompleteServers();
-  return _loadAllServers();
+  const all = await _loadAllServers();
+  return all.filter((entry) => !!entry.device_token);
 }
 
 /**

@@ -23,6 +23,7 @@ import {
   getOrCreateDeviceId,
   loadAllServers,
   loadCredentials,
+  removeServer,
   saveCredentials,
   switchServer,
   type Credentials,
@@ -220,6 +221,7 @@ class RemoteClient {
     connError.set(null);
 
     let ws: WebSocket;
+    let authenticated = false;
     try {
       ws = new WebSocket(this.buildUrl(pick.host, pick.kind));
     } catch (e: any) {
@@ -265,6 +267,7 @@ class RemoteClient {
       }
 
       if (msg.type === 'auth.ok') {
+        authenticated = true;
         if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
         const p = (msg.payload ?? {}) as AuthOk;
         const finalCreds: Credentials = {
@@ -346,6 +349,9 @@ class RemoteClient {
           connStatus.set('error');
           this.forceClose = true;
           try { ws.close(); } catch { /* ignore */ }
+          if (pairToken && creds.server_key) {
+            void removeServer(creds.server_key);
+          }
           connError.set(`Auth failed: ${p.reason}`);
         }
         return;
@@ -414,6 +420,18 @@ class RemoteClient {
       if (!isCurrent()) return;
       if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
       this.ws = null;
+      if (pairToken && !authenticated) {
+        if (creds.server_key) {
+          void removeServer(creds.server_key);
+        }
+        if (!this.forceClose) {
+          connStatus.set('error');
+          connError.set('Pairing connection closed before it finished');
+        } else {
+          connStatus.set('closed');
+        }
+        return;
+      }
       if (this.forceClose) {
         connStatus.set('closed');
         return;
