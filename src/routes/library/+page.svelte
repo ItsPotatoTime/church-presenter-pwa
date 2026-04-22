@@ -182,6 +182,15 @@
   </div>
 </header>
 
+<button class="bible-entry" type="button" disabled aria-disabled="true">
+  <div class="bible-copy">
+    <span class="bible-kicker">Coming soon</span>
+    <span class="bible-title">Bible</span>
+    <span class="bible-desc">Quick access for passages and references will live here.</span>
+  </div>
+  <span class="bible-pill">Later</span>
+</button>
+
 <section class="searchbar">
   <input
     type="text"
@@ -312,6 +321,67 @@
   .hdr { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; padding: 4px 0 10px; }
   h1 { margin:0; font-size: 22px; font-weight: 700; }
   .small { font-size: 12px; }
+
+  .bible-entry {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin: 0 0 14px;
+    padding: 14px 16px;
+    border-radius: 16px;
+    background:
+      linear-gradient(135deg, color-mix(in srgb, var(--panel) 72%, transparent), color-mix(in srgb, var(--surface) 88%, transparent)),
+      var(--surface);
+    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    text-align: left;
+    cursor: default;
+    opacity: 1;
+  }
+  .bible-entry:disabled {
+    opacity: 1;
+    cursor: default;
+  }
+  .bible-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .bible-kicker {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .bible-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .bible-desc {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+  .bible-pill {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--accent) 60%, var(--border));
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }
 
   .searchbar {
     display: flex;
