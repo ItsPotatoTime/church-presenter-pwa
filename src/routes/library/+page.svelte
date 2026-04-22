@@ -457,7 +457,6 @@
 {:else}
   <header class="hdr bible-hdr">
     <div>
-      <button class="back-chip" type="button" onclick={closeBibleMenu}>&lt; Songs</button>
       <h1>Bible</h1>
       <div class="muted small">{bibleStatusText()}</div>
     </div>
@@ -468,6 +467,17 @@
       disabled={$syncStatus === 'syncing' || $connStatus !== 'open'}
     >R</button>
   </header>
+
+  <button class="bible-entry nav-entry" type="button" onclick={closeBibleMenu}>
+    <div class="bible-copy">
+      <span class="bible-kicker">Library navigation</span>
+      <span class="bible-title">Songs</span>
+      <span class="bible-desc">
+        Return to the songs menu to browse folders, search titles, and add songs to the queue.
+      </span>
+    </div>
+    <span class="bible-pill">Open</span>
+  </button>
 
   <section class="bible-panel">
     <div class="mode-toggle">
@@ -678,6 +688,9 @@
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
     text-align: left;
   }
+  .nav-entry {
+    margin-bottom: 12px;
+  }
   .bible-copy {
     display: flex;
     flex-direction: column;
@@ -800,15 +813,6 @@
     border-color: var(--accent);
     color: #fff;
     font-weight: 700;
-  }
-  .back-chip {
-    padding: 6px 10px;
-    margin-bottom: 8px;
-    border-radius: 999px;
-    background: transparent;
-    border-color: var(--border);
-    color: var(--text-secondary);
-    font-size: 12px;
   }
   .crumbs {
     display: flex;
