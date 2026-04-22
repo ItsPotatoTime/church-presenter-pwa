@@ -150,6 +150,7 @@ export type ClientCommand =
   | { type: 'live.goto'; payload: { song_index: number; slide_index: number } }
   | { type: 'live.follow'; payload: { enabled: boolean } }
   | { type: 'queue.add'; payload: { song_path: string; position?: number } }
+  | { type: 'queue.add_bible_verse'; payload: { book: string; chapter: number; verse: number; position?: number } }
   | { type: 'queue.remove'; payload: { position: number } }
   | { type: 'queue.reorder'; payload: { from: number; to: number } }
   | { type: 'queue.clear' }
