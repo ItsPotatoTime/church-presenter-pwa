@@ -9,14 +9,17 @@
 // Version 2 adds `songs` + `lists` stores (Phase 2).
 // Version 3 adds `pending_mutations` (Phase 5 offline list editing).
 // Version 4 adds `servers` for multi-device pairing support.
+// Version 5 adds Bible cache stores.
 
-import type { LibrarySong, LibraryList, QueueState } from './protocol';
+import type { BibleBook, BibleVerse, LibrarySong, LibraryList, QueueState } from './protocol';
 
 const DB_NAME = 'church-remote';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const STORE_META = 'meta';
 const STORE_SONGS = 'songs';
 const STORE_LISTS = 'lists';
+const STORE_BIBLE_BOOKS = 'bible_books';
+const STORE_BIBLE_VERSES = 'bible_verses';
 const STORE_PENDING = 'pending_mutations';
 const STORE_SERVERS = 'servers';
 
@@ -46,6 +49,9 @@ export interface ServerEntry {
   last_used?: number;
   cached_songs?: LibrarySong[];
   cached_lists?: LibraryList[];
+  cached_bible_books?: BibleBook[];
+  cached_bible_verses?: BibleVerse[];
+  cached_bible_version?: string | null;
   cached_queue?: QueueState | null;
   last_sync_ts?: number;
 }
@@ -67,6 +73,12 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_LISTS)) {
         db.createObjectStore(STORE_LISTS, { keyPath: 'name' });
+      }
+      if (!db.objectStoreNames.contains(STORE_BIBLE_BOOKS)) {
+        db.createObjectStore(STORE_BIBLE_BOOKS, { keyPath: 'book_num' });
+      }
+      if (!db.objectStoreNames.contains(STORE_BIBLE_VERSES)) {
+        db.createObjectStore(STORE_BIBLE_VERSES, { keyPath: 'id' });
       }
       if (!db.objectStoreNames.contains(STORE_PENDING)) {
         db.createObjectStore(STORE_PENDING, { keyPath: 'id', autoIncrement: true });
@@ -258,6 +270,9 @@ export async function clearCredentials(): Promise<void> {
     // No servers left — wipe stale song/list data from IndexedDB.
     await clearSongs();
     await clearLists();
+    await clearBibleBooks();
+    await clearBibleVerses();
+    await deleteMeta('bible_version');
   }
 }
 
@@ -293,6 +308,9 @@ export async function removeServer(serverKey: string): Promise<void> {
       _credCache = null;
       await clearSongs();
       await clearLists();
+      await clearBibleBooks();
+      await clearBibleVerses();
+      await deleteMeta('bible_version');
     }
   }
 }
@@ -466,6 +484,88 @@ export async function getAllSongPaths(): Promise<string[]> {
   });
 }
 
+// â”€â”€ Bible cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+export async function putBibleBooks(books: BibleBook[]): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_BIBLE_BOOKS, 'readwrite');
+    const store = tx.objectStore(STORE_BIBLE_BOOKS);
+    store.clear();
+    for (const book of books) store.put(book);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function loadAllBibleBooks(): Promise<BibleBook[]> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_BIBLE_BOOKS, 'readonly');
+    const req = tx.objectStore(STORE_BIBLE_BOOKS).getAll();
+    req.onsuccess = () => resolve((req.result ?? []) as BibleBook[]);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clearBibleBooks(): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_BIBLE_BOOKS, 'readwrite');
+    tx.objectStore(STORE_BIBLE_BOOKS).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function putBibleVerses(verses: BibleVerse[]): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_BIBLE_VERSES, 'readwrite');
+    const store = tx.objectStore(STORE_BIBLE_VERSES);
+    store.clear();
+    for (const verse of verses) store.put(verse);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function loadAllBibleVerses(): Promise<BibleVerse[]> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_BIBLE_VERSES, 'readonly');
+    const req = tx.objectStore(STORE_BIBLE_VERSES).getAll();
+    req.onsuccess = () => resolve((req.result ?? []) as BibleVerse[]);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clearBibleVerses(): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_BIBLE_VERSES, 'readwrite');
+    tx.objectStore(STORE_BIBLE_VERSES).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function getBibleVersion(): Promise<string | null> {
+  return (await getRow<string>('bible_version')) ?? null;
+}
+
+export async function setBibleVersion(version: string | null): Promise<void> {
+  await setMeta('bible_version', version);
+  const sk = await getRow<string>('active_server_key');
+  if (sk) {
+    const entry = await _getServerByKey(sk);
+    if (entry) {
+      entry.cached_bible_version = version;
+      await _saveServer(entry);
+    }
+  }
+}
+
 // ── Lists ──────────────────────────────────────────────────────────
 
 export async function putLists(lists: LibraryList[]): Promise<void> {
@@ -497,6 +597,9 @@ export async function snapshotServerData(serverKey: string): Promise<void> {
   if (!entry) return;
   entry.cached_songs = await loadAllSongs();
   entry.cached_lists = await loadAllLists();
+  entry.cached_bible_books = await loadAllBibleBooks();
+  entry.cached_bible_verses = await loadAllBibleVerses();
+  entry.cached_bible_version = await getBibleVersion();
   entry.last_sync_ts = (await getRow<number>('last_sync_ts')) ?? 0;
   await _saveServer(entry);
 }
@@ -505,9 +608,14 @@ export async function restoreServerData(serverKey: string): Promise<void> {
   const entry = await _getServerByKey(serverKey);
   await clearSongs();
   await clearLists();
+  await clearBibleBooks();
+  await clearBibleVerses();
   if (entry?.cached_songs?.length) await putSongs(entry.cached_songs);
   if (entry?.cached_lists?.length) await putLists(entry.cached_lists);
+  if (entry?.cached_bible_books?.length) await putBibleBooks(entry.cached_bible_books);
+  if (entry?.cached_bible_verses?.length) await putBibleVerses(entry.cached_bible_verses);
   await setMeta('last_sync_ts', entry?.last_sync_ts ?? 0);
+  await setMeta('bible_version', entry?.cached_bible_version ?? null);
 }
 
 export async function cacheQueueState(queue: QueueState | null): Promise<void> {
@@ -582,6 +690,9 @@ export interface BackupData {
   exported_at: number;
   songs: LibrarySong[];
   lists: LibraryList[];
+  bible_books: BibleBook[];
+  bible_verses: BibleVerse[];
+  bible_version: string | null;
   servers: ServerEntry[];
   active_server_key: string | null;
   device_id: string | null;
@@ -590,6 +701,9 @@ export interface BackupData {
 export async function exportBackup(): Promise<BackupData> {
   const songs = await loadAllSongs();
   const lists = await loadAllLists();
+  const bibleBooks = await loadAllBibleBooks();
+  const bibleVerses = await loadAllBibleVerses();
+  const bibleVersion = await getBibleVersion();
   const servers = await _loadAllServers();
   const activeKey = await getRow<string>('active_server_key');
   const deviceId = await getRow<string>('device_id');
@@ -598,6 +712,9 @@ export async function exportBackup(): Promise<BackupData> {
     exported_at: Date.now(),
     songs,
     lists,
+    bible_books: bibleBooks,
+    bible_verses: bibleVerses,
+    bible_version: bibleVersion,
     servers,
     active_server_key: activeKey,
     device_id: deviceId,
@@ -626,8 +743,13 @@ export async function compareBackup(data: BackupData): Promise<BackupComparison>
 export async function importBackup(data: BackupData): Promise<void> {
   await clearSongs();
   await clearLists();
+  await clearBibleBooks();
+  await clearBibleVerses();
   if (data.songs.length) await putSongs(data.songs);
   if (data.lists.length) await putLists(data.lists);
+  if (data.bible_books.length) await putBibleBooks(data.bible_books);
+  if (data.bible_verses.length) await putBibleVerses(data.bible_verses);
+  await setMeta('bible_version', data.bible_version ?? null);
   // Restore servers
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {

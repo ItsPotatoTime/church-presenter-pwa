@@ -47,7 +47,7 @@
   let dragging = $state<number | null>(null);
   let insertAt = $state<number | null>(null);
   let ghostStyle = $state('');
-  let ghostItem = $state<{ name: string; folder?: string; is_merged?: boolean } | null>(null);
+  let ghostItem = $state<{ name: string; folder?: string; is_merged?: boolean; is_bible?: boolean } | null>(null);
 
   // Cached at drag-start (viewport-relative, before any drag transforms).
   let _tops: number[] = [];

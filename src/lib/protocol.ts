@@ -73,6 +73,26 @@ export interface QueueState {
   current_slide_index: number;
 }
 
+export interface BibleBook {
+  book_num: number;
+  name: string;
+  max_chapter: number;
+}
+
+export interface BibleVerse {
+  id: string;
+  book_num: number;
+  chapter: number;
+  verse: number;
+  text: string;
+}
+
+export interface BibleSyncData {
+  version: string | null;
+  books: BibleBook[];
+  verses: BibleVerse[];
+}
+
 // ── Library song (shape used in sync payloads + IndexedDB) ──────────
 export interface LibrarySong {
   path: string;
@@ -97,6 +117,7 @@ export interface SyncRequest {
 export interface SyncFull {
   songs: LibrarySong[];
   lists: LibraryList[];
+  bible?: BibleSyncData | null;
   server_ts: number;
 }
 
@@ -105,6 +126,7 @@ export interface SyncDelta {
   all_song_paths: string[];    // every current path — drives removal detection
   lists: LibraryList[] | null; // null means no list changes
   all_list_names: string[];
+  bible?: BibleSyncData | null;
   server_ts: number;
 }
 

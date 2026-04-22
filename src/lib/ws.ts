@@ -393,7 +393,7 @@ class RemoteClient {
           void (async () => {
             const c = await loadCredentials();
             if (c && isCurrent()) {
-              c.cloud_host = p.cloud_host;
+              c.cloud_host = p.cloud_host ?? c.cloud_host ?? null;
               await saveCredentials(c);
             }
           })();

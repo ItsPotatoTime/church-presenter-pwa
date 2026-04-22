@@ -4,20 +4,36 @@
 
 import { remote } from './ws';
 import {
+  clearBibleBooks,
+  clearBibleVerses,
   deleteSongsByPath,
   getAllSongPaths,
+  getBibleVersion,
   getCachedQueueState,
   getLastSyncTs,
+  loadAllBibleBooks,
+  loadAllBibleVerses,
   loadAllLists,
   loadAllSongs,
+  putBibleBooks,
+  putBibleVerses,
   putLists,
   putSongs,
+  setBibleVersion,
   setLastSyncTs,
   snapshotServerData,
   getActiveServerKey,
 } from './db';
 import type { SyncDelta, SyncFull } from './protocol';
-import { listsStore, queueState, songsStore, syncStatus } from './stores';
+import {
+  bibleBooksStore,
+  bibleVersesStore,
+  bibleVersionStore,
+  listsStore,
+  queueState,
+  songsStore,
+  syncStatus,
+} from './stores';
 
 type PendingResolver = (msg: { type: string; payload: any }) => void;
 
@@ -83,6 +99,15 @@ async function _doSync(since: number): Promise<void> {
       if (currentPaths.length) await deleteSongsByPath(currentPaths);
       await putSongs(p.songs);
       await putLists(p.lists);
+      await clearBibleBooks();
+      await clearBibleVerses();
+      if (p.bible) {
+        await putBibleBooks(p.bible.books);
+        await putBibleVerses(p.bible.verses);
+        await setBibleVersion(p.bible.version);
+      } else {
+        await setBibleVersion(await getBibleVersion());
+      }
       await setLastSyncTs(p.server_ts);
     } else if (resp.type === 'sync.delta') {
       const p = resp.payload as SyncDelta;
@@ -93,15 +118,29 @@ async function _doSync(since: number): Promise<void> {
       const toDelete = local.filter((x) => !haveNow.has(x));
       if (toDelete.length) await deleteSongsByPath(toDelete);
       if (p.lists !== null) await putLists(p.lists);
+      if (p.bible) {
+        await putBibleBooks(p.bible.books);
+        await putBibleVerses(p.bible.verses);
+        await setBibleVersion(p.bible.version);
+      }
       await setLastSyncTs(p.server_ts);
     } else {
       throw new Error('unexpected sync response: ' + resp.type);
     }
 
     // Refresh stores from IndexedDB
-    const [songs, lists] = await Promise.all([loadAllSongs(), loadAllLists()]);
+    const [songs, lists, bibleBooks, bibleVerses, bibleVersion] = await Promise.all([
+      loadAllSongs(),
+      loadAllLists(),
+      loadAllBibleBooks(),
+      loadAllBibleVerses(),
+      getBibleVersion(),
+    ]);
     songsStore.set(songs);
     listsStore.set(lists);
+    bibleBooksStore.set(bibleBooks);
+    bibleVersesStore.set(bibleVerses);
+    bibleVersionStore.set(bibleVersion);
     syncStatus.set('idle');
 
     // Persist fresh data into the server entry cache so switching away
@@ -116,12 +155,18 @@ async function _doSync(since: number): Promise<void> {
 
 /** Load whatever is in IndexedDB into the Svelte stores (for offline UI). */
 export async function hydrateFromCache(): Promise<void> {
-  const [songs, lists, cachedQueue] = await Promise.all([
+  const [songs, lists, bibleBooks, bibleVerses, bibleVersion, cachedQueue] = await Promise.all([
     loadAllSongs(),
     loadAllLists(),
+    loadAllBibleBooks(),
+    loadAllBibleVerses(),
+    getBibleVersion(),
     getCachedQueueState(),
   ]);
   songsStore.set(songs);
   listsStore.set(lists);
+  bibleBooksStore.set(bibleBooks);
+  bibleVersesStore.set(bibleVerses);
+  bibleVersionStore.set(bibleVersion);
   if (cachedQueue) queueState.set(cachedQueue);
 }

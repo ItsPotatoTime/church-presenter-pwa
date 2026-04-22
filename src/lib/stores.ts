@@ -1,6 +1,13 @@
 // Svelte stores for connection status + live broadcast state + cached library.
 import { derived, writable, type Readable, type Writable } from 'svelte/store';
-import type { LibraryList, LibrarySong, LiveState, QueueState } from './protocol';
+import type {
+  BibleBook,
+  BibleVerse,
+  LibraryList,
+  LibrarySong,
+  LiveState,
+  QueueState,
+} from './protocol';
 
 export type ConnStatus =
   | 'idle'
@@ -19,6 +26,9 @@ export const queueState: Writable<QueueState | null> = writable(null);
 
 export const songsStore: Writable<LibrarySong[]> = writable([]);
 export const listsStore: Writable<LibraryList[]> = writable([]);
+export const bibleBooksStore: Writable<BibleBook[]> = writable([]);
+export const bibleVersesStore: Writable<BibleVerse[]> = writable([]);
+export const bibleVersionStore: Writable<string | null> = writable(null);
 
 export type SyncStatus = 'idle' | 'syncing' | 'error';
 export const syncStatus: Writable<SyncStatus> = writable('idle');
