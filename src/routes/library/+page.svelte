@@ -5,7 +5,7 @@
   import { loadCredentials } from '$lib/db';
   import type { BibleBook, BibleVerse, LibrarySong } from '$lib/protocol';
   import { normalize, renderMarkdown } from '$lib/search';
-  import { syncFull } from '$lib/sync';
+  import { isReducedDataConnection, syncFull, syncNow } from '$lib/sync';
   import {
     bibleBooksStore,
     bibleVersesStore,
@@ -40,6 +40,7 @@
   let bibleDebounceTimer: number | null = null;
   let bibleCurrentBookNum = $state<number | null>(null);
   let bibleCurrentChapter = $state<number | null>(null);
+  let hasRequestedLibrarySync = $state(false);
 
   onMount(async () => {
     const creds = await loadCredentials();
@@ -48,6 +49,11 @@
       return;
     }
     await remote.connect();
+    const hasAnyCache = ($songsStore?.length ?? 0) > 0 || (($bibleBooksStore?.length ?? 0) > 0 && ($bibleVersesStore?.length ?? 0) > 0);
+    if ($connStatus === 'open' && !hasAnyCache) {
+      hasRequestedLibrarySync = true;
+      void syncNow();
+    }
   });
 
   const hasLibrary = $derived(($songsStore?.length ?? 0) > 0);
@@ -67,13 +73,12 @@
     return Array.from({ length: currentBibleBook.max_chapter }, (_, index) => index + 1);
   });
 
-  let lastSyncAt = 0;
   $effect(() => {
-    if ($connStatus !== 'open') return;
-    const now = Date.now();
-    if (now - lastSyncAt < 30_000) return;
-    lastSyncAt = now;
-    void syncFull();
+    if ($connStatus !== 'open' || hasRequestedLibrarySync) return;
+    if (isReducedDataConnection() && (hasLibrary || hasBibleData)) return;
+    if (hasLibrary || hasBibleData) return;
+    hasRequestedLibrarySync = true;
+    void syncNow();
   });
 
   $effect(() => {

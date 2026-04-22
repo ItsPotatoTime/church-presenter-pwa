@@ -4,13 +4,14 @@
   import { page } from '$app/stores';
   import { base } from '$app/paths';
   import { getOrCreateDeviceId, loadCredentials } from '$lib/db';
-  import { hydrateFromCache, syncFull } from '$lib/sync';
+  import { hydrateFromCache, isReducedDataConnection, syncNow } from '$lib/sync';
   import { myDeviceId, isViewOnly, connStatus } from '$lib/stores';
 
   let { children } = $props();
   let paired = $state(false);
   let ready = $state(false);
   let hasHydrated = $state(false);
+  let hasTriggeredSync = $state(false);
 
   onMount(async () => {
     myDeviceId.set(await getOrCreateDeviceId());
@@ -26,7 +27,6 @@
 
   // After first QR pairing, connStatus becomes 'open' before layout re-mounts.
   // Update paired reactively so the tab bar appears without a page refresh.
-  let hasTriggeredSync = false;
   $effect(() => {
     if ($connStatus === 'open') {
       if (!paired) {
@@ -36,10 +36,11 @@
           void hydrateFromCache();
         }
       }
-      // Force a full sync once per session on first open so slide_texts are never stale.
-      if (!hasTriggeredSync) {
+      // Prefer a delta sync on reconnect; the first-ever sync still falls back
+      // to a full snapshot because last_sync_ts starts at 0.
+      if (!hasTriggeredSync && !isReducedDataConnection()) {
         hasTriggeredSync = true;
-        void syncFull();
+        void syncNow();
       }
     }
   });
