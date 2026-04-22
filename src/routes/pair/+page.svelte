@@ -3,7 +3,8 @@
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { page } from '$app/stores';
-  import { loadCredentials, saveServer, switchServer, getOrCreateDeviceId, type ServerEntry } from '$lib/db';
+  import { get } from 'svelte/store';
+  import { loadCredentials } from '$lib/db';
   import { remote } from '$lib/ws';
   import { connStatus, connError } from '$lib/stores';
 
@@ -61,25 +62,8 @@
     error = null;
     phase = 'pairing';
 
-    const device_id = await getOrCreateDeviceId();
-    // Create a new server entry for this pairing so existing pairings are preserved.
     const serverKey = crypto.randomUUID();
-    const provisional: ServerEntry = {
-      server_key: serverKey,
-      device_id,
-      device_token: '',
-      device_name: deviceName.trim() || 'Phone',
-      cloud_host: cloudHost,
-      lan_host: lanHost,
-      last_used: Date.now(),
-    };
-    await saveServer(provisional);
-    await switchServer(serverKey); // sets this as the active server
-
-    await remote.pair(
-      { pair_token: pairToken, cloud_host: cloudHost, lan_host: lanHost },
-      deviceName.trim() || 'Phone'
-    );
+    const finalName = deviceName.trim() || 'Phone';
 
     const unsub = connStatus.subscribe((s) => {
       if (s === 'open') {
@@ -92,6 +76,17 @@
         phase = 'idle';
       }
     });
+
+    await remote.pair(
+      { server_key: serverKey, pair_token: pairToken, cloud_host: cloudHost, lan_host: lanHost },
+      finalName
+    );
+
+    if (get(connStatus) === 'open') {
+      phase = 'done';
+      unsub();
+      setTimeout(() => goto(`${base}/live/`), 600);
+    }
   }
 </script>
 

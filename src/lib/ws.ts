@@ -44,6 +44,7 @@ const RECONNECT_BACKOFF_MS = [250, 500, 1000, 2000, 4000, 8000, 15000];
 const AUTH_TIMEOUT_MS = 8000;
 
 export type PairParams = {
+  server_key: string;
   pair_token: string;
   cloud_host: string | null;
   lan_host: string | null;
@@ -115,6 +116,7 @@ class RemoteClient {
     this.tearDown();
     const device_id = await getOrCreateDeviceId();
     const provisional: Credentials = {
+      server_key: params.server_key,
       device_id,
       device_token: '',
       device_name: deviceName,
