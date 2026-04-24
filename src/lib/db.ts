@@ -12,6 +12,7 @@
 // Version 5 adds Bible cache stores.
 // Version 6 forces one full resync for existing installs so Bible data is cached.
 
+import { sortBibleVerses } from './bible';
 import type { BibleBook, BibleVerse, LibrarySong, LibraryList, QueueState } from './protocol';
 
 const DB_NAME = 'church-remote';
@@ -555,7 +556,7 @@ export async function loadAllBibleVerses(): Promise<BibleVerse[]> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_BIBLE_VERSES, 'readonly');
     const req = tx.objectStore(STORE_BIBLE_VERSES).getAll();
-    req.onsuccess = () => resolve((req.result ?? []) as BibleVerse[]);
+    req.onsuccess = () => resolve(sortBibleVerses((req.result ?? []) as BibleVerse[]));
     req.onerror = () => reject(req.error);
   });
 }

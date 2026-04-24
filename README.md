@@ -6,6 +6,12 @@ A Progressive Web App that turns any phone into a wireless remote control for th
 
 ---
 
+## Development Workflow
+
+After every PWA change, run `npm run build`, commit inside this `phone-remote` repo, and push `main` to GitHub. The push triggers GitHub Actions and updates the live GitHub Pages app automatically.
+
+---
+
 ## Features
 
 ### Live Slide Control

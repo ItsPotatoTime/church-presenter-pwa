@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
+  import { sortBibleVerses } from '$lib/bible';
   import { loadCredentials } from '$lib/db';
   import type { BibleBook, BibleVerse, LibrarySong } from '$lib/protocol';
   import { normalize, renderMarkdown } from '$lib/search';
@@ -64,8 +65,10 @@
   );
   const currentBibleVerses = $derived.by(() => {
     if (bibleCurrentBookNum === null || bibleCurrentChapter === null) return [];
-    return $bibleVersesStore.filter(
-      (verse) => verse.book_num === bibleCurrentBookNum && verse.chapter === bibleCurrentChapter,
+    return sortBibleVerses(
+      $bibleVersesStore.filter(
+        (verse) => verse.book_num === bibleCurrentBookNum && verse.chapter === bibleCurrentChapter,
+      ),
     );
   });
   const currentBibleChapters = $derived.by(() => {
@@ -226,7 +229,7 @@
       (verse) => verse.book_num === parsed.exactBook!.book_num && verse.chapter === parsed.chapter,
     );
     if (parsed.verse !== null) return verses.filter((verse) => verse.verse === parsed.verse);
-    return verses;
+    return sortBibleVerses(verses);
   });
 
   const bibleTextResults = $derived.by(() => {

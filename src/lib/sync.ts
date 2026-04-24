@@ -4,6 +4,7 @@
 
 import { remote } from './ws';
 import { get } from 'svelte/store';
+import { sortBibleVerses } from './bible';
 import {
   clearBibleBooks,
   clearBibleVerses,
@@ -128,11 +129,12 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
       await clearBibleBooks();
       await clearBibleVerses();
       if (p.bible) {
+        const sortedVerses = sortBibleVerses(p.bible.verses);
         await putBibleBooks(p.bible.books);
-        await putBibleVerses(p.bible.verses);
+        await putBibleVerses(sortedVerses);
         await setBibleVersion(p.bible.version);
         bibleBooks = p.bible.books;
-        bibleVerses = p.bible.verses;
+        bibleVerses = sortedVerses;
         bibleVersion = p.bible.version;
       } else {
         bibleVersion = await getBibleVersion();
@@ -157,11 +159,12 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         lists = p.lists;
       }
       if (p.bible) {
+        const sortedVerses = sortBibleVerses(p.bible.verses);
         await putBibleBooks(p.bible.books);
-        await putBibleVerses(p.bible.verses);
+        await putBibleVerses(sortedVerses);
         await setBibleVersion(p.bible.version);
         bibleBooks = p.bible.books;
-        bibleVerses = p.bible.verses;
+        bibleVerses = sortedVerses;
         bibleVersion = p.bible.version;
       }
       await setLastSyncTs(p.server_ts);
