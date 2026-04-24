@@ -50,15 +50,18 @@ export function handleSyncMessage(msg: { type: string; id?: string; payload: any
   }
 }
 
-function requestSync(sinceTs: number): Promise<{ type: string; payload: any }> {
+function requestSync(
+  sinceTs: number,
+  bibleVersion: string | null,
+): Promise<{ type: string; payload: any }> {
   return new Promise((resolve, reject) => {
     const id = crypto.randomUUID();
     pending.set(id, resolve);
-    // 15s timeout (library could be large on first sync)
+    // First sync can include the full song library plus the full Bible text.
     const timer = window.setTimeout(() => {
       pending.delete(id);
       reject(new Error('sync timed out'));
-    }, 15000);
+    }, 60000);
     const clearOnResolve = (resolveWrapped: PendingResolver) => (m: any) => {
       clearTimeout(timer);
       resolveWrapped(m);
@@ -68,7 +71,7 @@ function requestSync(sinceTs: number): Promise<{ type: string; payload: any }> {
       remote.sendRaw({
         type: 'sync.request',
         id,
-        payload: { since_ts: sinceTs },
+        payload: { since_ts: sinceTs, bible_version: bibleVersion },
       });
     } catch (e) {
       clearTimeout(timer);
@@ -85,7 +88,14 @@ export async function syncFull(): Promise<void> {
 
 /** Perform a delta or full sync against the desktop and update IndexedDB + stores. */
 export async function syncNow(): Promise<void> {
-  return _doSync(await getLastSyncTs());
+  const [lastSyncTs, bibleBooks, bibleVerses, bibleVersion] = await Promise.all([
+    getLastSyncTs(),
+    loadAllBibleBooks(),
+    loadAllBibleVerses(),
+    getBibleVersion(),
+  ]);
+  const needsBibleSnapshot = bibleBooks.length === 0 || bibleVerses.length === 0;
+  return _doSync(needsBibleSnapshot ? 0 : lastSyncTs, bibleVersion);
 }
 
 export function isReducedDataConnection(): boolean {
@@ -98,10 +108,10 @@ export function isReducedDataConnection(): boolean {
   return connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g';
 }
 
-async function _doSync(since: number): Promise<void> {
+async function _doSync(since: number, cachedBibleVersion: string | null = null): Promise<void> {
   syncStatus.set('syncing');
   try {
-    const resp = await requestSync(since);
+    const resp = await requestSync(since, cachedBibleVersion);
     let songs = get(songsStore);
     let lists = get(listsStore);
     let bibleBooks = get(bibleBooksStore);

@@ -111,6 +111,7 @@ export interface LibraryList {
 // ── Sync (client → server) ───────────────────────────────────────────
 export interface SyncRequest {
   since_ts: number; // 0 → force full resync
+  bible_version?: string | null;
 }
 
 // ── Sync (server → client) ───────────────────────────────────────────
@@ -161,7 +162,7 @@ export type ClientCommand =
   | { type: 'list.remove_song'; payload: { list_name: string; position: number } }
   | { type: 'list.reorder'; payload: { list_name: string; from: number; to: number } }
   | { type: 'list.load_to_queue'; payload: { list_name: string } }
-  | { type: 'sync.request'; id?: string; payload: { since_ts: number } }
+  | { type: 'sync.request'; id?: string; payload: { since_ts: number; bible_version?: string | null } }
   | { type: 'device.rename'; payload: { new_name: string } }
   | { type: 'live.toggle_present' }
   | { type: 'live.font_size'; payload: { delta: number } };

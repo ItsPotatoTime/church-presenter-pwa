@@ -10,11 +10,12 @@
 // Version 3 adds `pending_mutations` (Phase 5 offline list editing).
 // Version 4 adds `servers` for multi-device pairing support.
 // Version 5 adds Bible cache stores.
+// Version 6 forces one full resync for existing installs so Bible data is cached.
 
 import type { BibleBook, BibleVerse, LibrarySong, LibraryList, QueueState } from './protocol';
 
 const DB_NAME = 'church-remote';
-const DB_VERSION = 5;
+const DB_VERSION = 6;
 const STORE_META = 'meta';
 const STORE_SONGS = 'songs';
 const STORE_LISTS = 'lists';
@@ -111,6 +112,20 @@ function openDb(): Promise<IDBDatabase> {
           serversStore.put(entry);
           metaStore.put({ key: 'active_server_key', value: serverKey });
         };
+      }
+
+      if (ev.oldVersion < 6 && db.objectStoreNames.contains(STORE_META)) {
+        tx.objectStore(STORE_META).put({ key: 'last_sync_ts', value: 0 });
+        if (db.objectStoreNames.contains(STORE_SERVERS)) {
+          const serversStore = tx.objectStore(STORE_SERVERS);
+          const serversReq = serversStore.getAll();
+          serversReq.onsuccess = () => {
+            const servers = (serversReq.result ?? []) as ServerEntry[];
+            for (const server of servers) {
+              serversStore.put({ ...server, last_sync_ts: 0 });
+            }
+          };
+        }
       }
     };
     req.onsuccess = () => resolve(req.result);
