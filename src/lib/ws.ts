@@ -63,6 +63,7 @@ class RemoteClient {
   // Tracks server_key values tried in the current connection cycle.
   // Prevents infinite loops when all paired servers reject us.
   private _triedServerKeys = new Set<string>();
+  private pendingRequests = new Map<string, (payload: any) => void>();
 
   constructor() {
     // iOS Safari kills WebSockets when the PWA moves to background.
@@ -151,6 +152,36 @@ class RemoteClient {
     this.ws.send(JSON.stringify(envelope));
   }
 
+  /** Send a request envelope and await the ack response payload. */
+  sendRequest(type: string, payload: any, timeoutMs = 25000): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        reject(new Error('Connection is not open'));
+        return;
+      }
+      const id = crypto.randomUUID();
+      const timer = window.setTimeout(() => {
+        if (this.pendingRequests.delete(id)) {
+          reject(new Error(`Request ${type} timed out`));
+        }
+      }, timeoutMs);
+
+      this.pendingRequests.set(id, (res: any) => {
+        clearTimeout(timer);
+        this.pendingRequests.delete(id);
+        resolve(res);
+      });
+
+      try {
+        this.ws.send(JSON.stringify({ type, id, payload }));
+      } catch (e) {
+        clearTimeout(timer);
+        this.pendingRequests.delete(id);
+        reject(e);
+      }
+    });
+  }
+
   isOpen(): boolean {
     return !!this.ws && this.ws.readyState === WebSocket.OPEN;
   }
@@ -169,6 +200,10 @@ class RemoteClient {
       clearTimeout(this.authTimer);
       this.authTimer = null;
     }
+    for (const [id, resolve] of this.pendingRequests.entries()) {
+      resolve({ ok: false, error: 'connection_lost' });
+    }
+    this.pendingRequests.clear();
     if (this.ws) {
       try { this.ws.close(); } catch { /* ignore */ }
       this.ws = null;
@@ -380,6 +415,17 @@ class RemoteClient {
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
         exclusiveDeviceName.set(p.device_name ?? null);
         return;
+      }
+
+      if (msg.type === 'ack') {
+        const id = msg.id;
+        if (id) {
+          const resolver = this.pendingRequests.get(id);
+          if (resolver) {
+            resolver(msg.payload);
+            return;
+          }
+        }
       }
 
       if (msg.type === 'sync.full' || msg.type === 'sync.delta') {

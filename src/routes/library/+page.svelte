@@ -17,7 +17,7 @@
   } from '$lib/stores';
   import { remote } from '$lib/ws';
 
-  type LibraryMode = 'songs' | 'bible';
+  type LibraryMode = 'songs' | 'bible' | 'write_song';
   type BibleSearchMode = 'reference' | 'text';
   type BibleReferenceParse = {
     exactBook: BibleBook | null;
@@ -352,6 +352,104 @@
     if (currentBibleBook) return `${currentBibleBook.max_chapter} chapters`;
     return `${$bibleBooksStore.length} books`;
   }
+
+  type WriteSongTab = 'link' | 'manual';
+  let writeSongTab = $state<WriteSongTab>('link');
+  let importUrl = $state('');
+  let importLoading = $state(false);
+  let importError = $state<string | null>(null);
+
+  let songTitle = $state('');
+  let songFolder = $state('Written Songs');
+  let songLyrics = $state('');
+  let songChorusIndex = $state<number | null>(null);
+  let saveLoading = $state(false);
+  let saveError = $state<string | null>(null);
+  let showOverwriteConfirm = $state(false);
+
+  function openWriteSongMenu() {
+    libraryMode = 'write_song';
+    writeSongTab = 'link';
+    importUrl = '';
+    importError = null;
+    songTitle = '';
+    songFolder = 'Written Songs';
+    songLyrics = '';
+    songChorusIndex = null;
+    saveError = null;
+    showOverwriteConfirm = false;
+  }
+
+  function closeWriteSongMenu() {
+    libraryMode = 'songs';
+  }
+
+  async function handleImportUrl() {
+    if (!importUrl) {
+      importError = 'Please enter a URL';
+      return;
+    }
+    importLoading = true;
+    importError = null;
+    try {
+      const res = await remote.sendRequest('song.fetch_rc', { url: importUrl });
+      if (res.ok) {
+        songTitle = res.title || '';
+        songLyrics = (res.slides || []).join('\n\n');
+        songChorusIndex = typeof res.chorus_index === 'number' ? res.chorus_index : null;
+        writeSongTab = 'manual';
+      } else {
+        importError = res.error || 'Failed to fetch song from URL';
+      }
+    } catch (err: any) {
+      importError = err.message || 'An error occurred during fetch';
+    } finally {
+      importLoading = false;
+    }
+  }
+
+  const parsedSlides = $derived.by<string[]>(() => {
+    return songLyrics
+      .split('\n\n')
+      .map(s => s.trim())
+      .filter(Boolean);
+  });
+
+  async function handleSaveSong(overwrite = false) {
+    if (!songTitle.trim()) {
+      saveError = 'Song title is required';
+      return;
+    }
+    const slides = parsedSlides;
+    if (slides.length === 0) {
+      saveError = 'Please enter song lyrics';
+      return;
+    }
+    saveLoading = true;
+    saveError = null;
+    try {
+      const res = await remote.sendRequest('song.create', {
+        name: songTitle.trim(),
+        slide_texts: slides,
+        chorus_index: songChorusIndex,
+        folder: songFolder.trim(),
+        overwrite
+      });
+      if (res.ok) {
+        showOverwriteConfirm = false;
+        await syncNow();
+        libraryMode = 'songs';
+      } else if (res.error === 'already_exists') {
+        showOverwriteConfirm = true;
+      } else {
+        saveError = res.error || 'Failed to save song';
+      }
+    } catch (err: any) {
+      saveError = err.message || 'An error occurred';
+    } finally {
+      saveLoading = false;
+    }
+  }
 </script>
 
 {#if libraryMode === 'songs'}
@@ -378,6 +476,17 @@
       </span>
     </div>
     <span class="bible-pill">Open</span>
+  </button>
+
+  <button class="bible-entry" type="button" onclick={openWriteSongMenu} style="margin-top: -6px;">
+    <div class="bible-copy">
+      <span class="bible-kicker">Create custom lyrics</span>
+      <span class="bible-title">Write Song</span>
+      <span class="bible-desc">
+        Write a song manually or fetch it from a resursecrestine.ro link.
+      </span>
+    </div>
+    <span class="bible-pill">Write</span>
   </button>
 
   <section class="searchbar">
@@ -633,6 +742,135 @@
       </div>
     {/if}
   </section>
+{:else if libraryMode === 'write_song'}
+  <header class="hdr bible-hdr">
+    <div>
+      <h1>Write Song</h1>
+      <div class="muted small">Create a custom song or import from web</div>
+    </div>
+    <button
+      class="refresh"
+      aria-label="Back to library"
+      onclick={closeWriteSongMenu}
+    >←</button>
+  </header>
+
+  <section class="bible-panel">
+    <div class="mode-toggle">
+      <button
+        type="button"
+        class:active={writeSongTab === 'link'}
+        onclick={() => { writeSongTab = 'link'; }}
+      >
+        Import Link
+      </button>
+      <button
+        type="button"
+        class:active={writeSongTab === 'manual'}
+        onclick={() => { writeSongTab = 'manual'; }}
+      >
+        Lyrics Editor
+      </button>
+    </div>
+
+    {#if writeSongTab === 'link'}
+      <div class="form-group">
+        <label for="import-url" class="form-label">Resurse Crestine URL</label>
+        <input
+          id="import-url"
+          type="text"
+          placeholder="https://www.resursecrestine.ro/cantari/..."
+          bind:value={importUrl}
+          autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+        />
+        {#if importError}
+          <p class="error-text">{importError}</p>
+        {/if}
+        <button
+          type="button"
+          class="accent fw"
+          onclick={handleImportUrl}
+          disabled={importLoading}
+        >
+          {#if importLoading}Fetching...{:else}Fetch & Edit{/if}
+        </button>
+        <div class="import-help muted small">
+          Enter a song link from resursecrestine.ro to automatically download and parse the title, slides, and chorus.
+        </div>
+      </div>
+    {:else}
+      <div class="form-group">
+        <label for="song-title" class="form-label">Song Title</label>
+        <input
+          id="song-title"
+          type="text"
+          placeholder="Enter title..."
+          bind:value={songTitle}
+          autocomplete="off"
+        />
+
+        <label for="song-folder" class="form-label">Folder / Category</label>
+        <input
+          id="song-folder"
+          type="text"
+          placeholder="Written Songs"
+          bind:value={songFolder}
+          autocomplete="off"
+        />
+
+        <label for="song-lyrics" class="form-label">Lyrics</label>
+        <textarea
+          id="song-lyrics"
+          placeholder="Enter lyrics here. Use two blank lines to separate slides."
+          bind:value={songLyrics}
+          rows="10"
+        ></textarea>
+
+        {#if parsedSlides.length > 0}
+          <div class="slide-previews-header">
+            <span class="form-label">Slide Previews</span>
+            <span class="muted small">Tap a slide to toggle it as the Chorus</span>
+          </div>
+          <div class="slide-previews-list">
+            {#each parsedSlides as slide, i}
+              <button
+                type="button"
+                class="slide-prev-item"
+                class:is-chorus={songChorusIndex === i}
+                onclick={() => {
+                  songChorusIndex = songChorusIndex === i ? null : i;
+                }}
+              >
+                <div class="slide-prev-badge">
+                  {#if songChorusIndex === i}
+                    Chorus
+                  {:else}
+                    Slide {i + 1}
+                  {/if}
+                </div>
+                <div class="slide-prev-text">{slide}</div>
+              </button>
+            {/each}
+          </div>
+        {/if}
+
+        {#if saveError}
+          <p class="error-text">{saveError}</p>
+        {/if}
+
+        <button
+          type="button"
+          class="accent fw"
+          onclick={() => handleSaveSong(false)}
+          disabled={saveLoading || $connStatus !== 'open' || $isViewOnly}
+        >
+          {#if saveLoading}Saving...{:else}Save to Library{/if}
+        </button>
+      </div>
+    {/if}
+  </section>
 {/if}
 
 {#if previewSong}
@@ -670,6 +908,41 @@
       >
         + Add to queue
       </button>
+    </div>
+  </div>
+{/if}
+
+{#if showOverwriteConfirm}
+  <div
+    class="modal-back"
+    role="button"
+    tabindex="-1"
+    aria-label="Close confirm"
+    onclick={() => { showOverwriteConfirm = false; }}
+    onkeydown={(e) => { if (e.key === 'Escape') showOverwriteConfirm = false; }}
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <div class="modal-head">
+        <div class="modal-title">Song Already Exists</div>
+      </div>
+      <p style="margin: 12px 0; font-size: 14px; line-height: 1.5; color: var(--text-secondary);">
+        A song named "<strong>{songTitle}</strong>" already exists in the library. Do you want to overwrite it?
+      </p>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px;">
+        <button class="ghost" onclick={() => { showOverwriteConfirm = false; }}>
+          Cancel
+        </button>
+        <button class="accent" onclick={() => handleSaveSong(true)} disabled={saveLoading}>
+          {#if saveLoading}Overwriting...{:else}Overwrite{/if}
+        </button>
+      </div>
     </div>
   </div>
 {/if}
@@ -1022,5 +1295,97 @@
       flex-direction: column;
       align-items: flex-start;
     }
+  }
+
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .form-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--accent);
+    margin-top: 8px;
+  }
+  .form-label:first-of-type {
+    margin-top: 0;
+  }
+  textarea {
+    background: var(--elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    color: var(--text-primary);
+    font-family: inherit;
+    font-size: 14px;
+    resize: vertical;
+  }
+  textarea:focus {
+    border-color: var(--accent);
+    outline: none;
+  }
+  .error-text {
+    color: #ef4444;
+    font-size: 13px;
+    margin: 4px 0;
+  }
+  .import-help {
+    line-height: 1.4;
+    margin-top: 4px;
+  }
+  .slide-previews-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 16px;
+  }
+  .slide-previews-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 6px;
+  }
+  .slide-prev-item {
+    background: var(--elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: left;
+    transition: border-color 150ms ease, background-color 150ms ease;
+    cursor: pointer;
+    position: relative;
+  }
+  .slide-prev-item:hover {
+    border-color: var(--border-light);
+  }
+  .slide-prev-item.is-chorus {
+    background: var(--chorus-tint);
+    border-color: var(--chorus-border);
+  }
+  .slide-prev-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+  }
+  .slide-prev-item.is-chorus .slide-prev-badge {
+    color: var(--accent);
+  }
+  .slide-prev-text {
+    font-size: 13px;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    padding-right: 60px; /* space for badge */
   }
 </style>

@@ -165,4 +165,6 @@ export type ClientCommand =
   | { type: 'sync.request'; id?: string; payload: { since_ts: number; bible_version?: string | null } }
   | { type: 'device.rename'; payload: { new_name: string } }
   | { type: 'live.toggle_present' }
-  | { type: 'live.font_size'; payload: { delta: number } };
+  | { type: 'live.font_size'; payload: { delta: number } }
+  | { type: 'song.fetch_rc'; id?: string; payload: { url: string } }
+  | { type: 'song.create'; id?: string; payload: { name: string; slide_texts: string[]; chorus_index?: number | null; folder?: string; overwrite?: boolean } };
