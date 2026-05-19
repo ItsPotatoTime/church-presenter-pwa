@@ -463,31 +463,33 @@
     </div>
   </header>
 
-  <button class="bible-entry" type="button" onclick={openBibleMenu}>
-    <div class="bible-copy">
-      <span class="bible-kicker">{hasBibleData ? 'Synced on phone' : 'Waiting for sync'}</span>
-      <span class="bible-title">Bible</span>
-      <span class="bible-desc">
+  <div class="quick-actions">
+    <button class="action-card" type="button" onclick={openBibleMenu}>
+      <div class="action-header">
+        <span class="action-icon">📖</span>
+        <span class="action-pill">{hasBibleData ? 'Open' : 'Sync'}</span>
+      </div>
+      <span class="action-title">Bible</span>
+      <span class="action-desc">
         {#if hasBibleData}
-          Open the Bible menu to search books, chapters, verses, and passage text.
+          Search books, chapters & verses.
         {:else}
-          Open the Bible menu now. It will fill in as soon as the desktop sends Bible data.
+          Waiting for sync...
         {/if}
       </span>
-    </div>
-    <span class="bible-pill">Open</span>
-  </button>
+    </button>
 
-  <button class="bible-entry" type="button" onclick={openWriteSongMenu} style="margin-top: -6px;">
-    <div class="bible-copy">
-      <span class="bible-kicker">Create custom lyrics</span>
-      <span class="bible-title">Write Song</span>
-      <span class="bible-desc">
-        Write a song manually or fetch it from a resursecrestine.ro link.
+    <button class="action-card" type="button" onclick={openWriteSongMenu}>
+      <div class="action-header">
+        <span class="action-icon">✍️</span>
+        <span class="action-pill">Write</span>
+      </div>
+      <span class="action-title">Write Song</span>
+      <span class="action-desc">
+        Write lyrics manually or fetch from link.
       </span>
-    </div>
-    <span class="bible-pill">Write</span>
-  </button>
+    </button>
+  </div>
 
   <section class="searchbar">
     <input
@@ -585,15 +587,12 @@
     >R</button>
   </header>
 
-  <button class="bible-entry nav-entry" type="button" onclick={closeBibleMenu}>
-    <div class="bible-copy">
-      <span class="bible-kicker">Library navigation</span>
-      <span class="bible-title">Songs</span>
-      <span class="bible-desc">
-        Return to the songs menu to browse folders, search titles, and add songs to the queue.
-      </span>
+  <button class="action-card nav-entry" type="button" onclick={closeBibleMenu} style="width: 100%; min-height: auto; flex-direction: row; align-items: center; gap: 12px; padding: 10px 14px;">
+    <div class="action-icon" style="font-size: 16px;">←</div>
+    <div class="action-info" style="flex: 1;">
+      <span class="action-title" style="font-size: 14px; margin-bottom: 0;">Back to Songs</span>
     </div>
-    <span class="bible-pill">Open</span>
+    <span class="action-pill">Songs</span>
   </button>
 
   <section class="bible-panel">
@@ -953,70 +952,74 @@
   h1 { margin:0; font-size: 22px; font-weight: 700; }
   .small { font-size: 12px; }
  
-  .bible-entry {
+  .quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 0 0 12px;
+  }
+  .action-card {
     width: 100%;
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
     justify-content: space-between;
-    gap: 14px;
-    margin: 0 0 14px;
-    padding: 14px 16px;
-    border-radius: 16px;
+    padding: 10px 12px;
+    border-radius: 12px;
     background:
       linear-gradient(135deg, color-mix(in srgb, var(--panel) 72%, transparent), color-mix(in srgb, var(--surface) 88%, transparent)),
       var(--surface);
-    border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, var(--border));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
     text-align: left;
     transition: background 150ms ease, border-color 150ms ease, transform 100ms ease, box-shadow 150ms ease;
+    cursor: pointer;
+    min-height: 94px;
+    box-sizing: border-box;
   }
-  .bible-entry:hover {
+  .action-card:hover {
     border-color: var(--accent);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
-  .bible-entry:active {
-    transform: scale(0.98);
+  .action-card:active {
+    transform: scale(0.97);
   }
   .nav-entry {
     margin-bottom: 12px;
   }
-  .bible-copy {
+  .action-header {
+    width: 100%;
     display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
   }
-  .bible-kicker {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
-    color: var(--accent);
+  .action-icon {
+    font-size: 16px;
+    line-height: 1;
+  }
+  .action-pill {
+    font-size: 9px;
     font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+    line-height: 1;
   }
-  .bible-title {
-    font-size: 18px;
+  .action-title {
+    font-size: 14px;
     font-weight: 700;
     color: var(--text-primary);
+    margin-bottom: 1px;
   }
-  .bible-desc {
-    font-size: 13px;
+  .action-desc {
+    font-size: 10px;
     color: var(--text-secondary);
-    line-height: 1.4;
-  }
-  .bible-pill {
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 34px;
-    padding: 0 12px;
-    border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--accent) 60%, var(--border));
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
-    color: var(--accent);
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 0.2px;
+    line-height: 1.35;
   }
  
   .searchbar {
