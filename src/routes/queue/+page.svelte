@@ -247,8 +247,16 @@
     font-size: 14px;
     border: 1px solid var(--border);
     color: var(--text-primary);
+    transition: background 150ms ease, border-color 150ms ease, transform 100ms ease;
   }
-
+  .btn:hover:not(.disabled) {
+    background: var(--panel);
+    border-color: var(--accent);
+  }
+  .btn:active:not(.disabled) {
+    transform: scale(0.97);
+  }
+ 
   .qlist { list-style: none; padding: 0; margin: 0; }
   .qitem {
     display: grid;
@@ -262,12 +270,13 @@
     margin-bottom: 8px;
     will-change: transform;
     box-sizing: border-box;
+    transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
   }
-  .qitem.playing { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+  .qitem.playing { border-color: var(--accent); box-shadow: 0 0 12px rgba(233, 69, 96, 0.25), 0 0 0 1px var(--accent) inset; }
   .qitem.current { border-color: var(--border-light); }
   /* Source item is invisible during drag — ghost takes its visual place */
   .qitem.drag-src { opacity: 0; }
-
+ 
   .grip {
     color: var(--text-secondary);
     font-size: 14px;
@@ -283,7 +292,7 @@
     align-items: center;
     justify-content: center;
   }
-
+ 
   .label {
     text-align: left; background: transparent; border: none;
     padding: 10px 4px; color: var(--text-primary); border-radius: 6px;
@@ -292,10 +301,12 @@
   .rm {
     width: 40px; padding: 0; font-size: 16px;
     background: transparent; color: var(--text-secondary); border-color: var(--border);
+    transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease, transform 100ms ease;
   }
-  .rm:hover { color: var(--danger); border-color: var(--danger); }
+  .rm:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
+  .rm:active:not(:disabled) { transform: scale(0.95); background: rgba(239, 68, 68, 0.15); }
   a.btn.disabled { pointer-events: none; opacity: 0.45; }
-
+ 
   /* ── Floating drag ghost ──────────────────────────────────────────── */
   .drag-ghost {
     position: fixed;
@@ -319,7 +330,7 @@
   }
   .ghost-label .name { font-weight: 600; }
   .bible-tag { color: var(--accent); }
-
+ 
   /* ── Confirm modal ─────────────────────────────────────────────────── */
   .modal-back {
     position: fixed; inset: 0;
@@ -328,6 +339,8 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
   .modal {
     background: var(--surface);
@@ -336,6 +349,7 @@
     width: 100%;
     max-width: 720px;
     padding: 20px 16px 24px;
+    box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.3);
   }
   .modal-msg {
     font-size: 16px;

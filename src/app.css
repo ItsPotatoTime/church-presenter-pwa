@@ -1,19 +1,21 @@
 :root {
-  --bg: #12121f;
-  --surface: #1a1a2e;
-  --panel: #0f3460;
-  --elevated: #1e1e34;
+  --bg: #0f0f14;
+  --surface: #16161e;
+  --panel: #1c1c28;
+  --elevated: #22222e;
   --accent: #e94560;
   --accent-hover: #ff6080;
-  --text-primary: #f0f0ff;
-  --text-secondary: #8888aa;
-  --text-muted: #444466;
-  --border: #2a2a4a;
-  --border-light: #3c3c60;
-  --chorus-tint: #4a1a6e;
-  --success: #2ecc71;
-  --warning: #f39c12;
-  --danger: #e74c3c;
+  --accent-dim: #c73a52;
+  --text-primary: #e8e8f0;
+  --text-secondary: #7878a0;
+  --text-muted: #484868;
+  --border: #252535;
+  --border-light: #30304a;
+  --chorus-tint: #2a1a40;
+  --chorus-border: #7c3aed;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
 }
 
 * { box-sizing: border-box; }
@@ -23,7 +25,7 @@ html, body {
   padding: 0;
   background: var(--bg);
   color: var(--text-primary);
-  font-family: -apple-system, "Segoe UI", "SF Pro Display", "Ubuntu", system-ui, sans-serif;
+  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", "SF Pro Display", "Ubuntu", system-ui, sans-serif;
   font-size: 15px;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
@@ -47,16 +49,20 @@ button {
   font-family: inherit;
   font-size: 15px;
   cursor: pointer;
-  transition: background 120ms, border-color 120ms;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 100ms ease;
+  will-change: transform;
 }
 
-button:hover {
+button:hover:not(:disabled) {
   background: var(--panel);
   border-color: var(--accent);
 }
 
-button:active {
+button:active:not(:disabled) {
   background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  transform: scale(0.97);
 }
 
 button.accent {
@@ -66,13 +72,18 @@ button.accent {
   font-weight: 600;
 }
 
-button.accent:hover {
+button.accent:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
 }
 
+button.accent:active:not(:disabled) {
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
+}
+
 button:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -85,6 +96,7 @@ input[type="text"], input[type="url"] {
   font-family: inherit;
   font-size: 15px;
   width: 100%;
+  transition: border-color 150ms ease, background-color 150ms ease;
 }
 
 input[type="text"]:focus, input[type="url"]:focus {
@@ -98,6 +110,7 @@ input[type="text"]:focus, input[type="url"]:focus {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 }
 
 .muted {

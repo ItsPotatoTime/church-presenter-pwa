@@ -377,11 +377,31 @@
     color: var(--text-secondary);
     text-decoration: none;
     font-size: 14px;
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 100ms ease;
   }
   button.sm { padding: 6px 10px; font-size: 13px; margin-top: 0; width: auto; }
-  button.danger { color: var(--danger); border-color: var(--danger); }
-  button.ghost:hover { color: var(--text-primary); }
-
+  button.danger {
+    color: var(--danger);
+    border-color: var(--danger);
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 100ms ease;
+  }
+  button.danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
+    border-color: var(--danger);
+  }
+  button.danger:active {
+    transform: scale(0.96);
+  }
+  button.ghost:hover, .btn-link:hover {
+    color: var(--text-primary);
+    border-color: var(--accent);
+    background: var(--panel);
+  }
+  button.ghost:active, .btn-link:active {
+    transform: scale(0.98);
+  }
+ 
   .modal-back {
     position: fixed; inset: 0;
     background: rgba(0,0,0,0.6);
@@ -389,6 +409,8 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
   .modal {
     background: var(--surface);

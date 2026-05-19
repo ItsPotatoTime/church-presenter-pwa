@@ -679,7 +679,7 @@
   .bible-hdr { align-items: flex-start; }
   h1 { margin:0; font-size: 22px; font-weight: 700; }
   .small { font-size: 12px; }
-
+ 
   .bible-entry {
     width: 100%;
     display: flex;
@@ -695,6 +695,14 @@
     border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
     text-align: left;
+    transition: background 150ms ease, border-color 150ms ease, transform 100ms ease, box-shadow 150ms ease;
+  }
+  .bible-entry:hover {
+    border-color: var(--accent);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+  .bible-entry:active {
+    transform: scale(0.98);
   }
   .nav-entry {
     margin-bottom: 12px;
@@ -737,7 +745,7 @@
     font-weight: 700;
     letter-spacing: 0.2px;
   }
-
+ 
   .searchbar {
     display: flex;
     gap: 8px;
@@ -760,16 +768,17 @@
     line-height: 1;
     font-weight: 700;
   }
-
+ 
   .group { margin-bottom: 14px; }
   .group-head {
     font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 1.2px;
     color: var(--text-secondary);
     padding: 8px 2px 4px;
+    font-weight: 700;
   }
-
+ 
   .song {
     display: flex;
     gap: 8px;
@@ -778,6 +787,11 @@
     border-radius: 10px;
     padding: 4px;
     margin-bottom: 6px;
+    transition: border-color 150ms ease, background-color 150ms ease;
+  }
+  .song:hover {
+    border-color: var(--accent);
+    background: var(--panel);
   }
   .song-main {
     flex: 1;
@@ -787,6 +801,10 @@
     padding: 10px 12px;
     color: var(--text-primary);
     border-radius: 8px;
+    transition: background-color 150ms ease;
+  }
+  .song-main:active {
+    background: rgba(255, 255, 255, 0.04);
   }
   .song-name { font-weight: 600; }
   .snippet {
@@ -798,14 +816,27 @@
     text-overflow: ellipsis;
     max-width: 240px;
   }
+ 
   .add {
     width: 52px;
     font-size: 20px;
     font-weight: 700;
     color: var(--accent);
     border-color: var(--border);
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 100ms ease;
   }
-
+  .add:hover:not(:disabled) {
+    background: var(--panel);
+    border-color: var(--accent);
+    color: var(--accent-hover);
+  }
+  .add:active:not(:disabled) {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    transform: scale(0.93);
+  }
+ 
   .bible-panel {
     display: flex;
     flex-direction: column;
@@ -821,6 +852,7 @@
     border-color: var(--accent);
     color: #fff;
     font-weight: 700;
+    box-shadow: 0 2px 8px rgba(233, 69, 96, 0.3);
   }
   .crumbs {
     display: flex;
@@ -831,6 +863,10 @@
     padding: 7px 12px;
     border-radius: 999px;
     font-size: 12px;
+    transition: background-color 150ms ease, border-color 150ms ease, transform 100ms ease;
+  }
+  .crumb:active {
+    transform: scale(0.95);
   }
   .crumb.current {
     display: inline-flex;
@@ -841,6 +877,7 @@
     color: var(--accent);
     font-size: 12px;
     font-weight: 700;
+    box-shadow: 0 0 8px rgba(233, 69, 96, 0.15);
   }
   .book-list,
   .bible-results {
@@ -859,6 +896,7 @@
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 14px;
+    transition: background-color 150ms ease, border-color 150ms ease, transform 100ms ease;
   }
   .book-card {
     display: flex;
@@ -866,6 +904,13 @@
     justify-content: space-between;
     gap: 10px;
     text-align: left;
+  }
+  .book-card:hover {
+    border-color: var(--accent);
+    background: var(--panel);
+  }
+  .book-card:active {
+    transform: scale(0.98);
   }
   .verse-card { flex: 1; }
   .verse-add {
@@ -886,6 +931,14 @@
   .chapter-chip {
     min-height: 52px;
     font-weight: 600;
+    transition: background-color 150ms ease, border-color 150ms ease, transform 100ms ease;
+  }
+  .chapter-chip:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: var(--panel);
+  }
+  .chapter-chip:active:not(:disabled) {
+    transform: scale(0.96);
   }
   .verse-ref {
     color: var(--accent);
@@ -900,10 +953,10 @@
     white-space: pre-wrap;
   }
   .bible-empty { margin: 0; }
-
+ 
   .sentinel { height: 1px; }
   .load-hint { text-align: center; padding: 6px 0 10px; margin: 0; }
-
+ 
   .modal-back {
     position: fixed;
     inset: 0;
@@ -912,6 +965,8 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
   .modal {
     background: var(--surface);
@@ -922,6 +977,7 @@
     max-height: 90vh;
     overflow-y: auto;
     padding: 16px;
+    box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.35);
   }
   .modal-head {
     display: flex;
@@ -936,7 +992,7 @@
     color: var(--text-secondary);
   }
   button.accent.fw { width: 100%; padding: 14px; margin-top: 12px; }
-
+ 
   .slide-prev {
     background: var(--elevated);
     border: 1px solid var(--border);
@@ -946,9 +1002,18 @@
     white-space: pre-wrap;
     line-height: 1.4;
     font-size: 13px;
+    transition: border-color 150ms ease;
   }
-  .slide-prev.chorus { background: var(--chorus-tint); color: #fff; }
-
+  .slide-prev:hover {
+    border-color: var(--border-light);
+  }
+  .slide-prev.chorus {
+    background: var(--chorus-tint);
+    border-color: var(--chorus-border);
+    color: #fff;
+    box-shadow: 0 0 10px rgba(124, 58, 237, 0.15);
+  }
+ 
   @media (max-width: 560px) {
     .chapter-grid {
       grid-template-columns: 1fr 1fr;

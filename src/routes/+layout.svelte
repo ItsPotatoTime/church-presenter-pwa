@@ -129,10 +129,12 @@
     z-index: 30;
     display: flex;
     justify-content: space-around;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
+    background: rgba(22, 22, 30, 0.75);
+    border-top: 1px solid rgba(48, 48, 74, 0.4);
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0));
-    backdrop-filter: blur(6px);
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
   }
 
   .tab {
@@ -148,14 +150,45 @@
     font-size: 11px;
     font-weight: 600;
     -webkit-tap-highlight-color: transparent;
+    position: relative;
+    transition: color 150ms ease, transform 100ms ease;
+    will-change: transform;
+  }
+
+  .tab:active {
+    transform: scale(0.94);
+  }
+
+  .tab::after {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 50%;
+    transform: translateX(-50%) scaleX(0);
+    width: 28px;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 0 0 3px 3px;
+    transition: transform 200ms cubic-bezier(0.2, 0, 0, 1);
+    box-shadow: 0 2px 10px var(--accent);
+    will-change: transform;
   }
 
   .tab.active {
     color: var(--accent);
   }
 
+  .tab.active::after {
+    transform: translateX(-50%) scaleX(1);
+  }
+
   .tab .icon {
     font-size: 20px;
     line-height: 1;
+    transition: transform 150ms ease;
+  }
+
+  .tab:hover .icon {
+    transform: translateY(-1px);
   }
 </style>

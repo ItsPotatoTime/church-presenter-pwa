@@ -176,22 +176,24 @@
   .err { color: var(--danger); font-size: 12px; margin-top: 4px; }
 
   .slide-box {
-    background: var(--surface);
+    background: #08080e;
     border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 20px;
+    border-radius: 12px;
+    padding: 24px;
     margin-top: 12px;
-    min-height: 40vh;
+    min-height: 38vh;
     display: flex;
     align-items: center;
     justify-content: center;
     text-align: center;
-    transition: background 120ms;
+    transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
     position: relative;
+    box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
   }
   .slide-box.blanked {
     background: #000;
     border-color: var(--accent);
+    box-shadow: inset 0 2px 15px rgba(233, 69, 96, 0.25);
   }
   .blank-label { color: var(--accent); font-weight: 700; letter-spacing: 2px; }
   .bible-ref {
@@ -206,7 +208,7 @@
     max-width: 100%;
     word-break: break-word;
   }
-
+ 
   .controls {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -214,31 +216,50 @@
     margin-top: 14px;
   }
   .big {
-    padding: 26px 10px;
+    padding: 22px 10px;
     font-size: 20px;
     font-weight: 700;
+    border-radius: 12px;
   }
-
+ 
   .row {
     display: flex;
     gap: 10px;
     margin-top: 10px;
   }
   .row > button { flex: 1; }
-
+ 
   .font-row > button { flex: 1; }
-
+ 
   button.present-on {
-    background: var(--danger, #c0392b);
+    background: var(--danger);
     color: #fff;
-    border-color: var(--danger, #c0392b);
+    border-color: var(--danger);
     font-weight: 700;
   }
+  button.present-on:hover:not(:disabled) {
+    background: #ff5555;
+    border-color: #ff5555;
+  }
+  button.present-on:active:not(:disabled) {
+    background: #d63838;
+    border-color: #d63838;
+    transform: scale(0.97);
+  }
   button.present-off {
-    background: var(--success, #27ae60);
+    background: var(--success);
     color: #fff;
-    border-color: var(--success, #27ae60);
+    border-color: var(--success);
     font-weight: 700;
+  }
+  button.present-off:hover:not(:disabled) {
+    background: #2ed573;
+    border-color: #2ed573;
+  }
+  button.present-off:active:not(:disabled) {
+    background: #1eb24c;
+    border-color: #1eb24c;
+    transform: scale(0.97);
   }
 
   .pill {
