@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { base } from '$app/paths';
   import { sortBibleVerses } from '$lib/bible';
   import { loadCredentials } from '$lib/db';
@@ -34,7 +35,7 @@
   let renderCount = $state(300);
   let sentinel = $state<Element | null>(null);
 
-  let libraryMode = $state<LibraryMode>('songs');
+  const libraryMode = $derived(($page.url.searchParams.get('mode') as LibraryMode) || 'songs');
   let rawBibleQuery = $state('');
   let bibleQuery = $state('');
   let bibleSearchMode = $state<BibleSearchMode>('reference');
@@ -308,7 +309,7 @@
   }
 
   function openBibleMenu() {
-    libraryMode = 'bible';
+    goto('?mode=bible', { keepFocus: true, noScroll: true });
     bibleSearchMode = 'reference';
     bibleCurrentBookNum = null;
     bibleCurrentChapter = null;
@@ -317,7 +318,7 @@
   }
 
   function closeBibleMenu() {
-    libraryMode = 'songs';
+    goto('?', { keepFocus: true, noScroll: true });
     rawBibleQuery = '';
     bibleQuery = '';
   }
@@ -368,7 +369,7 @@
   let showOverwriteConfirm = $state(false);
 
   function openWriteSongMenu() {
-    libraryMode = 'write_song';
+    goto('?mode=write_song', { keepFocus: true, noScroll: true });
     writeSongTab = 'link';
     importUrl = '';
     importError = null;
@@ -381,7 +382,7 @@
   }
 
   function closeWriteSongMenu() {
-    libraryMode = 'songs';
+    goto('?', { keepFocus: true, noScroll: true });
   }
 
   async function handleImportUrl() {
@@ -438,7 +439,7 @@
       if (res.ok) {
         showOverwriteConfirm = false;
         await syncNow();
-        libraryMode = 'songs';
+        goto('?', { keepFocus: true, noScroll: true });
       } else if (res.error === 'already_exists') {
         showOverwriteConfirm = true;
       } else {
@@ -573,7 +574,7 @@
       </p>
     {/if}
   {/if}
-{:else}
+{:else if libraryMode === 'bible'}
   <header class="hdr bible-hdr">
     <div>
       <h1>Bible</h1>
