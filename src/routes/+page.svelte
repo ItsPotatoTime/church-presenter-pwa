@@ -4,6 +4,7 @@
   import { base } from '$app/paths';
   import { loadCredentials } from '$lib/db';
   import { serverName } from '$lib/stores';
+  import jsQR from 'jsqr';
 
   let checked = $state(false);
   let paired = $state(false);
@@ -15,13 +16,14 @@
   let pasteUrl = $state('');
   let pasteErr = $state<string | null>(null);
 
-  // Camera scanner (BarcodeDetector — Safari 17+, Chrome/Edge desktop and Android)
-  let scanSupported = $state(false);
+  // Camera scanner states
+  let scanSupported = $state(true);
   let scanning = $state(false);
   let scanErr = $state<string | null>(null);
   let videoEl: HTMLVideoElement | null = $state(null);
+  let canvasEl: HTMLCanvasElement | null = $state(null);
   let scanStream: MediaStream | null = null;
-  let scanTimer: number | null = null;
+  let animationFrameId: number | null = null;
 
   onMount(() => {
     isIOS =
@@ -32,7 +34,8 @@
       window.matchMedia('(display-mode: standalone)').matches ||
       (window.navigator as any).standalone === true;
 
-    scanSupported = 'BarcodeDetector' in window;
+    // Check if media devices and getUserMedia are supported (standard camera detection)
+    scanSupported = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
     const handler = (e: Event) => {
       e.preventDefault();
@@ -99,7 +102,7 @@
   async function startScan() {
     scanErr = null;
     if (!scanSupported) {
-      scanErr = 'This browser has no built-in QR scanner. Paste the link instead.';
+      scanErr = 'Camera access is not supported on this browser. Paste the link instead.';
       return;
     }
     scanning = true;
@@ -114,28 +117,7 @@
         videoEl.srcObject = scanStream;
         await videoEl.play().catch(() => {});
       }
-      // @ts-expect-error BarcodeDetector is not in all TS libs
-      const detector = new window.BarcodeDetector({ formats: ['qr_code'] });
-      const tick = async () => {
-        if (!scanning || !videoEl) return;
-        try {
-          const codes = await detector.detect(videoEl);
-          if (codes && codes.length) {
-            const value = String(codes[0].rawValue ?? '');
-            if (value) {
-              const ok = handlePairUrl(value);
-              if (ok) {
-                stopScan();
-                return;
-              }
-            }
-          }
-        } catch {
-          /* frame not ready — keep scanning */
-        }
-        scanTimer = window.setTimeout(tick, 200);
-      };
-      tick();
+      animationFrameId = requestAnimationFrame(tick);
     } catch (e: any) {
       scanning = false;
       scanErr = e?.message ?? 'Camera unavailable';
@@ -144,15 +126,39 @@
 
   function stopScan() {
     scanning = false;
-    if (scanTimer !== null) {
-      clearTimeout(scanTimer);
-      scanTimer = null;
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
     }
     if (scanStream) {
       for (const t of scanStream.getTracks()) t.stop();
       scanStream = null;
     }
     if (videoEl) videoEl.srcObject = null;
+  }
+
+  function tick() {
+    if (!scanning || !videoEl || !canvasEl) return;
+    if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
+      const ctx = canvasEl.getContext('2d');
+      if (ctx) {
+        canvasEl.width = videoEl.videoWidth;
+        canvasEl.height = videoEl.videoHeight;
+        ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+        const imageData = ctx.getImageData(0, 0, canvasEl.width, canvasEl.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert',
+        });
+        if (code && code.data) {
+          const ok = handlePairUrl(code.data);
+          if (ok) {
+            stopScan();
+            return;
+          }
+        }
+      }
+    }
+    animationFrameId = requestAnimationFrame(tick);
   }
 </script>
 
@@ -193,14 +199,7 @@
     </p>
 
     {#if scanSupported}
-      {#if !scanning}
-        <button class="accent fw" onclick={startScan}>📷 Scan QR code</button>
-      {:else}
-        <div class="scan-wrap">
-          <video bind:this={videoEl} playsinline muted></video>
-          <button class="ghost fw" onclick={stopScan}>Cancel scan</button>
-        </div>
-      {/if}
+      <button class="accent fw" onclick={startScan}>📷 Scan QR code</button>
       {#if scanErr}<p class="err small">{scanErr}</p>{/if}
       <div class="or">— or —</div>
     {/if}
@@ -217,7 +216,7 @@
         bind:value={pasteUrl}
       />
       {#if pasteErr}<p class="err small">{pasteErr}</p>{/if}
-      <button class="accent fw" type="submit" disabled={!pasteUrl.trim()}>
+      <button class="accent fw" type="submit" style="margin-top: 12px;" disabled={!pasteUrl.trim()}>
         Pair with this link
       </button>
     </form>
@@ -248,32 +247,185 @@
   </section>
 {/if}
 
+{#if scanning}
+  <div class="scanner-modal" role="dialog" aria-modal="true">
+    <div class="scanner-header">
+      <h2>Scan QR Code</h2>
+      <button class="close-btn" onclick={stopScan} aria-label="Close scanner">✕</button>
+    </div>
+    
+    <div class="scanner-viewport">
+      <video bind:this={videoEl} playsinline muted></video>
+      <canvas bind:this={canvasEl} style="display: none;"></canvas>
+      
+      <!-- Visual targeting box -->
+      <div class="scan-reticle">
+        <div class="scan-line"></div>
+        <div class="corner top-left"></div>
+        <div class="corner top-right"></div>
+        <div class="corner bottom-left"></div>
+        <div class="corner bottom-right"></div>
+      </div>
+    </div>
+    
+    <div class="scanner-footer">
+      <p class="muted">Align the QR code inside the box to scan</p>
+    </div>
+  </div>
+{/if}
+
 <style>
   header { padding: 8px 0 16px; }
   h1 { margin: 0 0 6px; font-size: 22px; font-weight: 700; }
   h2 { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
-
+ 
   .panel.warn { border-color: var(--warning); }
   .steps { margin: 8px 0 0 20px; padding: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
   .steps li { margin-bottom: 4px; }
-
+ 
   form { display: block; margin-top: 4px; }
   label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
-
+ 
   button.fw { width: 100%; padding: 14px; margin-top: 12px; font-size: 15px; }
   .or { text-align: center; color: var(--text-secondary); font-size: 12px; margin: 14px 0 4px; }
-
-  .scan-wrap { margin-top: 10px; }
-  video {
-    width: 100%; max-height: 60vh;
-    background: #000;
-    border-radius: 10px;
-  }
-
+ 
   .err { color: var(--danger); font-size: 12px; margin: 6px 0 0; }
   .small { font-size: 12px; }
-
+ 
   .tip { margin-top: 14px; }
   .tip summary { cursor: pointer; }
   .tip p { margin: 6px 0 0; line-height: 1.5; }
+
+  /* Premium Scanner Overlay Styles */
+  .scanner-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(15, 15, 20, 0.95);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: calc(20px + env(safe-area-inset-top, 0)) 20px calc(30px + env(safe-area-inset-bottom, 0));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .scanner-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 20px;
+  }
+
+  .scanner-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .close-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: var(--text-primary);
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 150ms ease, transform 100ms ease;
+  }
+
+  .close-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .close-btn:active {
+    transform: scale(0.92);
+  }
+
+  .scanner-viewport {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    aspect-ratio: 1;
+    margin: auto;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-light);
+  }
+
+  .scanner-viewport video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .scan-reticle {
+    position: absolute;
+    inset: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  }
+
+  .corner {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--accent);
+    pointer-events: none;
+  }
+
+  .top-left {
+    top: -2px; left: -2px;
+    border-right: none; border-bottom: none;
+    border-top-left-radius: 8px;
+  }
+
+  .top-right {
+    top: -2px; right: -2px;
+    border-left: none; border-bottom: none;
+    border-top-right-radius: 8px;
+  }
+
+  .bottom-left {
+    bottom: -2px; left: -2px;
+    border-right: none; border-top: none;
+    border-bottom-left-radius: 8px;
+  }
+
+  .bottom-right {
+    bottom: -2px; right: -2px;
+    border-left: none; border-top: none;
+    border-bottom-right-radius: 8px;
+  }
+
+  .scan-line {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: scan 2s linear infinite;
+  }
+
+  @keyframes scan {
+    0% { top: 10%; }
+    50% { top: 90%; }
+    100% { top: 10%; }
+  }
+
+  .scanner-footer {
+    text-align: center;
+    margin-top: 20px;
+  }
 </style>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { page } from '$app/stores';
@@ -7,6 +7,7 @@
   import { loadCredentials, saveServer, switchServer, getOrCreateDeviceId, type ServerEntry } from '$lib/db';
   import { remote } from '$lib/ws';
   import { connStatus, connError } from '$lib/stores';
+  import jsQR from 'jsqr';
 
   let deviceName = $state('Phone');
   let pairToken = $state<string | null>(null);
@@ -19,6 +20,17 @@
   // not the installed PWA's. We detect and divert the user.
   let iosWarning = $state(false);
   let copied = $state(false);
+
+  // Camera QR Scanner states
+  let scanning = $state(false);
+  let scanErr = $state<string | null>(null);
+  let videoEl: HTMLVideoElement | null = $state(null);
+  let canvasEl: HTMLCanvasElement | null = $state(null);
+  let scanStream: MediaStream | null = null;
+  let animationFrameId: number | null = null;
+
+  let pasteUrl = $state('');
+  let pasteErr = $state<string | null>(null);
 
   onMount(async () => {
     const qs = $page.url.searchParams;
@@ -38,7 +50,7 @@
     }
 
     if (!pairToken || (!cloudHost && !lanHost)) {
-      // No QR params — user navigated here manually. Show instructions instead of an error.
+      // No QR params — user navigated here manually.
       return;
     }
 
@@ -46,15 +58,108 @@
     if (prev?.device_name) deviceName = prev.device_name;
   });
 
+  onDestroy(() => {
+    stopScan();
+  });
+
+  function handlePairUrl(raw: string): boolean {
+    scanErr = null;
+    const s = raw.trim();
+    if (!s) return false;
+    let url: URL;
+    try {
+      url = new URL(s);
+    } catch {
+      scanErr = 'That does not look like a valid link.';
+      return false;
+    }
+    const pt = url.searchParams.get('pt');
+    const c = url.searchParams.get('c');
+    const l = url.searchParams.get('l');
+    if (!pt || (!c && !l)) {
+      scanErr = 'Link is missing pt and c/l parameters.';
+      return false;
+    }
+    pairToken = pt;
+    cloudHost = c;
+    lanHost = l;
+    return true;
+  }
+
+  function onPasteSubmit(e: Event) {
+    e.preventDefault();
+    pasteErr = null;
+    const ok = handlePairUrl(pasteUrl);
+    if (!ok) {
+      pasteErr = scanErr || 'Invalid pairing link.';
+    }
+  }
+
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(window.location.href);
       copied = true;
       setTimeout(() => (copied = false), 2000);
     } catch {
-      // iOS may refuse clipboard without user gesture — button IS a gesture, but if it fails, fall back
       copied = false;
     }
+  }
+
+  async function startScan() {
+    scanErr = null;
+    scanning = true;
+    try {
+      scanStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' },
+        audio: false,
+      });
+      await new Promise((r) => setTimeout(r, 0));
+      if (videoEl) {
+        videoEl.srcObject = scanStream;
+        await videoEl.play().catch(() => {});
+      }
+      animationFrameId = requestAnimationFrame(tick);
+    } catch (e: any) {
+      scanning = false;
+      scanErr = e?.message ?? 'Camera unavailable';
+    }
+  }
+
+  function stopScan() {
+    scanning = false;
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
+    }
+    if (scanStream) {
+      for (const t of scanStream.getTracks()) t.stop();
+      scanStream = null;
+    }
+    if (videoEl) videoEl.srcObject = null;
+  }
+
+  function tick() {
+    if (!scanning || !videoEl || !canvasEl) return;
+    if (videoEl.readyState === videoEl.HAVE_ENOUGH_DATA) {
+      const ctx = canvasEl.getContext('2d');
+      if (ctx) {
+        canvasEl.width = videoEl.videoWidth;
+        canvasEl.height = videoEl.videoHeight;
+        ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+        const imageData = ctx.getImageData(0, 0, canvasEl.width, canvasEl.height);
+        const code = jsQR(imageData.data, imageData.width, imageData.height, {
+          inversionAttempts: 'dontInvert',
+        });
+        if (code && code.data) {
+          const ok = handlePairUrl(code.data);
+          if (ok) {
+            stopScan();
+            return;
+          }
+        }
+      }
+    }
+    animationFrameId = requestAnimationFrame(tick);
   }
 
   async function startPair() {
@@ -124,12 +229,37 @@
   </section>
 {:else if !pairToken && !cloudHost && !lanHost}
   <section class="panel">
-    <b>Scan a QR code</b>
+    <h2>Scan desktop QR code</h2>
     <p class="muted">
-      Open the desktop app, go to <b>Settings → Remote</b>,
-      and scan the QR code shown there. The link will open this page with the
-      pairing information filled in automatically.
+      Open the desktop app, go to <b>Settings → Remote</b>, and scan the QR code shown there to link this phone.
     </p>
+    
+    <button class="accent fw" onclick={startScan} style="margin-top: 16px;">
+      📷 Scan QR code
+    </button>
+    
+    {#if scanErr}
+      <p class="err small" style="margin-top: 8px;">{scanErr}</p>
+    {/if}
+
+    <div class="or">— or —</div>
+
+    <form onsubmit={onPasteSubmit}>
+      <label for="paste">Paste the pair link from the QR</label>
+      <input
+        id="paste"
+        type="url"
+        autocomplete="off"
+        autocapitalize="none"
+        autocorrect="off"
+        placeholder="https://…/pair/?pt=…"
+        bind:value={pasteUrl}
+      />
+      {#if pasteErr}<p class="err small">{pasteErr}</p>{/if}
+      <button class="accent fw" type="submit" style="margin-top: 12px;" disabled={!pasteUrl.trim()}>
+        Pair with this link
+      </button>
+    </form>
   </section>
 {:else if error}
   <section class="panel err">
@@ -168,6 +298,33 @@
   </section>
 {/if}
 
+{#if scanning}
+  <div class="scanner-modal" role="dialog" aria-modal="true">
+    <div class="scanner-header">
+      <h2>Scan QR Code</h2>
+      <button class="close-btn" onclick={stopScan} aria-label="Close scanner">✕</button>
+    </div>
+    
+    <div class="scanner-viewport">
+      <video bind:this={videoEl} playsinline muted></video>
+      <canvas bind:this={canvasEl} style="display: none;"></canvas>
+      
+      <!-- Visual targeting box -->
+      <div class="scan-reticle">
+        <div class="scan-line"></div>
+        <div class="corner top-left"></div>
+        <div class="corner top-right"></div>
+        <div class="corner bottom-left"></div>
+        <div class="corner bottom-right"></div>
+      </div>
+    </div>
+    
+    <div class="scanner-footer">
+      <p class="muted">Align the QR code inside the box to scan</p>
+    </div>
+  </div>
+{/if}
+
 <style>
   header { padding: 8px 0 12px; }
   h1 { margin: 0; font-size: 22px; font-weight: 700; }
@@ -188,4 +345,141 @@
 
   .steps { margin: 8px 0 0 20px; padding: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
   .steps li { margin-bottom: 4px; }
+
+  .or { text-align: center; color: var(--text-secondary); font-size: 12px; margin: 14px 0 4px; }
+  .err { color: var(--danger); font-size: 12px; margin: 6px 0 0; }
+  .small { font-size: 12px; }
+
+  /* Premium Scanner Overlay Styles */
+  .scanner-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(15, 15, 20, 0.95);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: calc(20px + env(safe-area-inset-top, 0)) 20px calc(30px + env(safe-area-inset-bottom, 0));
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .scanner-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    margin-bottom: 20px;
+  }
+
+  .scanner-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+
+  .close-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: var(--text-primary);
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 150ms ease, transform 100ms ease;
+  }
+
+  .close-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+  }
+
+  .close-btn:active {
+    transform: scale(0.92);
+  }
+
+  .scanner-viewport {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    aspect-ratio: 1;
+    margin: auto;
+    border-radius: 20px;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--border-light);
+  }
+
+  .scanner-viewport video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .scan-reticle {
+    position: absolute;
+    inset: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 12px;
+    pointer-events: none;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  }
+
+  .corner {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 3px solid var(--accent);
+    pointer-events: none;
+  }
+
+  .top-left {
+    top: -2px; left: -2px;
+    border-right: none; border-bottom: none;
+    border-top-left-radius: 8px;
+  }
+
+  .top-right {
+    top: -2px; right: -2px;
+    border-left: none; border-bottom: none;
+    border-top-right-radius: 8px;
+  }
+
+  .bottom-left {
+    bottom: -2px; left: -2px;
+    border-right: none; border-top: none;
+    border-bottom-left-radius: 8px;
+  }
+
+  .bottom-right {
+    bottom: -2px; right: -2px;
+    border-left: none; border-top: none;
+    border-bottom-right-radius: 8px;
+  }
+
+  .scan-line {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    box-shadow: 0 0 8px var(--accent);
+    animation: scan 2s linear infinite;
+  }
+
+  @keyframes scan {
+    0% { top: 10%; }
+    50% { top: 90%; }
+    100% { top: 10%; }
+  }
+
+  .scanner-footer {
+    text-align: center;
+    margin-top: 20px;
+  }
 </style>
