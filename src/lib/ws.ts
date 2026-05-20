@@ -428,6 +428,13 @@ class RemoteClient {
         }
       }
 
+      if (msg.type === 'library.changed') {
+        import('./sync').then(({ syncNow }) => {
+          void syncNow();
+        });
+        return;
+      }
+
       if (msg.type === 'sync.full' || msg.type === 'sync.delta') {
         handleSyncMessage(msg as any);
         return;
