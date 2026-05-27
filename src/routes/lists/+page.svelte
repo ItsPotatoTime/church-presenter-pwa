@@ -28,6 +28,24 @@
     showProjector = false;
   }
 
+  async function enterProjector() {
+    showProjector = true;
+    const docEl = document.documentElement as any;
+    try {
+      if (docEl.requestFullscreen) {
+        await docEl.requestFullscreen();
+      } else if (docEl.webkitRequestFullscreen) {
+        await docEl.webkitRequestFullscreen();
+      } else if (docEl.mozRequestFullScreen) {
+        await docEl.mozRequestFullScreen();
+      } else if (docEl.msRequestFullscreen) {
+        await docEl.msRequestFullscreen();
+      }
+    } catch (err) {
+      console.warn('Failed to enter fullscreen:', err);
+    }
+  }
+
   let selectedName = $state<string | null>(null);
   let showPicker = $state(false);
   let pickerQuery = $state('');
@@ -446,7 +464,7 @@
         <button
           class="ghost"
           style="flex: 1; padding: 14px; border-color: var(--accent); color: var(--accent);"
-          onclick={() => { showProjector = true; }}
+          onclick={enterProjector}
         >
           Projector Show
         </button>
