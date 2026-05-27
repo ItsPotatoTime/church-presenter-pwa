@@ -38,6 +38,7 @@ import {
   liveState,
   queueState,
   serverName,
+  canEditKeys,
 } from './stores';
 import { handleSyncMessage } from './sync';
 
@@ -315,6 +316,7 @@ class RemoteClient {
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
         exclusiveDeviceName.set(null);
         serverName.set(p.server_name || 'ChurchPresenter');
+        canEditKeys.set(!!p.can_edit_keys);
         this.backoffIdx = 0;
 
         // Persist credentials first, THEN flush mutations, THEN mark open.
@@ -414,6 +416,12 @@ class RemoteClient {
         const p = msg.payload as ExclusiveChanged;
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
         exclusiveDeviceName.set(p.device_name ?? null);
+        return;
+      }
+
+      if (msg.type === 'device.permission_changed') {
+        const p = msg.payload as { can_edit_keys: boolean };
+        canEditKeys.set(!!p.can_edit_keys);
         return;
       }
 

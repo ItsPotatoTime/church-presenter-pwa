@@ -25,6 +25,7 @@ export interface AuthOk {
   server_name: string;
   version: string;
   exclusive_device_id?: string | null;
+  can_edit_keys?: boolean;
 }
 
 export interface AuthFail {
@@ -105,6 +106,7 @@ export interface LibrarySong {
   normalized_name?: string;
   normalized_folder?: string;
   normalized_blob?: string;
+  key?: string | null;
 }
 
 export interface LibraryList {
@@ -171,4 +173,5 @@ export type ClientCommand =
   | { type: 'live.toggle_present' }
   | { type: 'live.font_size'; payload: { delta: number } }
   | { type: 'song.fetch_rc'; id?: string; payload: { url: string } }
-  | { type: 'song.create'; id?: string; payload: { name: string; slide_texts: string[]; chorus_index?: number | null; folder?: string; overwrite?: boolean } };
+  | { type: 'song.create'; id?: string; payload: { name: string; slide_texts: string[]; chorus_index?: number | null; folder?: string; overwrite?: boolean } }
+  | { type: 'song.set_key'; payload: { song_path: string; key: string | null } };

@@ -15,6 +15,7 @@
     isViewOnly,
     songsStore,
     syncStatus,
+    canEditKeys,
   } from '$lib/stores';
   import { remote } from '$lib/ws';
   import ProjectorOverlay from '$lib/ProjectorOverlay.svelte';
@@ -482,6 +483,32 @@
       saveLoading = false;
     }
   }
+
+  const ALL_KEYS = ['A', 'Am', 'A#', 'A#m', 'B', 'Bm', 'C', 'Cm', 'C#', 'C#m', 'D', 'Dm', 'D#', 'D#m', 'E', 'Em', 'F', 'Fm', 'F#', 'F#m', 'G', 'Gm', 'G#', 'G#m'];
+
+  async function updateSongKey(songPath: string, key: string | null) {
+    if (!$canEditKeys || $isViewOnly) return;
+    try {
+      const res = await remote.sendRequest('song.set_key', { song_path: songPath, key });
+      if (res.ok) {
+        songsStore.update(songs => {
+          return songs.map(s => {
+            if (s.path === songPath) {
+              return { ...s, key };
+            }
+            return s;
+          });
+        });
+        if (previewSong && previewSong.path === songPath) {
+          previewSong.key = key;
+        }
+      } else {
+        console.error('Failed to set key:', res.error);
+      }
+    } catch (err) {
+      console.error('Error setting key:', err);
+    }
+  }
 </script>
 
 {#if libraryMode === 'songs'}
@@ -557,7 +584,12 @@
       {#each searchResults as result (result.s.path)}
         <div class="song">
           <button class="song-main" onclick={() => openPreview(result.s)}>
-            <div class="song-name">{result.s.name}</div>
+            <div class="song-name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+              <div class="song-name">{result.s.name}</div>
+              {#if result.s.key}
+                <span class="key-badge">{result.s.key}</span>
+              {/if}
+            </div>
             <div class="muted small">{result.s.folder || '-'}</div>
             {#if result.snippet}
               <div class="snippet muted">{@html renderMarkdown(result.snippet)}</div>
@@ -582,7 +614,12 @@
         {#each songs as song (song.path)}
           <div class="song">
             <button class="song-main" onclick={() => openPreview(song)}>
-              <div class="song-name">{song.name}</div>
+              <div class="song-name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+                <div class="song-name">{song.name}</div>
+                {#if song.key}
+                  <span class="key-badge">{song.key}</span>
+                {/if}
+              </div>
               {#if song.slide_texts?.length}
                 <div class="muted small">{song.slide_texts.length} slides</div>
               {/if}
@@ -921,9 +958,46 @@
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => e.stopPropagation()}
     >
-      <div class="modal-head">
-        <div class="modal-title">{previewSong.name}</div>
-        <button class="ghost" onclick={closePreview}>Close</button>
+      <div class="modal-head" style="flex-direction: column; align-items: stretch; gap: 8px;">
+        <div class="modal-title-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;">
+          <div class="modal-title" style="flex: 1; font-weight: 700; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{previewSong.name}</div>
+          <div class="key-section" style="flex-shrink: 0; display: flex; align-items: center;">
+            {#if $canEditKeys && !$isViewOnly}
+              <select
+                class="key-select"
+                value={previewSong.key || ''}
+                onchange={(e) => updateSongKey(previewSong!.path, e.currentTarget.value || null)}
+                style="background: var(--elevated); border: 1px solid var(--border); border-radius: 6px; color: var(--accent); font-size: 13px; font-weight: 700; padding: 4px 8px; cursor: pointer; outline: none;"
+              >
+                <option value="">No Key</option>
+                {#each ALL_KEYS as k}
+                  <option value={k}>{k}</option>
+                {/each}
+              </select>
+            {:else if previewSong.key}
+              <span class="key-display-badge" style="background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); color: var(--accent); font-size: 13px; font-weight: 700; padding: 4px 8px; border-radius: 6px; display: inline-block;">Key: {previewSong.key}</span>
+            {/if}
+          </div>
+          <button class="ghost" style="padding: 6px 12px; font-size: 13px; flex-shrink: 0;" onclick={closePreview}>Close</button>
+        </div>
+        
+        <div style="display: flex; gap: 8px; width: 100%; margin-top: 4px; margin-bottom: 8px;">
+          <button
+            class="accent"
+            style="flex: 2; padding: 10px 14px; font-size: 14px;"
+            onclick={() => { if (previewSong) addToQueue(previewSong.path); closePreview(); }}
+            disabled={$connStatus !== 'open' || $isViewOnly}
+          >
+            + Add to queue
+          </button>
+          <button
+            class="ghost"
+            style="flex: 1; padding: 10px 14px; font-size: 14px; border-color: var(--accent); color: var(--accent);"
+            onclick={enterProjector}
+          >
+            Projector Show
+          </button>
+        </div>
       </div>
       {#each previewSong.slide_texts as slide, i (i)}
         <div class="slide-prev" class:chorus={previewSong.chorus_index === i}>
@@ -932,23 +1006,6 @@
           {/each}
         </div>
       {/each}
-      <div style="display: flex; gap: 8px; margin-top: 12px; width: 100%;">
-        <button
-          class="accent"
-          style="flex: 2; padding: 14px;"
-          onclick={() => { if (previewSong) addToQueue(previewSong.path); closePreview(); }}
-          disabled={$connStatus !== 'open' || $isViewOnly}
-        >
-          + Add to queue
-        </button>
-        <button
-          class="ghost"
-          style="flex: 1; padding: 14px; border-color: var(--accent); color: var(--accent);"
-          onclick={enterProjector}
-        >
-          Projector Show
-        </button>
-      </div>
     </div>
   </div>
 {/if}

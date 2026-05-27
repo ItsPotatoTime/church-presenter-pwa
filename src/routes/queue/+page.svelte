@@ -4,7 +4,9 @@
   import { base } from '$app/paths';
   import { loadCredentials } from '$lib/db';
   import { remote } from '$lib/ws';
-  import { connStatus, isViewOnly, queueState } from '$lib/stores';
+  import { connStatus, isViewOnly, queueState, songsStore } from '$lib/stores';
+
+  const songKeyMap = $derived.by(() => new Map($songsStore.map((song) => [song.path, song.key])));
 
   let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
 
@@ -169,7 +171,12 @@
           onpointerdown={(e) => onGripDown(e, i)}
         >⋮⋮</span>
         <button class="label" onclick={() => tapJump(i)} disabled={$isViewOnly}>
-          <div class="name">{item.name || 'Untitled'}</div>
+          <div class="name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+            <div class="name">{item.name || 'Untitled'}</div>
+            {#if !item.is_bible && !item.is_merged && songKeyMap.get(item.path)}
+              <span class="key-badge">{songKeyMap.get(item.path)}</span>
+            {/if}
+          </div>
           {#if item.is_bible}
             <div class="muted small bible-tag">📖 {item.bible_refs?.length ?? 0} verse{((item.bible_refs?.length ?? 0) !== 1) ? 's' : ''}</div>
           {:else if item.is_merged}

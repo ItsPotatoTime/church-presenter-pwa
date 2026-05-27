@@ -46,6 +46,8 @@ export const serverName: Writable<string> = writable('ChurchPresenter');
 // the desktop skips pushing `live.state` to us.
 export const liveFollowEnabled: Writable<boolean> = writable(true);
 
+export const canEditKeys: Writable<boolean> = writable(false);
+
 /** True when a *different* phone holds exclusive control — this phone is view-only. */
 export const isViewOnly: Readable<boolean> = derived(
   [exclusiveDeviceId, myDeviceId],
