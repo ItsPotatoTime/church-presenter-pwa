@@ -132,15 +132,17 @@
   const index = $derived.by<Entry[]>(() =>
     $songsStore.map((song) => ({
       s: song,
-      nName: normalize(song.name),
-      nFolder: normalize(song.folder),
-      nSlides: null,
+      nName: song.normalized_name ?? normalize(song.name),
+      nFolder: song.normalized_folder ?? normalize(song.folder),
+      nSlides: song.normalized_blob ? song.normalized_blob.split(' | ') : null,
     })),
   );
 
   function slidesFor(entry: Entry): string[] {
     if (entry.nSlides) return entry.nSlides;
-    entry.nSlides = (entry.s.slide_texts ?? []).map(normalize);
+    entry.nSlides = entry.s.normalized_blob
+      ? entry.s.normalized_blob.split(' | ')
+      : (entry.s.slide_texts ?? []).map(normalize);
     return entry.nSlides;
   }
 
@@ -180,9 +182,13 @@
       } else if (entry.nFolder.includes(q)) {
         folders.push({ s: entry.s, score: 2, snippet: '' });
       } else if (searchSlides) {
+        // Fast rejection check using pre-normalized blob
+        if (entry.s.normalized_blob && !entry.s.normalized_blob.includes(q)) {
+          continue;
+        }
         const normalizedSlides = slidesFor(entry);
         for (let slideIndex = 0; slideIndex < normalizedSlides.length; slideIndex++) {
-          if (normalizedSlides[slideIndex].includes(q)) {
+          if (normalizedSlides[slideIndex] && normalizedSlides[slideIndex].includes(q)) {
             const hitIndex = normalizedSlides[slideIndex].indexOf(q);
             const raw = entry.s.slide_texts[slideIndex] ?? '';
             const start = Math.max(0, hitIndex - 20);
@@ -239,7 +245,7 @@
     if (!q) return [];
     const results: BibleVerse[] = [];
     for (const verse of $bibleVersesStore) {
-      if (normalize(verse.text).includes(q)) results.push(verse);
+      if ((verse.normalized_text ?? normalize(verse.text)).includes(q)) results.push(verse);
       if (results.length >= 120) break;
     }
     return results;

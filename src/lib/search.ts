@@ -41,7 +41,16 @@ export type ScoredResult<T> = {
   snippet: string;
 };
 
-export function matchScore<T extends { name: string; folder?: string; slide_texts?: string[] }>(
+export function matchScore<
+  T extends {
+    name: string;
+    folder?: string;
+    slide_texts?: string[];
+    normalized_name?: string;
+    normalized_folder?: string;
+    normalized_blob?: string;
+  }
+>(
   q: string,
   item: T,
   searchSlides: boolean,
@@ -52,9 +61,9 @@ export function matchScore<T extends { name: string; folder?: string; slide_text
   let cached = normCache?.get(item);
   if (!cached) {
     cached = {
-      nName: normalize(item.name),
-      nFolder: normalize(item.folder ?? ''),
-      nSlides: null,
+      nName: item.normalized_name ?? normalize(item.name),
+      nFolder: item.normalized_folder ?? normalize(item.folder ?? ''),
+      nSlides: item.normalized_blob ? item.normalized_blob.split(' | ') : null,
     };
     normCache?.set(item, cached);
   }
@@ -63,12 +72,19 @@ export function matchScore<T extends { name: string; folder?: string; slide_text
   if (cached.nFolder.includes(q)) return { score: 2, snippet: '' };
 
   if (searchSlides && item.slide_texts) {
+    // Fast rejection check using pre-normalized blob
+    if (item.normalized_blob && !item.normalized_blob.includes(q)) {
+      return { score: 0, snippet: '' };
+    }
+
     if (!cached.nSlides) {
-      cached.nSlides = item.slide_texts.map(normalize);
+      cached.nSlides = item.normalized_blob
+        ? item.normalized_blob.split(' | ')
+        : item.slide_texts.map(normalize);
     }
     for (let si = 0; si < cached.nSlides.length; si++) {
       const ns = cached.nSlides[si];
-      if (ns.includes(q)) {
+      if (ns && ns.includes(q)) {
         const nIdx = ns.indexOf(q);
         const raw = item.slide_texts[si] ?? '';
         const start = Math.max(0, nIdx - 20);

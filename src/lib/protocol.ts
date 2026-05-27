@@ -85,6 +85,7 @@ export interface BibleVerse {
   chapter: number;
   verse: number;
   text: string;
+  normalized_text?: string;
 }
 
 export interface BibleSyncData {
@@ -101,6 +102,9 @@ export interface LibrarySong {
   slide_texts: string[];
   chorus_index?: number;
   modified_ts?: number;
+  normalized_name?: string;
+  normalized_folder?: string;
+  normalized_blob?: string;
 }
 
 export interface LibraryList {
