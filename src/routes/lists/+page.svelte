@@ -11,6 +11,22 @@
   import type { LibraryList, LibrarySong } from '$lib/protocol';
   import { normalize, filterSongs, renderMarkdown } from '$lib/search';
   import type { ScoredResult } from '$lib/search';
+  import ProjectorOverlay from '$lib/ProjectorOverlay.svelte';
+
+  let previewSong = $state<LibrarySong | null>(null);
+  let showProjector = $state(false);
+
+  function openSongPreview(path: string) {
+    const s = $songsStore.find((song) => song.path === path);
+    if (s) {
+      previewSong = s;
+    }
+  }
+
+  function closePreview() {
+    previewSong = null;
+    showProjector = false;
+  }
 
   let selectedName = $state<string | null>(null);
   let showPicker = $state(false);
@@ -257,7 +273,14 @@
           ondragend={onDragEnd}
         >
           <span class="grip" aria-hidden="true">⋮⋮</span>
-          <div class="meta">
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <div
+            class="meta"
+            onclick={() => openSongPreview(song.path)}
+            style="cursor: pointer; flex: 1;"
+            role="button"
+            tabindex="0"
+          >
             <div class="name">{song.name || 'Untitled'}</div>
             {#if song.folder}<div class="muted small">{song.folder}</div>{/if}
           </div>
@@ -381,6 +404,59 @@
       </div>
     </div>
   </div>
+{/if}
+
+{#if previewSong}
+  <div
+    class="modal-back"
+    role="button"
+    tabindex="-1"
+    aria-label="Close preview"
+    onclick={closePreview}
+    onkeydown={(e) => { if (e.key === 'Escape') closePreview(); }}
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <div class="modal-head">
+        <div class="modal-title">{previewSong.name}</div>
+        <button class="ghost" onclick={closePreview}>Close</button>
+      </div>
+      {#each previewSong.slide_texts as slide, i (i)}
+        <div class="slide-prev" class:chorus={previewSong.chorus_index === i}>
+          {#each slide.split('\n') as line}
+            <div>{@html renderMarkdown(line) || '\u00A0'}</div>
+          {/each}
+        </div>
+      {/each}
+      <div style="display: flex; gap: 8px; margin-top: 12px; width: 100%;">
+        <button
+          class="accent"
+          style="flex: 2; padding: 14px;"
+          onclick={() => { if (previewSong) addToQueue(previewSong.path); closePreview(); }}
+          disabled={$connStatus !== 'open' || $isViewOnly}
+        >
+          + Add to queue
+        </button>
+        <button
+          class="ghost"
+          style="flex: 1; padding: 14px; border-color: var(--accent); color: var(--accent);"
+          onclick={() => { showProjector = true; }}
+        >
+          Projector Show
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if showProjector && previewSong}
+  <ProjectorOverlay song={previewSong} onclose={() => { showProjector = false; }} />
 {/if}
 
 <style>

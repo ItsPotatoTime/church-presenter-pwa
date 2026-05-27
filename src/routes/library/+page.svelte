@@ -17,6 +17,7 @@
     syncStatus,
   } from '$lib/stores';
   import { remote } from '$lib/ws';
+  import ProjectorOverlay from '$lib/ProjectorOverlay.svelte';
 
   type LibraryMode = 'songs' | 'bible' | 'write_song';
   type BibleSearchMode = 'reference' | 'text';
@@ -31,6 +32,7 @@
   let query = $state('');
   let searchSlides = $state(false);
   let previewSong = $state<LibrarySong | null>(null);
+  let showProjector = $state(false);
   let debounceTimer: number | null = null;
   let renderCount = $state(300);
   let sentinel = $state<Element | null>(null);
@@ -316,6 +318,7 @@
 
   function closePreview() {
     previewSong = null;
+    showProjector = false;
   }
 
   function openBibleMenu() {
@@ -911,15 +914,29 @@
           {/each}
         </div>
       {/each}
-      <button
-        class="accent fw"
-        onclick={() => { if (previewSong) addToQueue(previewSong.path); closePreview(); }}
-        disabled={$connStatus !== 'open' || $isViewOnly}
-      >
-        + Add to queue
-      </button>
+      <div style="display: flex; gap: 8px; margin-top: 12px; width: 100%;">
+        <button
+          class="accent"
+          style="flex: 2; padding: 14px;"
+          onclick={() => { if (previewSong) addToQueue(previewSong.path); closePreview(); }}
+          disabled={$connStatus !== 'open' || $isViewOnly}
+        >
+          + Add to queue
+        </button>
+        <button
+          class="ghost"
+          style="flex: 1; padding: 14px; border-color: var(--accent); color: var(--accent);"
+          onclick={() => { showProjector = true; }}
+        >
+          Projector Show
+        </button>
+      </div>
     </div>
   </div>
+{/if}
+
+{#if showProjector && previewSong}
+  <ProjectorOverlay song={previewSong} onclose={() => { showProjector = false; }} />
 {/if}
 
 {#if showOverwriteConfirm}
