@@ -225,8 +225,29 @@
     }
   }
 
+  async function lockOrientation() {
+    try {
+      if (window.screen && window.screen.orientation && typeof (window.screen.orientation as any).lock === 'function') {
+        await (window.screen.orientation as any).lock('portrait');
+      }
+    } catch (err) {
+      console.warn('Orientation lock failed:', err);
+    }
+  }
+
+  async function unlockOrientation() {
+    try {
+      if (window.screen && window.screen.orientation && typeof (window.screen.orientation as any).unlock === 'function') {
+        await (window.screen.orientation as any).unlock();
+      }
+    } catch (err) {
+      console.warn('Orientation unlock failed:', err);
+    }
+  }
+
   onMount(() => {
     requestWakeLock();
+    unlockOrientation();
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && !wakeLock) {
         await requestWakeLock();
@@ -236,6 +257,7 @@
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       releaseWakeLock();
+      void lockOrientation();
     };
   });
 </script>
