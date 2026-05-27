@@ -385,7 +385,12 @@
       <div class="picker-list">
         {#each pickerFiltered as sr (sr.item.path)}
           <button class="picker-item" onclick={() => addSong(sr.item)}>
-            <div class="name">{sr.item.name}</div>
+            <div class="name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+              <div class="name" style="font-weight: 600;">{sr.item.name}</div>
+              {#if sr.item.key}
+                <span class="key-badge">{sr.item.key}</span>
+              {/if}
+            </div>
             {#if sr.item.folder}<div class="muted small">{sr.item.folder}</div>{/if}
             {#if sr.snippet}<div class="snippet">{@html renderMarkdown(sr.snippet)}</div>{/if}
           </button>
