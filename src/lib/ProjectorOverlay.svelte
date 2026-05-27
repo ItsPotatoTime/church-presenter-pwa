@@ -235,19 +235,19 @@
     }
   }
 
-  async function unlockOrientation() {
+  async function forceLandscapeOrientation() {
     try {
-      if (window.screen && window.screen.orientation && typeof (window.screen.orientation as any).unlock === 'function') {
-        await (window.screen.orientation as any).unlock();
+      if (window.screen && window.screen.orientation && typeof (window.screen.orientation as any).lock === 'function') {
+        await (window.screen.orientation as any).lock('landscape');
       }
     } catch (err) {
-      console.warn('Orientation unlock failed:', err);
+      console.warn('Orientation lock landscape failed:', err);
     }
   }
 
   onMount(() => {
     requestWakeLock();
-    unlockOrientation();
+    void forceLandscapeOrientation();
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && !wakeLock) {
         await requestWakeLock();
