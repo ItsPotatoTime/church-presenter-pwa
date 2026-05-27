@@ -78,7 +78,11 @@
   });
 
   $effect(() => {
-    if ($connStatus !== 'open' || hasRequestedLibrarySync) return;
+    if ($connStatus !== 'open') {
+      hasRequestedLibrarySync = false;
+      return;
+    }
+    if (hasRequestedLibrarySync) return;
     if (isReducedDataConnection() && (hasLibrary || hasBibleData)) return;
     if (hasLibrary || hasBibleData) return;
     hasRequestedLibrarySync = true;

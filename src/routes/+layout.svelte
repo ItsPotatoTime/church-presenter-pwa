@@ -42,6 +42,8 @@
         hasTriggeredSync = true;
         void syncNow();
       }
+    } else {
+      hasTriggeredSync = false;
     }
   });
 

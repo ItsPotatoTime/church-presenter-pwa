@@ -113,11 +113,11 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
   syncStatus.set('syncing');
   try {
     const resp = await requestSync(since, cachedBibleVersion);
-    let songs = get(songsStore);
-    let lists = get(listsStore);
-    let bibleBooks = get(bibleBooksStore);
-    let bibleVerses = get(bibleVersesStore);
-    let bibleVersion = get(bibleVersionStore);
+    let songs = await loadAllSongs();
+    let lists = await loadAllLists();
+    let bibleBooks = await loadAllBibleBooks();
+    let bibleVerses = await loadAllBibleVerses();
+    let bibleVersion = await getBibleVersion();
 
     if (resp.type === 'sync.full') {
       const p = resp.payload as SyncFull;
