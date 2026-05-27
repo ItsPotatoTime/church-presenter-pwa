@@ -144,7 +144,11 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         bibleVerses = [];
       }
       await setLastSyncTs(p.server_ts);
-      songs = p.songs;
+      songs = [...p.songs].sort((a, b) => {
+        const folderCompare = (a.folder || '').localeCompare(b.folder || '');
+        if (folderCompare !== 0) return folderCompare;
+        return a.name.localeCompare(b.name);
+      });
       lists = p.lists;
     } else if (resp.type === 'sync.delta') {
       const p = resp.payload as SyncDelta;
@@ -173,7 +177,11 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         const byPath = new Map(songs.map((song) => [song.path, song]));
         for (const song of p.songs_changed) byPath.set(song.path, song);
         for (const path of toDelete) byPath.delete(path);
-        songs = [...byPath.values()].sort((a, b) => a.name.localeCompare(b.name));
+        songs = [...byPath.values()].sort((a, b) => {
+          const folderCompare = (a.folder || '').localeCompare(b.folder || '');
+          if (folderCompare !== 0) return folderCompare;
+          return a.name.localeCompare(b.name);
+        });
       }
     } else {
       throw new Error('unexpected sync response: ' + resp.type);

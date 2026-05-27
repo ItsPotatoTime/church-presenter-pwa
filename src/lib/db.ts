@@ -490,7 +490,15 @@ export async function loadAllSongs(): Promise<LibrarySong[]> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_SONGS, 'readonly');
     const req = tx.objectStore(STORE_SONGS).getAll();
-    req.onsuccess = () => resolve((req.result ?? []) as LibrarySong[]);
+    req.onsuccess = () => {
+      const songs = (req.result ?? []) as LibrarySong[];
+      songs.sort((a, b) => {
+        const folderCompare = (a.folder || '').localeCompare(b.folder || '');
+        if (folderCompare !== 0) return folderCompare;
+        return a.name.localeCompare(b.name);
+      });
+      resolve(songs);
+    };
     req.onerror = () => reject(req.error);
   });
 }
