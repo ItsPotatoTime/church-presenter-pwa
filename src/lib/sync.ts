@@ -145,8 +145,6 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
       }
       await setLastSyncTs(p.server_ts);
       songs = [...p.songs].sort((a, b) => {
-        const folderCompare = (a.folder || '').localeCompare(b.folder || '');
-        if (folderCompare !== 0) return folderCompare;
         const aDigit = (a.name && a.name.charAt(0) >= '0' && a.name.charAt(0) <= '9') ? 1 : 0;
         const bDigit = (b.name && b.name.charAt(0) >= '0' && b.name.charAt(0) <= '9') ? 1 : 0;
         if (aDigit !== bDigit) return aDigit - bDigit;
@@ -181,8 +179,6 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         for (const song of p.songs_changed) byPath.set(song.path, song);
         for (const path of toDelete) byPath.delete(path);
         songs = [...byPath.values()].sort((a, b) => {
-          const folderCompare = (a.folder || '').localeCompare(b.folder || '');
-          if (folderCompare !== 0) return folderCompare;
           const aDigit = (a.name && a.name.charAt(0) >= '0' && a.name.charAt(0) <= '9') ? 1 : 0;
           const bDigit = (b.name && b.name.charAt(0) >= '0' && b.name.charAt(0) <= '9') ? 1 : 0;
           if (aDigit !== bDigit) return aDigit - bDigit;

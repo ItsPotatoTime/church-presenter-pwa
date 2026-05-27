@@ -493,8 +493,6 @@ export async function loadAllSongs(): Promise<LibrarySong[]> {
     req.onsuccess = () => {
       const songs = (req.result ?? []) as LibrarySong[];
       songs.sort((a, b) => {
-        const folderCompare = (a.folder || '').localeCompare(b.folder || '');
-        if (folderCompare !== 0) return folderCompare;
         const aDigit = (a.name && a.name.charAt(0) >= '0' && a.name.charAt(0) <= '9') ? 1 : 0;
         const bDigit = (b.name && b.name.charAt(0) >= '0' && b.name.charAt(0) <= '9') ? 1 : 0;
         if (aDigit !== bDigit) return aDigit - bDigit;
