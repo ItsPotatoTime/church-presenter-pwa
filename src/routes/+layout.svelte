@@ -1,8 +1,9 @@
 <script lang="ts">
   import '../app.css';
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { page } from '$app/stores';
   import { base } from '$app/paths';
+  import { dev } from '$app/environment';
   import { beforeNavigate, goto } from '$app/navigation';
   import { getOrCreateDeviceId, loadCredentialsResilient } from '$lib/db';
   import { hydrateFromCache, isReducedDataConnection, syncNow } from '$lib/sync';
@@ -13,8 +14,68 @@
   let ready = $state(false);
   let hasHydrated = $state(false);
   let hasTriggeredSync = $state(false);
+  let showUpdateBanner = $state(false);
+
+  // Foolproof dynamic chunk error handlers
+  function handleChunkError(e: ErrorEvent) {
+    if (e.message && (e.message.includes('Failed to fetch dynamically imported module') || e.message.includes('Importing a module script failed'))) {
+      console.warn('[layout] Chunk loading failed. Reloading page...');
+      window.location.reload();
+    }
+  }
+
+  function handleUnhandledRejection(e: PromiseRejectionEvent) {
+    const message = e.reason?.message || '';
+    if (message.includes('Failed to fetch dynamically imported module') || message.includes('Importing a module script failed')) {
+      console.warn('[layout] Chunk loading rejection. Reloading page...');
+      window.location.reload();
+    }
+  }
+
+  // Active check for updates when phone remote wakes up
+  async function handleVisibilityChange() {
+    if (document.visibilityState === 'visible' && 'serviceWorker' in navigator) {
+      try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg) {
+          await reg.update();
+        }
+      } catch (err) {
+        console.warn('[layout] ServiceWorker update check failed:', err);
+      }
+    }
+  }
 
   onMount(async () => {
+    // Register global error interceptors for chunk load failures
+    window.addEventListener('error', handleChunkError, true);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Register PWA service worker (only in production)
+    if ('serviceWorker' in navigator && !dev) {
+      try {
+        const registration = await navigator.serviceWorker.register(`${base}/service-worker.js`, {
+          scope: `${base}/`
+        });
+        console.log('[layout] ServiceWorker registered with scope:', registration.scope);
+      } catch (err) {
+        console.error('[layout] ServiceWorker registration failed:', err);
+      }
+
+      // Handle controller change (automatic reload when new SW activates)
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          showUpdateBanner = true;
+          setTimeout(() => {
+            window.location.reload();
+          }, 800);
+        }
+      });
+    }
+
     try {
       myDeviceId.set(await getOrCreateDeviceId());
     } catch (err) {
@@ -33,6 +94,14 @@
       }
     }
     ready = true;
+  });
+
+  onDestroy(() => {
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('error', handleChunkError, true);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
   });
 
   // After first QR pairing, connStatus becomes 'open' before layout re-mounts.
@@ -113,13 +182,19 @@
   }
 </script>
 
-{#if showTabs() && $isViewOnly}
-  <div class="view-only-banner" role="status">
-    View-only — another phone has exclusive control
+{#if showUpdateBanner}
+  <div class="update-banner" role="alert">
+    Updating to latest version...
   </div>
+{:else}
+  {#if showTabs() && $isViewOnly}
+    <div class="view-only-banner" role="status">
+      View-only — another phone has exclusive control
+    </div>
+  {/if}
 {/if}
 
-<main class:has-tabs={showTabs()} class:has-banner={showTabs() && $isViewOnly}>
+<main class:has-tabs={showTabs()} class:has-banner={(showTabs() && $isViewOnly) || showUpdateBanner}>
   {#if ready}
     {@render children()}
   {:else}
@@ -174,6 +249,27 @@
     font-weight: 700;
     letter-spacing: 0.4px;
   }
+
+  .update-banner {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 50;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #fff;
+    text-align: center;
+    padding: calc(12px + env(safe-area-inset-top, 0)) 12px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes slideDown {
+    from { transform: translateY(-100%); }
+    to { transform: translateY(0); }
+  }
+
 
   .tabbar {
     position: fixed;
