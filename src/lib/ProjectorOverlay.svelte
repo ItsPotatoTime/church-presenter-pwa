@@ -2,8 +2,21 @@
   import { onMount } from 'svelte';
   import { renderMarkdown } from '$lib/search';
   import type { LibrarySong } from '$lib/protocol';
+  import { activeModals } from '$lib/stores';
 
   let { song, onclose } = $props<{ song: LibrarySong; onclose: () => void }>();
+
+  // Register close handler for back gestures
+  $effect(() => {
+    const handleClose = () => {
+      onclose();
+      return true;
+    };
+    activeModals.update(list => [...list, handleClose]);
+    return () => {
+      activeModals.update(list => list.filter(fn => fn !== handleClose));
+    };
+  });
 
   let currentIndex = $state(0);
   let winW = $state(0);

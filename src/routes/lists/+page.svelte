@@ -6,7 +6,7 @@
   import { remote } from '$lib/ws';
   import { get } from 'svelte/store';
   import {
-    connStatus, isViewOnly, listsStore, songsStore, canEditKeys,
+    connStatus, isViewOnly, listsStore, songsStore, canEditKeys, activeModals,
   } from '$lib/stores';
   import type { LibraryList, LibrarySong } from '$lib/protocol';
   import { normalize, filterSongs, renderMarkdown } from '$lib/search';
@@ -46,6 +46,50 @@
   function showPrompt(title: string, initial = ''): Promise<string | null> {
     return new Promise((resolve) => { promptDialog = { title, initial, value: initial, resolve }; });
   }
+
+  // Register showPicker for back gestures
+  $effect(() => {
+    if (showPicker) {
+      const handleClose = () => {
+        closePicker();
+        return true;
+      };
+      activeModals.update(list => [...list, handleClose]);
+      return () => {
+        activeModals.update(list => list.filter(fn => fn !== handleClose));
+      };
+    }
+  });
+
+  // Register confirmDialog for back gestures
+  $effect(() => {
+    if (confirmDialog) {
+      const handleClose = () => {
+        confirmDialog?.resolve(false);
+        confirmDialog = null;
+        return true;
+      };
+      activeModals.update(list => [...list, handleClose]);
+      return () => {
+        activeModals.update(list => list.filter(fn => fn !== handleClose));
+      };
+    }
+  });
+
+  // Register promptDialog for back gestures
+  $effect(() => {
+    if (promptDialog) {
+      const handleClose = () => {
+        promptDialog?.resolve(null);
+        promptDialog = null;
+        return true;
+      };
+      activeModals.update(list => [...list, handleClose]);
+      return () => {
+        activeModals.update(list => list.filter(fn => fn !== handleClose));
+      };
+    }
+  });
 
   // Layout already calls hydrateFromCache() on startup — no need to repeat here.
   onMount(async () => {

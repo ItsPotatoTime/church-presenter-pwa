@@ -4,7 +4,7 @@
   import { base } from '$app/paths';
   import { loadCredentials } from '$lib/db';
   import { remote } from '$lib/ws';
-  import { connStatus, isViewOnly, queueState, songsStore } from '$lib/stores';
+  import { connStatus, isViewOnly, queueState, songsStore, activeModals } from '$lib/stores';
 
   const songKeyMap = $derived.by(() => new Map($songsStore.map((song) => [song.path, song.key])));
 
@@ -13,6 +13,21 @@
   function showConfirm(msg: string): Promise<boolean> {
     return new Promise(resolve => { confirmDialog = { message: msg, resolve }; });
   }
+
+  // Register confirmDialog for back gestures
+  $effect(() => {
+    if (confirmDialog) {
+      const handleClose = () => {
+        confirmDialog?.resolve(false);
+        confirmDialog = null;
+        return true;
+      };
+      activeModals.update(list => [...list, handleClose]);
+      return () => {
+        activeModals.update(list => list.filter(fn => fn !== handleClose));
+      };
+    }
+  });
 
   onMount(async () => {
     const creds = await loadCredentials();

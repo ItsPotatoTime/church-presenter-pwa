@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
+  import { onMount, tick } from 'svelte';
+  import { goto, afterNavigate } from '$app/navigation';
   import { page } from '$app/stores';
   import { base } from '$app/paths';
+  import { get } from 'svelte/store';
   import { sortBibleVerses } from '$lib/bible';
   import { loadCredentials } from '$lib/db';
   import type { BibleBook, BibleVerse, LibrarySong } from '$lib/protocol';
@@ -16,6 +17,15 @@
     songsStore,
     syncStatus,
     canEditKeys,
+    activeModals,
+    libraryScrollY,
+    libraryRenderCount,
+    libraryRawQuery,
+    librarySearchSlides,
+    libraryBibleCurrentBookNum,
+    libraryBibleCurrentChapter,
+    libraryBibleRawQuery,
+    libraryBibleSearchMode,
   } from '$lib/stores';
   import { remote } from '$lib/ws';
   import SongPreviewModal from '$lib/SongPreviewModal.svelte';
@@ -29,21 +39,21 @@
     verse: number | null;
   };
 
-  let rawQuery = $state('');
-  let query = $state('');
-  let searchSlides = $state(false);
+  let rawQuery = $state(get(libraryRawQuery));
+  let query = $state(get(libraryRawQuery));
+  let searchSlides = $state(get(librarySearchSlides));
   let previewSong = $state<LibrarySong | null>(null);
   let debounceTimer: number | null = null;
-  let renderCount = $state(300);
+  let renderCount = $state(get(libraryRenderCount));
   let sentinel = $state<Element | null>(null);
 
   const libraryMode = $derived(($page.url.searchParams.get('mode') as LibraryMode) || 'songs');
-  let rawBibleQuery = $state('');
-  let bibleQuery = $state('');
-  let bibleSearchMode = $state<BibleSearchMode>('reference');
+  let rawBibleQuery = $state(get(libraryBibleRawQuery));
+  let bibleQuery = $state(get(libraryBibleRawQuery));
+  let bibleSearchMode = $state<BibleSearchMode>(get(libraryBibleSearchMode));
   let bibleDebounceTimer: number | null = null;
-  let bibleCurrentBookNum = $state<number | null>(null);
-  let bibleCurrentChapter = $state<number | null>(null);
+  let bibleCurrentBookNum = $state<number | null>(get(libraryBibleCurrentBookNum));
+  let bibleCurrentChapter = $state<number | null>(get(libraryBibleCurrentChapter));
   let hasRequestedLibrarySync = $state(false);
 
   onMount(async () => {
@@ -126,6 +136,45 @@
     );
     obs.observe(el);
     return () => obs.disconnect();
+  });
+
+  // Sync state changes to persistent stores
+  $effect(() => {
+    libraryRawQuery.set(rawQuery);
+  });
+  $effect(() => {
+    librarySearchSlides.set(searchSlides);
+  });
+  $effect(() => {
+    libraryRenderCount.set(renderCount);
+  });
+  $effect(() => {
+    libraryBibleRawQuery.set(rawBibleQuery);
+  });
+  $effect(() => {
+    libraryBibleSearchMode.set(bibleSearchMode);
+  });
+  $effect(() => {
+    libraryBibleCurrentBookNum.set(bibleCurrentBookNum);
+  });
+  $effect(() => {
+    libraryBibleCurrentChapter.set(bibleCurrentChapter);
+  });
+
+  // Track window scroll and save to store
+  function handleScroll() {
+    if (libraryMode === 'songs' && !previewSong) {
+      libraryScrollY.set(window.scrollY);
+    }
+  }
+
+  // Restore scroll position after navigating back to the page
+  afterNavigate(async () => {
+    await tick();
+    const savedY = get(libraryScrollY);
+    if (savedY > 0) {
+      window.scrollTo(0, savedY);
+    }
   });
 
   type Entry = {
@@ -330,7 +379,11 @@
   }
 
   function closeBibleMenu() {
-    goto('?', { keepFocus: true, noScroll: true });
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      goto('?', { replaceState: true, keepFocus: true, noScroll: true });
+    }
     rawBibleQuery = '';
     bibleQuery = '';
   }
@@ -394,7 +447,11 @@
   }
 
   function closeWriteSongMenu() {
-    goto('?', { keepFocus: true, noScroll: true });
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      goto('?', { replaceState: true, keepFocus: true, noScroll: true });
+    }
   }
 
   async function handleImportUrl() {
@@ -451,7 +508,7 @@
       if (res.ok) {
         showOverwriteConfirm = false;
         await syncNow();
-        goto('?', { keepFocus: true, noScroll: true });
+        goto('?', { replaceState: true, keepFocus: true, noScroll: true });
       } else if (res.error === 'already_exists') {
         showOverwriteConfirm = true;
       } else {
@@ -466,6 +523,8 @@
 
   // updateSongKey is handled by SongPreviewModal
 </script>
+
+<svelte:window onscroll={handleScroll} />
 
 {#if libraryMode === 'songs'}
   <header class="hdr">

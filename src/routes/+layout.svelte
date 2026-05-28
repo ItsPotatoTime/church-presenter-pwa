@@ -3,9 +3,10 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { base } from '$app/paths';
+  import { beforeNavigate, goto } from '$app/navigation';
   import { getOrCreateDeviceId, loadCredentials } from '$lib/db';
   import { hydrateFromCache, isReducedDataConnection, syncNow } from '$lib/sync';
-  import { myDeviceId, isViewOnly, connStatus } from '$lib/stores';
+  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY } from '$lib/stores';
 
   let { children } = $props();
   let paired = $state(false);
@@ -67,6 +68,36 @@
     const p = $page.url.pathname;
     return p === href || p === href.replace(/\/$/, '');
   }
+
+  // Intercept back gesture / popstate navigation to close modals first
+  beforeNavigate((navigation) => {
+    if (navigation.type === 'popstate') {
+      if ($activeModals.length > 0) {
+        navigation.cancel();
+        const closeFn = $activeModals[$activeModals.length - 1];
+        closeFn();
+      }
+    }
+  });
+
+  function handleTabClick(e: MouseEvent, t: typeof tabs[0]) {
+    if (isActive(t.href)) {
+      if (t.key === 'library') {
+        const search = $page.url.search;
+        if (search && search.includes('mode=')) {
+          // Exit Bible / Write Song modes if active
+          e.preventDefault();
+          libraryScrollY.set(0);
+          goto(`${base}/library/`, { replaceState: true });
+        } else {
+          // Scroll smoothly to top and reset saved scroll Y
+          e.preventDefault();
+          libraryScrollY.set(0);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }
+    }
+  }
 </script>
 
 {#if showTabs() && $isViewOnly}
@@ -86,6 +117,7 @@
         class="tab"
         class:active={isActive(t.href)}
         href={t.href}
+        onclick={(e) => handleTabClick(e, t)}
         data-sveltekit-preload-data="tap"
         data-sveltekit-preload-code="eager"
       >

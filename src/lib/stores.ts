@@ -49,3 +49,17 @@ export const isViewOnly: Readable<boolean> = derived(
   [exclusiveDeviceId, myDeviceId],
   ([$ex, $me]) => $ex !== null && $ex !== $me,
 );
+
+// Registry for active modal/dialog close callbacks
+export const activeModals: Writable<(() => boolean)[]> = writable([]);
+
+// Saved state for Library page to support scroll and view preservation
+export const libraryScrollY: Writable<number> = writable(0);
+export const libraryRenderCount: Writable<number> = writable(300);
+export const libraryRawQuery: Writable<string> = writable('');
+export const librarySearchSlides: Writable<boolean> = writable(false);
+export const libraryBibleCurrentBookNum: Writable<number | null> = writable(null);
+export const libraryBibleCurrentChapter: Writable<number | null> = writable(null);
+export const libraryBibleRawQuery: Writable<string> = writable('');
+export const libraryBibleSearchMode: Writable<'reference' | 'text'> = writable('reference');
+

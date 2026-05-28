@@ -2,7 +2,7 @@
   import type { LibrarySong } from '$lib/protocol';
   import { renderMarkdown } from '$lib/search';
   import { remote } from '$lib/ws';
-  import { connStatus, isViewOnly, songsStore, canEditKeys } from '$lib/stores';
+  import { connStatus, isViewOnly, songsStore, canEditKeys, activeModals } from '$lib/stores';
   import ProjectorOverlay from '$lib/ProjectorOverlay.svelte';
 
   // Svelte 5 props
@@ -12,6 +12,18 @@
   }>();
 
   let showProjector = $state(false);
+
+  // Register close handler for back gestures
+  $effect(() => {
+    const handleClose = () => {
+      onclose();
+      return true;
+    };
+    activeModals.update(list => [...list, handleClose]);
+    return () => {
+      activeModals.update(list => list.filter(fn => fn !== handleClose));
+    };
+  });
 
   const ALL_KEYS = ['A', 'Am', 'A#', 'A#m', 'B', 'Bm', 'C', 'Cm', 'C#', 'C#m', 'D', 'Dm', 'D#', 'D#m', 'E', 'Em', 'F', 'Fm', 'F#', 'F#m', 'G', 'Gm', 'G#', 'G#m'];
 
