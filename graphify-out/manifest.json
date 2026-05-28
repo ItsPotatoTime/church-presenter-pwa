@@ -44,12 +44,12 @@
     "hash": "3bdd7b303d5f932841ceee2dca95c11c"
   },
   "/home/potato/Seafile/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/lists/+page.svelte": {
-    "mtime": 1779951413.2988575,
-    "hash": "eeef12864da13aa512657454e193a4cf"
+    "mtime": 1779951806.2578878,
+    "hash": "e90d6ae2ebdc95f0d8140243c70f76d4"
   },
   "/home/potato/Seafile/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/library/+page.svelte": {
-    "mtime": 1779906888.9382489,
-    "hash": "780f2b24dc7ac3054951df97bd869b2c"
+    "mtime": 1779951822.7511773,
+    "hash": "a48fec2299d953384768d63a5dd9b354"
   },
   "/home/potato/Seafile/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/ws.ts": {
     "mtime": 1779906859.505913,
@@ -86,6 +86,10 @@
   "/home/potato/Seafile/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/ProjectorOverlay.svelte": {
     "mtime": 1779906069.0352583,
     "hash": "2049c6e4ff04597cb923918350f63bef"
+  },
+  "/home/potato/Seafile/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/SongPreviewModal.svelte": {
+    "mtime": 1779951774.4393282,
+    "hash": "27b7915c4806b30f9fdfa1b2add242c1"
   },
   "/home/potato/Seafile/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md": {
     "mtime": 1777032044.0,

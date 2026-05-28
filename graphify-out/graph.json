@@ -81,7 +81,7 @@
       "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/+page.svelte",
       "source_location": "L1",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_page_svelte",
-      "community": 3,
+      "community": 2,
       "norm_label": "+page.svelte"
     },
     {
@@ -90,7 +90,7 @@
       "source_file": "svelte",
       "confidence": "EXTRACTED",
       "id": "svelte",
-      "community": 3,
+      "community": 2,
       "norm_label": "svelte"
     },
     {
@@ -99,7 +99,7 @@
       "source_file": "$app/navigation",
       "confidence": "EXTRACTED",
       "id": "navigation",
-      "community": 3,
+      "community": 2,
       "norm_label": "$app/navigation"
     },
     {
@@ -108,7 +108,7 @@
       "source_file": "$app/paths",
       "confidence": "EXTRACTED",
       "id": "paths",
-      "community": 3,
+      "community": 2,
       "norm_label": "$app/paths"
     },
     {
@@ -117,7 +117,7 @@
       "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/db",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_db",
-      "community": 3,
+      "community": 2,
       "norm_label": "$lib/db"
     },
     {
@@ -126,7 +126,7 @@
       "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/stores",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_stores",
-      "community": 3,
+      "community": 2,
       "norm_label": "$lib/stores"
     },
     {
@@ -135,7 +135,7 @@
       "source_file": "jsqr",
       "confidence": "EXTRACTED",
       "id": "jsqr",
-      "community": 3,
+      "community": 2,
       "norm_label": "jsqr"
     },
     {
@@ -153,7 +153,7 @@
       "source_file": "src/routes/+layout.svelte",
       "source_location": "L1",
       "id": "src_routes_layout_svelte",
-      "community": 3,
+      "community": 2,
       "norm_label": "+layout.svelte"
     },
     {
@@ -162,7 +162,7 @@
       "source_file": "src/routes/+layout.svelte",
       "source_location": "L32",
       "id": "routes_layout_if",
-      "community": 3,
+      "community": 2,
       "norm_label": "if()"
     },
     {
@@ -171,7 +171,7 @@
       "source_file": "src/routes/+layout.svelte",
       "source_location": "L87",
       "id": "routes_layout_active",
-      "community": 3,
+      "community": 2,
       "norm_label": "active"
     },
     {
@@ -180,7 +180,7 @@
       "source_file": "src/app.css",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_app_css",
-      "community": 3,
+      "community": 2,
       "norm_label": "../app.css"
     },
     {
@@ -189,7 +189,7 @@
       "source_file": "$app/stores",
       "confidence": "EXTRACTED",
       "id": "stores",
-      "community": 3,
+      "community": 2,
       "norm_label": "$app/stores"
     },
     {
@@ -198,7 +198,7 @@
       "source_file": "src/lib/db",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_db",
-      "community": 3,
+      "community": 2,
       "norm_label": "$lib/db"
     },
     {
@@ -216,7 +216,7 @@
       "source_file": "src/lib/stores",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_stores",
-      "community": 3,
+      "community": 2,
       "norm_label": "$lib/stores"
     },
     {
@@ -225,7 +225,7 @@
       "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
       "source_location": "L1",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_settings_page_svelte",
-      "community": 3,
+      "community": 2,
       "norm_label": "+page.svelte"
     },
     {
@@ -234,7 +234,7 @@
       "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
       "source_location": "L126",
       "id": "settings_page_data",
-      "community": 3,
+      "community": 2,
       "norm_label": "data"
     },
     {
@@ -243,7 +243,7 @@
       "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/ws",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_ws",
-      "community": 3,
+      "community": 2,
       "norm_label": "$lib/ws"
     },
     {
@@ -252,7 +252,7 @@
       "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/sync",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_sync",
-      "community": 3,
+      "community": 2,
       "norm_label": "$lib/sync"
     },
     {
@@ -261,7 +261,7 @@
       "source_file": "src/routes/queue/+page.svelte",
       "source_location": "L1",
       "id": "src_routes_queue_page_svelte",
-      "community": 3,
+      "community": 6,
       "norm_label": "+page.svelte"
     },
     {
@@ -270,7 +270,7 @@
       "source_file": "src/routes/queue/+page.svelte",
       "source_location": "L13",
       "id": "queue_page_showconfirm",
-      "community": 3,
+      "community": 6,
       "norm_label": "showconfirm()"
     },
     {
@@ -279,7 +279,7 @@
       "source_file": "src/routes/queue/+page.svelte",
       "source_location": "L23",
       "id": "queue_page_send",
-      "community": 3,
+      "community": 6,
       "norm_label": "send()"
     },
     {
@@ -288,7 +288,7 @@
       "source_file": "src/routes/queue/+page.svelte",
       "source_location": "L28",
       "id": "queue_page_tapjump",
-      "community": 3,
+      "community": 6,
       "norm_label": "tapjump()"
     },
     {
@@ -297,7 +297,7 @@
       "source_file": "src/routes/queue/+page.svelte",
       "source_location": "L35",
       "id": "queue_page_remove",
-      "community": 3,
+      "community": 6,
       "norm_label": "remove()"
     },
     {
@@ -306,7 +306,7 @@
       "source_file": "src/routes/queue/+page.svelte",
       "source_location": "L41",
       "id": "queue_page_clearall",
-      "community": 3,
+      "community": 6,
       "norm_label": "clearall()"
     },
     {
@@ -315,7 +315,7 @@
       "source_file": "src/routes/queue/+page.svelte",
       "source_location": "L51",
       "id": "queue_page_ghoststyle",
-      "community": 3,
+      "community": 6,
       "norm_label": "ghoststyle"
     },
     {
@@ -324,7 +324,7 @@
       "source_file": "src/routes/queue/+page.svelte",
       "source_location": "L62",
       "id": "queue_page_itemshift",
-      "community": 3,
+      "community": 6,
       "norm_label": "itemshift()"
     },
     {
@@ -333,7 +333,7 @@
       "source_file": "src/routes/queue/+page.svelte",
       "source_location": "L71",
       "id": "queue_page_ongripdown",
-      "community": 3,
+      "community": 6,
       "norm_label": "ongripdown()"
     },
     {
@@ -342,7 +342,7 @@
       "source_file": "src/routes/queue/+page.svelte",
       "source_location": "L97",
       "id": "queue_page_ondragmove",
-      "community": 3,
+      "community": 6,
       "norm_label": "ondragmove()"
     },
     {
@@ -351,7 +351,7 @@
       "source_file": "src/routes/queue/+page.svelte",
       "source_location": "L112",
       "id": "queue_page_ondragend",
-      "community": 3,
+      "community": 6,
       "norm_label": "ondragend()"
     },
     {
@@ -360,7 +360,7 @@
       "source_file": "src/lib/ws",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_ws",
-      "community": 3,
+      "community": 2,
       "norm_label": "$lib/ws"
     },
     {
@@ -369,7 +369,7 @@
       "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/pair/+page.svelte",
       "source_location": "L1",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_pair_page_svelte",
-      "community": 3,
+      "community": 2,
       "norm_label": "+page.svelte"
     },
     {
@@ -378,7 +378,7 @@
       "source_file": "svelte/store",
       "confidence": "EXTRACTED",
       "id": "store",
-      "community": 3,
+      "community": 0,
       "norm_label": "svelte/store"
     },
     {
@@ -387,7 +387,7 @@
       "source_file": "src/routes/live/+page.svelte",
       "source_location": "L1",
       "id": "src_routes_live_page_svelte",
-      "community": 3,
+      "community": 2,
       "norm_label": "+page.svelte"
     },
     {
@@ -396,7 +396,7 @@
       "source_file": "src/lib/search",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_search",
-      "community": 3,
+      "community": 2,
       "norm_label": "$lib/search"
     },
     {
@@ -405,16 +405,16 @@
       "source_file": "src/routes/lists/+page.svelte",
       "source_location": "L1",
       "id": "src_routes_lists_page_svelte",
-      "community": 3,
+      "community": 2,
       "norm_label": "+page.svelte"
     },
     {
       "label": "if()",
       "file_type": "code",
       "source_file": "src/routes/lists/+page.svelte",
-      "source_location": "L220",
+      "source_location": "L202",
       "id": "lists_page_if",
-      "community": 3,
+      "community": 2,
       "norm_label": "if()"
     },
     {
@@ -423,18 +423,18 @@
       "source_file": "src/lib/protocol",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_protocol",
-      "community": 6,
+      "community": 2,
       "norm_label": "$lib/protocol"
     },
     {
-      "label": "ProjectorOverlay.svelte",
+      "label": "SongPreviewModal.svelte",
       "file_type": "code",
-      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_file": "src/lib/SongPreviewModal.svelte",
       "confidence": "EXTRACTED",
       "source_location": "L1",
-      "id": "src_lib_projectoroverlay_svelte",
-      "community": 6,
-      "norm_label": "projectoroverlay.svelte"
+      "id": "src_lib_songpreviewmodal_svelte",
+      "community": 2,
+      "norm_label": "songpreviewmodal.svelte"
     },
     {
       "label": "+page.svelte",
@@ -442,386 +442,359 @@
       "source_file": "src/routes/library/+page.svelte",
       "source_location": "L1",
       "id": "src_routes_library_page_svelte",
-      "community": 2,
+      "community": 3,
       "norm_label": "+page.svelte"
     },
     {
       "label": "hasLibrary",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L64",
+      "source_location": "L63",
       "id": "library_page_haslibrary",
-      "community": 2,
+      "community": 3,
       "norm_label": "haslibrary"
     },
     {
       "label": "hasBibleData",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L65",
+      "source_location": "L64",
       "id": "library_page_hasbibledata",
-      "community": 2,
+      "community": 3,
       "norm_label": "hasbibledata"
     },
     {
       "label": "bibleBookMap",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L66",
+      "source_location": "L65",
       "id": "library_page_biblebookmap",
-      "community": 2,
+      "community": 3,
       "norm_label": "biblebookmap"
     },
     {
       "label": "currentBibleBook",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L67",
+      "source_location": "L66",
       "id": "library_page_currentbiblebook",
-      "community": 2,
+      "community": 3,
       "norm_label": "currentbiblebook"
     },
     {
       "label": "currentBibleVerses",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L70",
+      "source_location": "L69",
       "id": "library_page_currentbibleverses",
-      "community": 2,
+      "community": 3,
       "norm_label": "currentbibleverses"
     },
     {
       "label": "currentBibleChapters",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L78",
+      "source_location": "L77",
       "id": "library_page_currentbiblechapters",
-      "community": 2,
+      "community": 3,
       "norm_label": "currentbiblechapters"
     },
     {
       "label": "obs",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L120",
+      "source_location": "L119",
       "id": "library_page_obs",
-      "community": 2,
+      "community": 3,
       "norm_label": "obs"
     },
     {
       "label": "slidesFor()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L148",
+      "source_location": "L147",
       "id": "library_page_slidesfor",
-      "community": 2,
+      "community": 3,
       "norm_label": "slidesfor()"
     },
     {
       "label": "hasQuery",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L156",
+      "source_location": "L155",
       "id": "library_page_hasquery",
-      "community": 2,
+      "community": 3,
       "norm_label": "hasquery"
     },
     {
       "label": "grouped",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L161",
+      "source_location": "L160",
       "id": "library_page_grouped",
-      "community": 2,
+      "community": 3,
       "norm_label": "grouped"
     },
     {
       "label": "q",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L175",
+      "source_location": "L174",
       "id": "library_page_q",
-      "community": 2,
+      "community": 3,
       "norm_label": "q"
     },
     {
       "label": "[]",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L177",
+      "source_location": "L176",
       "id": "library_page",
-      "community": 2,
+      "community": 3,
       "norm_label": "[]"
     },
     {
       "label": "normalizedSlides",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L196",
+      "source_location": "L195",
       "id": "library_page_normalizedslides",
-      "community": 2,
+      "community": 3,
       "norm_label": "normalizedslides"
     },
     {
       "label": "hitIndex",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L199",
+      "source_location": "L198",
       "id": "library_page_hitindex",
-      "community": 2,
+      "community": 3,
       "norm_label": "hitindex"
     },
     {
       "label": "start",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L201",
+      "source_location": "L200",
       "id": "library_page_start",
-      "community": 2,
+      "community": 3,
       "norm_label": "start"
     },
     {
       "label": "end",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L202",
+      "source_location": "L201",
       "id": "library_page_end",
-      "community": 2,
+      "community": 3,
       "norm_label": "end"
     },
     {
       "label": "verses",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L242",
+      "source_location": "L241",
       "id": "library_page_verses",
-      "community": 2,
+      "community": 3,
       "norm_label": "verses"
     },
     {
       "label": "bibleVerseRef()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L299",
+      "source_location": "L298",
       "id": "library_page_bibleverseref",
-      "community": 2,
+      "community": 3,
       "norm_label": "bibleverseref()"
     },
     {
       "label": "addToQueue()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L303",
+      "source_location": "L302",
       "id": "library_page_addtoqueue",
-      "community": 2,
+      "community": 3,
       "norm_label": "addtoqueue()"
     },
     {
       "label": "addBibleVerseToQueue()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L307",
+      "source_location": "L306",
       "id": "library_page_addbibleversetoqueue",
-      "community": 2,
+      "community": 3,
       "norm_label": "addbibleversetoqueue()"
     },
     {
       "label": "openPreview()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L316",
+      "source_location": "L315",
       "id": "library_page_openpreview",
-      "community": 2,
+      "community": 3,
       "norm_label": "openpreview()"
     },
     {
       "label": "closePreview()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L320",
+      "source_location": "L319",
       "id": "library_page_closepreview",
-      "community": 2,
+      "community": 3,
       "norm_label": "closepreview()"
-    },
-    {
-      "label": "enterProjector()",
-      "file_type": "code",
-      "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L325",
-      "id": "library_page_enterprojector",
-      "community": 2,
-      "norm_label": "enterprojector()"
     },
     {
       "label": "openBibleMenu()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L343",
+      "source_location": "L323",
       "id": "library_page_openbiblemenu",
-      "community": 2,
+      "community": 3,
       "norm_label": "openbiblemenu()"
     },
     {
       "label": "closeBibleMenu()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L352",
+      "source_location": "L332",
       "id": "library_page_closebiblemenu",
-      "community": 2,
+      "community": 3,
       "norm_label": "closebiblemenu()"
     },
     {
       "label": "enterBibleBook()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L358",
+      "source_location": "L338",
       "id": "library_page_enterbiblebook",
-      "community": 2,
+      "community": 3,
       "norm_label": "enterbiblebook()"
     },
     {
       "label": "enterBibleChapter()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L365",
+      "source_location": "L345",
       "id": "library_page_enterbiblechapter",
-      "community": 2,
+      "community": 3,
       "norm_label": "enterbiblechapter()"
     },
     {
       "label": "resetBibleNavigation()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L371",
+      "source_location": "L351",
       "id": "library_page_resetbiblenavigation",
-      "community": 2,
+      "community": 3,
       "norm_label": "resetbiblenavigation()"
     },
     {
       "label": "bibleStatusText()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L376",
+      "source_location": "L356",
       "id": "library_page_biblestatustext",
-      "community": 2,
+      "community": 3,
       "norm_label": "biblestatustext()"
     },
     {
       "label": "importUrl",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L391",
+      "source_location": "L371",
       "id": "library_page_importurl",
-      "community": 2,
+      "community": 3,
       "norm_label": "importurl"
     },
     {
       "label": "importLoading",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L392",
+      "source_location": "L372",
       "id": "library_page_importloading",
-      "community": 2,
+      "community": 3,
       "norm_label": "importloading"
     },
     {
       "label": "songTitle",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L395",
+      "source_location": "L375",
       "id": "library_page_songtitle",
-      "community": 2,
+      "community": 3,
       "norm_label": "songtitle"
     },
     {
       "label": "songFolder",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L396",
+      "source_location": "L376",
       "id": "library_page_songfolder",
-      "community": 2,
+      "community": 3,
       "norm_label": "songfolder"
     },
     {
       "label": "songLyrics",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L397",
+      "source_location": "L377",
       "id": "library_page_songlyrics",
-      "community": 2,
+      "community": 3,
       "norm_label": "songlyrics"
     },
     {
       "label": "saveLoading",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L399",
+      "source_location": "L379",
       "id": "library_page_saveloading",
-      "community": 2,
+      "community": 3,
       "norm_label": "saveloading"
     },
     {
       "label": "showOverwriteConfirm",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L401",
+      "source_location": "L381",
       "id": "library_page_showoverwriteconfirm",
-      "community": 2,
+      "community": 3,
       "norm_label": "showoverwriteconfirm"
     },
     {
       "label": "openWriteSongMenu()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L403",
+      "source_location": "L383",
       "id": "library_page_openwritesongmenu",
-      "community": 2,
+      "community": 3,
       "norm_label": "openwritesongmenu()"
     },
     {
       "label": "closeWriteSongMenu()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L416",
+      "source_location": "L396",
       "id": "library_page_closewritesongmenu",
-      "community": 2,
+      "community": 3,
       "norm_label": "closewritesongmenu()"
     },
     {
       "label": "handleImportUrl()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L420",
+      "source_location": "L400",
       "id": "library_page_handleimporturl",
-      "community": 2,
+      "community": 3,
       "norm_label": "handleimporturl()"
     },
     {
       "label": "handleSaveSong()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L451",
+      "source_location": "L431",
       "id": "library_page_handlesavesong",
       "community": 1,
       "norm_label": "handlesavesong()"
-    },
-    {
-      "label": "ALL_KEYS",
-      "file_type": "code",
-      "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L487",
-      "id": "library_page_all_keys",
-      "community": 2,
-      "norm_label": "all_keys"
-    },
-    {
-      "label": "updateSongKey()",
-      "file_type": "code",
-      "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L489",
-      "id": "library_page_updatesongkey",
-      "community": 2,
-      "norm_label": "updatesongkey()"
     },
     {
       "label": "$lib/bible",
@@ -829,7 +802,7 @@
       "source_file": "src/lib/bible",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_bible",
-      "community": 2,
+      "community": 3,
       "norm_label": "$lib/bible"
     },
     {
@@ -1072,7 +1045,7 @@
       "source_file": "src/lib/sync.ts",
       "source_location": "L86",
       "id": "lib_sync_syncfull",
-      "community": 0,
+      "community": 1,
       "norm_label": "syncfull()"
     },
     {
@@ -1612,7 +1585,7 @@
       "source_file": "src/lib/db.ts",
       "source_location": "L302",
       "id": "lib_db_loadallservers",
-      "community": 1,
+      "community": 0,
       "norm_label": "loadallservers()"
     },
     {
@@ -1666,7 +1639,7 @@
       "source_file": "src/lib/db.ts",
       "source_location": "L415",
       "id": "lib_db_getorcreatedeviceid",
-      "community": 5,
+      "community": 1,
       "norm_label": "getorcreatedeviceid()"
     },
     {
@@ -1900,7 +1873,7 @@
       "source_file": "src/lib/db.ts",
       "source_location": "L696",
       "id": "lib_db_getpendingmutations",
-      "community": 1,
+      "community": 0,
       "norm_label": "getpendingmutations()"
     },
     {
@@ -1909,7 +1882,7 @@
       "source_file": "src/lib/db.ts",
       "source_location": "L706",
       "id": "lib_db_clearpendingmutations",
-      "community": 1,
+      "community": 0,
       "norm_label": "clearpendingmutations()"
     },
     {
@@ -1985,12 +1958,22 @@
       "norm_label": "sortbibleverses()"
     },
     {
+      "label": "$lib/ProjectorOverlay.svelte",
+      "file_type": "code",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L1",
+      "confidence": "EXTRACTED",
+      "id": "src_lib_projectoroverlay_svelte",
+      "community": 2,
+      "norm_label": "$lib/projectoroverlay.svelte"
+    },
+    {
       "label": "lines",
       "file_type": "code",
       "source_file": "src/lib/ProjectorOverlay.svelte",
       "source_location": "L57",
       "id": "lib_projectoroverlay_lines",
-      "community": 6,
+      "community": 2,
       "norm_label": "lines"
     },
     {
@@ -1999,7 +1982,7 @@
       "source_file": "src/lib/ProjectorOverlay.svelte",
       "source_location": "L66",
       "id": "lib_projectoroverlay_cleaned",
-      "community": 6,
+      "community": 2,
       "norm_label": "cleaned"
     },
     {
@@ -2008,7 +1991,7 @@
       "source_file": "src/lib/ProjectorOverlay.svelte",
       "source_location": "L106",
       "id": "lib_projectoroverlay_canvas",
-      "community": 6,
+      "community": 2,
       "norm_label": "canvas"
     },
     {
@@ -2017,7 +2000,7 @@
       "source_file": "src/lib/ProjectorOverlay.svelte",
       "source_location": "L107",
       "id": "lib_projectoroverlay_ctx",
-      "community": 6,
+      "community": 2,
       "norm_label": "ctx"
     },
     {
@@ -2026,7 +2009,7 @@
       "source_file": "src/lib/ProjectorOverlay.svelte",
       "source_location": "L118",
       "id": "lib_projectoroverlay_mid",
-      "community": 6,
+      "community": 2,
       "norm_label": "mid"
     },
     {
@@ -2035,7 +2018,7 @@
       "source_file": "src/lib/ProjectorOverlay.svelte",
       "source_location": "L124",
       "id": "lib_projectoroverlay_cleanline",
-      "community": 6,
+      "community": 2,
       "norm_label": "cleanline"
     },
     {
@@ -2044,7 +2027,7 @@
       "source_file": "src/lib/ProjectorOverlay.svelte",
       "source_location": "L137",
       "id": "lib_projectoroverlay_markersize",
-      "community": 6,
+      "community": 2,
       "norm_label": "markersize"
     },
     {
@@ -2053,7 +2036,7 @@
       "source_file": "src/lib/ProjectorOverlay.svelte",
       "source_location": "L193",
       "id": "lib_projectoroverlay_prev",
-      "community": 6,
+      "community": 2,
       "norm_label": "prev()"
     },
     {
@@ -2062,7 +2045,7 @@
       "source_file": "src/lib/ProjectorOverlay.svelte",
       "source_location": "L251",
       "id": "lib_projectoroverlay_handlevisibilitychange",
-      "community": 6,
+      "community": 2,
       "norm_label": "handlevisibilitychange()"
     },
     {
@@ -2071,7 +2054,7 @@
       "source_file": "src/lib/ProjectorOverlay.svelte",
       "source_location": "L256",
       "id": "lib_projectoroverlay_handlefullscreenchange",
-      "community": 6,
+      "community": 2,
       "norm_label": "handlefullscreenchange()"
     },
     {
@@ -2228,11 +2211,38 @@
       "norm_label": "readme.md"
     },
     {
+      "label": "enterProjector()",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L325",
+      "community": 3,
+      "norm_label": "enterprojector()",
+      "id": "library_page_enterprojector"
+    },
+    {
+      "label": "ALL_KEYS",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L487",
+      "community": 3,
+      "norm_label": "all_keys",
+      "id": "library_page_all_keys"
+    },
+    {
+      "label": "updateSongKey()",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L489",
+      "community": 3,
+      "norm_label": "updatesongkey()",
+      "id": "library_page_updatesongkey"
+    },
+    {
       "label": "ALL_KEYS",
       "file_type": "code",
       "source_file": "src/routes/lists/+page.svelte",
       "source_location": "L234",
-      "community": 3,
+      "community": 2,
       "norm_label": "all_keys",
       "id": "lists_page_all_keys"
     },
@@ -2241,7 +2251,7 @@
       "file_type": "code",
       "source_file": "src/routes/lists/+page.svelte",
       "source_location": "L236",
-      "community": 3,
+      "community": 2,
       "norm_label": "updatesongkey()",
       "id": "lists_page_updatesongkey"
     },
@@ -2286,7 +2296,7 @@
       "file_type": "code",
       "source_file": "src/routes/+page.svelte",
       "source_location": "L1",
-      "community": 3,
+      "community": 2,
       "norm_label": "+page.svelte",
       "id": "src_routes_page_svelte"
     },
@@ -2304,7 +2314,7 @@
       "file_type": "code",
       "source_file": "src/app.css",
       "confidence": "EXTRACTED",
-      "community": 3,
+      "community": 2,
       "norm_label": "../app.css",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_app_css"
     },
@@ -2313,7 +2323,7 @@
       "file_type": "code",
       "source_file": "src/routes/settings/+page.svelte",
       "source_location": "L1",
-      "community": 3,
+      "community": 2,
       "norm_label": "+page.svelte",
       "id": "src_routes_settings_page_svelte"
     },
@@ -2322,7 +2332,7 @@
       "file_type": "code",
       "source_file": "src/routes/pair/+page.svelte",
       "source_location": "L1",
-      "community": 3,
+      "community": 2,
       "norm_label": "+page.svelte",
       "id": "src_routes_pair_page_svelte"
     },
@@ -2331,7 +2341,7 @@
       "file_type": "code",
       "source_file": "src/routes/live/+page.svelte",
       "source_location": "L100",
-      "community": 3,
+      "community": 2,
       "norm_label": "off",
       "id": "live_page_off"
     },
@@ -2340,7 +2350,7 @@
       "file_type": "code",
       "source_file": "src/lib/search",
       "confidence": "EXTRACTED",
-      "community": 3,
+      "community": 2,
       "norm_label": "$lib/search",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_search"
     },
@@ -2358,7 +2368,7 @@
       "file_type": "code",
       "source_file": "src/lib/bible",
       "confidence": "EXTRACTED",
-      "community": 2,
+      "community": 3,
       "norm_label": "$lib/bible",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_bible"
     },
@@ -3145,6 +3155,14 @@
       "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_stores"
     },
     {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/SongPreviewModal.svelte",
+      "source": "src_lib_songpreviewmodal_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_stores",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
@@ -3464,6 +3482,14 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "src/lib/SongPreviewModal.svelte",
+      "source": "src_lib_songpreviewmodal_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_ws",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/pair/+page.svelte",
       "confidence_score": 1.0,
       "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_pair_page_svelte",
@@ -3558,6 +3584,14 @@
       "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_search"
     },
     {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/SongPreviewModal.svelte",
+      "source": "src_lib_songpreviewmodal_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_search",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/routes/lists/+page.svelte",
@@ -3574,6 +3608,14 @@
       "confidence_score": 1.0,
       "source": "src_routes_lists_page_svelte",
       "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_protocol"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/lists/+page.svelte",
+      "source": "src_routes_lists_page_svelte",
+      "target": "src_lib_songpreviewmodal_svelte",
+      "confidence_score": 1.0
     },
     {
       "relation": "imports_from",
@@ -3638,110 +3680,26 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "src/lib/SongPreviewModal.svelte",
+      "source": "src_lib_songpreviewmodal_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_protocol",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "src/routes/library/+page.svelte",
-      "confidence_score": 1.0,
       "source": "src_routes_library_page_svelte",
-      "target": "src_lib_projectoroverlay_svelte"
+      "target": "src_lib_songpreviewmodal_svelte",
+      "confidence_score": 1.0
     },
     {
-      "relation": "contains",
+      "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/lib/ProjectorOverlay.svelte",
-      "source_location": "L111",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_projectoroverlay_svelte",
-      "target": "lib_projectoroverlay_lines"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/ProjectorOverlay.svelte",
-      "source_location": "L66",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_projectoroverlay_svelte",
-      "target": "lib_projectoroverlay_cleaned"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/ProjectorOverlay.svelte",
-      "source_location": "L106",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_projectoroverlay_svelte",
-      "target": "lib_projectoroverlay_canvas"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/ProjectorOverlay.svelte",
-      "source_location": "L107",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_projectoroverlay_svelte",
-      "target": "lib_projectoroverlay_ctx"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/ProjectorOverlay.svelte",
-      "source_location": "L118",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_projectoroverlay_svelte",
-      "target": "lib_projectoroverlay_mid"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/ProjectorOverlay.svelte",
-      "source_location": "L124",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_projectoroverlay_svelte",
-      "target": "lib_projectoroverlay_cleanline"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/ProjectorOverlay.svelte",
-      "source_location": "L137",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_projectoroverlay_svelte",
-      "target": "lib_projectoroverlay_markersize"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/ProjectorOverlay.svelte",
-      "source_location": "L193",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_projectoroverlay_svelte",
-      "target": "lib_projectoroverlay_prev"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/ProjectorOverlay.svelte",
-      "source_location": "L251",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_projectoroverlay_svelte",
-      "target": "lib_projectoroverlay_handlevisibilitychange"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/lib/ProjectorOverlay.svelte",
-      "source_location": "L256",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_lib_projectoroverlay_svelte",
-      "target": "lib_projectoroverlay_handlefullscreenchange"
+      "source_file": "src/lib/SongPreviewModal.svelte",
+      "source": "src_lib_songpreviewmodal_svelte",
+      "target": "src_lib_projectoroverlay_svelte",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -3967,16 +3925,6 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L325",
-      "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "src_routes_library_page_svelte",
-      "target": "library_page_enterprojector"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": "src/routes/library/+page.svelte",
       "source_location": "L310",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -4144,6 +4092,32 @@
       "target": "library_page_handlesavesong"
     },
     {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_bible"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "src_lib_projectoroverlay_svelte"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L325",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_enterprojector"
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/routes/library/+page.svelte",
@@ -4162,14 +4136,6 @@
       "confidence_score": 1.0,
       "source": "src_routes_library_page_svelte",
       "target": "library_page_updatesongkey"
-    },
-    {
-      "relation": "imports_from",
-      "confidence": "EXTRACTED",
-      "source_file": "src/routes/library/+page.svelte",
-      "confidence_score": 1.0,
-      "source": "src_routes_library_page_svelte",
-      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_bible"
     },
     {
       "relation": "imports_from",
@@ -7924,6 +7890,106 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L111",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_lines"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L66",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_cleaned"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L106",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_canvas"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L107",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_ctx"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L118",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_mid"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L124",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_cleanline"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L137",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_markersize"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L193",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_prev"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L251",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_handlevisibilitychange"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L256",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_handlefullscreenchange"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
       "source_location": "L1",
       "weight": 1.0,
@@ -8083,5 +8149,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "1f75c139cc1ba4f2d2efd8c4f5adc6d69aec9de9"
+  "built_at_commit": "ee70167468de15e9d0d0c9e7104633e99392a5e6"
 }
