@@ -107,7 +107,14 @@
 {/if}
 
 <main class:has-tabs={showTabs()} class:has-banner={showTabs() && $isViewOnly}>
-  {@render children()}
+  {#if ready}
+    {@render children()}
+  {:else}
+    <div class="loading-screen">
+      <div class="loader"></div>
+      <div class="loading-text">Loading Remote...</div>
+    </div>
+  {/if}
 </main>
 
 {#if showTabs()}
@@ -224,5 +231,36 @@
 
   .tab:hover .icon {
     transform: translateY(-1px);
+  }
+
+  .loading-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 50vh;
+    text-align: center;
+    gap: 16px;
+  }
+
+  .loader {
+    width: 48px;
+    height: 48px;
+    border: 3.5px solid rgba(233, 69, 96, 0.1);
+    border-radius: 50%;
+    border-top-color: var(--accent);
+    animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    box-shadow: 0 0 15px rgba(233, 69, 96, 0.1);
+  }
+
+  .loading-text {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    letter-spacing: 0.5px;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 </style>

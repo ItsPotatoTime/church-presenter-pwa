@@ -48,7 +48,7 @@
       const text = slideTexts[i];
       result.push({ text, isChorus: i === chorusIndex, originalIndex: i });
       if (i !== chorusIndex) {
-        const nextIndex = i + 1;
+        const nextIndex: number = i + 1;
         const isNextChorus = nextIndex < slideTexts.length && nextIndex === chorusIndex;
         const hasNoChorusSuffix = text.endsWith('\u200b');
         if (!isNextChorus && !hasNoChorusSuffix) {
