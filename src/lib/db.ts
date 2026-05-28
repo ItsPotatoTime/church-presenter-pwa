@@ -61,8 +61,14 @@ export interface ServerEntry {
 
 // ── DB open / upgrade ──────────────────────────────────────────────
 
-function openDb(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
+let dbInstance: IDBDatabase | null = null;
+let dbPromise: Promise<IDBDatabase> | null = null;
+
+function openDb(retries = 3, delayMs = 150): Promise<IDBDatabase> {
+  if (dbInstance) return Promise.resolve(dbInstance);
+  if (dbPromise) return dbPromise;
+
+  dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = (ev) => {
       const db = req.result;
@@ -133,9 +139,33 @@ function openDb(): Promise<IDBDatabase> {
         }
       }
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      dbInstance = req.result;
+      dbInstance.onversionchange = () => {
+        dbInstance?.close();
+        dbInstance = null;
+        dbPromise = null;
+      };
+      dbInstance.onclose = () => {
+        dbInstance = null;
+        dbPromise = null;
+      };
+      resolve(dbInstance);
+    };
+    req.onerror = () => {
+      dbPromise = null;
+      if (retries > 1) {
+        console.warn(`[db] Open failed, retrying in ${delayMs}ms. Retries left: ${retries - 1}. Error:`, req.error);
+        setTimeout(() => {
+          openDb(retries - 1, delayMs * 2).then(resolve, reject);
+        }, delayMs);
+      } else {
+        reject(req.error);
+      }
+    };
   });
+
+  return dbPromise;
 }
 
 // ── Low-level helpers ──────────────────────────────────────────────
@@ -185,52 +215,77 @@ let _credCache: Credentials | null | undefined = undefined;
 export async function loadCredentials(): Promise<Credentials | null> {
   if (_credCache !== undefined) return _credCache;
 
-  // Try the active server first
-  const activeKey = await getRow<string>('active_server_key');
-  if (activeKey) {
-    const entry = await _getServerByKey(activeKey);
-    if (entry?.device_token) {
+  try {
+    // Try the active server first
+    const activeKey = await getRow<string>('active_server_key');
+    if (activeKey) {
+      const entry = await _getServerByKey(activeKey);
+      if (entry?.device_token) {
+        _credCache = _entryToCredentials(entry);
+        return _credCache;
+      }
+    }
+
+    // No active key or stale/incomplete key — pick the most recently used complete server
+    const all = (await _loadAllServers()).filter((entry) => !!entry.device_token);
+    if (all.length > 0) {
+      const best = all.sort((a, b) => (b.last_used ?? 0) - (a.last_used ?? 0))[0];
+      await setMeta('active_server_key', best.server_key);
+      _credCache = _entryToCredentials(best);
+      return _credCache;
+    }
+
+    if (activeKey) {
+      await deleteMeta('active_server_key');
+    }
+
+    // Legacy fallback: meta['creds'] (pre-v4 data that didn't migrate in onupgradeneeded)
+    const legacy = await getRow<Credentials>('creds');
+    if (legacy) {
+      const serverKey = crypto.randomUUID();
+      const entry: ServerEntry = {
+        server_key: serverKey,
+        device_id: legacy.device_id,
+        device_token: legacy.device_token,
+        device_name: legacy.device_name,
+        cloud_host: legacy.cloud_host,
+        lan_host: legacy.lan_host,
+        server_name: legacy.server_name,
+        paired_at: legacy.paired_at,
+        last_used: Date.now(),
+      };
+      await _saveServer(entry);
+      await setMeta('active_server_key', serverKey);
       _credCache = _entryToCredentials(entry);
       return _credCache;
     }
-  }
-
-  // No active key or stale/incomplete key — pick the most recently used complete server
-  const all = (await _loadAllServers()).filter((entry) => !!entry.device_token);
-  if (all.length > 0) {
-    const best = all.sort((a, b) => (b.last_used ?? 0) - (a.last_used ?? 0))[0];
-    await setMeta('active_server_key', best.server_key);
-    _credCache = _entryToCredentials(best);
-    return _credCache;
-  }
-
-  if (activeKey) {
-    await deleteMeta('active_server_key');
-  }
-
-  // Legacy fallback: meta['creds'] (pre-v4 data that didn't migrate in onupgradeneeded)
-  const legacy = await getRow<Credentials>('creds');
-  if (legacy) {
-    const serverKey = crypto.randomUUID();
-    const entry: ServerEntry = {
-      server_key: serverKey,
-      device_id: legacy.device_id,
-      device_token: legacy.device_token,
-      device_name: legacy.device_name,
-      cloud_host: legacy.cloud_host,
-      lan_host: legacy.lan_host,
-      server_name: legacy.server_name,
-      paired_at: legacy.paired_at,
-      last_used: Date.now(),
-    };
-    await _saveServer(entry);
-    await setMeta('active_server_key', serverKey);
-    _credCache = _entryToCredentials(entry);
-    return _credCache;
+  } catch (err) {
+    console.error('[db] Error reading credentials from IndexedDB:', err);
+    return null; // Return null but do NOT set _credCache so we can retry on next wake/call
   }
 
   _credCache = null;
   return null;
+}
+
+export async function loadCredentialsResilient(maxAttempts = 3, delays = [150, 300]): Promise<Credentials | null> {
+  let creds = null;
+  let attempts = 0;
+  while (attempts < maxAttempts) {
+    try {
+      creds = await loadCredentials();
+      if (creds && creds.device_token) {
+        return creds;
+      }
+    } catch (err) {
+      console.warn(`[db] loadCredentials failed (attempt ${attempts + 1}):`, err);
+    }
+    if (attempts < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delays[attempts]));
+    }
+    attempts++;
+  }
+  return creds;
 }
 
 export async function saveCredentials(c: Credentials): Promise<void> {

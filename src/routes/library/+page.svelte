@@ -5,7 +5,7 @@
   import { base } from '$app/paths';
   import { get } from 'svelte/store';
   import { sortBibleVerses } from '$lib/bible';
-  import { loadCredentials } from '$lib/db';
+  import { loadCredentialsResilient } from '$lib/db';
   import type { BibleBook, BibleVerse, LibrarySong } from '$lib/protocol';
   import { normalize, renderMarkdown } from '$lib/search';
   import { isReducedDataConnection, syncFull, syncNow } from '$lib/sync';
@@ -57,7 +57,7 @@
   let hasRequestedLibrarySync = $state(false);
 
   onMount(async () => {
-    const creds = await loadCredentials();
+    const creds = await loadCredentialsResilient();
     if (!creds?.device_token) {
       goto(`${base}/`);
       return;

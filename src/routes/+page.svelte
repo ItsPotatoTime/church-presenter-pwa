@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
-  import { loadCredentials } from '$lib/db';
+  import { loadCredentialsResilient } from '$lib/db';
   import { serverName } from '$lib/stores';
   import jsQR from 'jsqr';
 
@@ -45,7 +45,7 @@
     window.addEventListener('beforeinstallprompt', handler);
 
     void (async () => {
-      const creds = await loadCredentials();
+      const creds = await loadCredentialsResilient();
       paired = !!creds && !!creds.device_token;
       checked = true;
       if (paired) goto(`${base}/live/`);

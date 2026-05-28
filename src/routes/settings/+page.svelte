@@ -3,7 +3,7 @@
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import {
-    loadCredentials,
+    loadCredentialsResilient,
     loadAllServers,
     removeServer,
     switchServer,
@@ -34,7 +34,7 @@
   let lastSyncTs = $state(0);
 
   onMount(async () => {
-    const c = await loadCredentials();
+    const c = await loadCredentialsResilient();
     if (!c?.device_token) {
       goto(`${base}/`);
       return;
@@ -50,7 +50,7 @@
     await remote.unpair();
     // Reload server list — clearCredentials may have switched to another
     servers = await loadAllServers();
-    creds = await loadCredentials();
+    creds = await loadCredentialsResilient();
     if (!creds?.device_token) goto(`${base}/`);
   }
 
@@ -68,7 +68,7 @@
     if (!confirm('Remove this server pairing?')) return;
     await removeServer(key);
     servers = await loadAllServers();
-    creds = await loadCredentials();
+    creds = await loadCredentialsResilient();
     if (!creds?.device_token) {
       goto(`${base}/`);
       return;

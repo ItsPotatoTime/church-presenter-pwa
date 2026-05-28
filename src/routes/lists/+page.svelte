@@ -2,7 +2,7 @@
   import { onMount, tick } from 'svelte';
   import { goto, afterNavigate } from '$app/navigation';
   import { base } from '$app/paths';
-  import { loadCredentials, addPendingMutation, putLists, putPrivateLists } from '$lib/db';
+  import { loadCredentialsResilient, addPendingMutation, putLists, putPrivateLists } from '$lib/db';
   import { remote } from '$lib/ws';
   import { get } from 'svelte/store';
   import {
@@ -108,7 +108,7 @@
   });
 
   onMount(async () => {
-    const creds = await loadCredentials();
+    const creds = await loadCredentialsResilient();
     if (!creds?.device_token) {
       goto(`${base}/`);
       return;

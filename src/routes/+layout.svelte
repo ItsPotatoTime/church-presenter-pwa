@@ -4,7 +4,7 @@
   import { page } from '$app/stores';
   import { base } from '$app/paths';
   import { beforeNavigate, goto } from '$app/navigation';
-  import { getOrCreateDeviceId, loadCredentials } from '$lib/db';
+  import { getOrCreateDeviceId, loadCredentialsResilient } from '$lib/db';
   import { hydrateFromCache, isReducedDataConnection, syncNow } from '$lib/sync';
   import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY } from '$lib/stores';
 
@@ -15,13 +15,22 @@
   let hasTriggeredSync = $state(false);
 
   onMount(async () => {
-    myDeviceId.set(await getOrCreateDeviceId());
-    const creds = await loadCredentials();
+    try {
+      myDeviceId.set(await getOrCreateDeviceId());
+    } catch (err) {
+      console.error('[layout] Failed to get/create device ID:', err);
+    }
+
+    const creds = await loadCredentialsResilient();
     paired = !!creds && !!creds.device_token;
     if (paired) {
       // Load library cache so Library/Queue show something even offline.
-      await hydrateFromCache();
-      hasHydrated = true;
+      try {
+        await hydrateFromCache();
+        hasHydrated = true;
+      } catch (err) {
+        console.error('[layout] hydrateFromCache failed:', err);
+      }
     }
     ready = true;
   });

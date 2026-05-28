@@ -65,6 +65,8 @@ class RemoteClient {
   // Prevents infinite loops when all paired servers reject us.
   private _triedServerKeys = new Set<string>();
   private pendingRequests = new Map<string, (payload: any) => void>();
+  private heartbeatTimer: number | null = null;
+  private lastMessageTime = 0;
 
   constructor() {
     // iOS Safari kills WebSockets when the PWA moves to background.
@@ -73,13 +75,7 @@ class RemoteClient {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState !== 'visible') return;
         if (this.forceClose) return;
-        if (this.ws && this.ws.readyState !== WebSocket.CLOSED) return;
-        // Cancel any pending backoff timer so we reconnect now, not after the delay.
-        if (this.reconnectTimer !== null) {
-          clearTimeout(this.reconnectTimer);
-          this.reconnectTimer = null;
-        }
-        this.backoffIdx = 0; // reset backoff on foreground
+        this.tearDown();
         void this.connect();
       });
     }
@@ -87,12 +83,7 @@ class RemoteClient {
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => {
         if (this.forceClose) return;
-        if (this.ws && this.ws.readyState !== WebSocket.CLOSED) return;
-        if (this.reconnectTimer !== null) {
-          clearTimeout(this.reconnectTimer);
-          this.reconnectTimer = null;
-        }
-        this.backoffIdx = 0; // reset backoff on network restore
+        this.tearDown();
         void this.connect();
       });
     }
@@ -193,6 +184,7 @@ class RemoteClient {
   private tearDown(): void {
     this.gen += 1; // invalidate any in-flight handlers from the previous socket
     this.forceClose = true;
+    this.stopHeartbeat();
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -295,10 +287,15 @@ class RemoteClient {
 
     ws.onmessage = (ev) => {
       if (!isCurrent()) return;
+      this.lastMessageTime = Date.now();
       let msg: Envelope;
       try {
         msg = JSON.parse(typeof ev.data === 'string' ? ev.data : '');
       } catch {
+        return;
+      }
+
+      if (msg.type === 'pong') {
         return;
       }
 
@@ -337,6 +334,7 @@ class RemoteClient {
           if (!isCurrent()) return;
           connStatus.set('open');
           connError.set(null);
+          this.startHeartbeat(myGen, ws);
         })();
         return;
       }
@@ -516,6 +514,40 @@ class RemoteClient {
         if (fresh && fresh.device_token) this.openSocket(fresh, null);
       });
     }, delay);
+  }
+
+  private startHeartbeat(myGen: number, ws: WebSocket): void {
+    if (this.heartbeatTimer !== null) {
+      clearInterval(this.heartbeatTimer);
+    }
+    this.lastMessageTime = Date.now();
+    this.heartbeatTimer = window.setInterval(() => {
+      if (this.gen !== myGen || this.ws !== ws || ws.readyState !== WebSocket.OPEN) {
+        this.stopHeartbeat();
+        return;
+      }
+      const now = Date.now();
+      if (now - this.lastMessageTime > 30000) {
+        console.warn('[ws] Heartbeat lost. Closing connection.');
+        this.stopHeartbeat();
+        try {
+          ws.close();
+        } catch { /* ignore */ }
+        return;
+      }
+      try {
+        ws.send(JSON.stringify({ type: 'ping' }));
+      } catch {
+        /* ignore */
+      }
+    }, 10000);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer !== null) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 }
 

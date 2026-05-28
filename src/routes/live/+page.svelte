@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
-  import { loadCredentials } from '$lib/db';
+  import { loadCredentialsResilient } from '$lib/db';
   import { remote } from '$lib/ws';
   import { renderMarkdown } from '$lib/search';
   import {
@@ -14,7 +14,7 @@
   let fontBoost = $state(1.0); // local preview zoom only
 
   onMount(async () => {
-    const creds = await loadCredentials();
+    const creds = await loadCredentialsResilient();
     if (!creds || !creds.device_token) {
       goto(`${base}/`);
       return;

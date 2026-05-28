@@ -2,7 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
-  import { loadCredentials } from '$lib/db';
+  import { loadCredentialsResilient } from '$lib/db';
   import { remote } from '$lib/ws';
   import { connStatus, isViewOnly, queueState, songsStore, activeModals } from '$lib/stores';
 
@@ -30,7 +30,7 @@
   });
 
   onMount(async () => {
-    const creds = await loadCredentials();
+    const creds = await loadCredentialsResilient();
     if (!creds?.device_token) { goto(`${base}/`); return; }
     await remote.connect();
   });
