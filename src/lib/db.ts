@@ -16,10 +16,11 @@ import { sortBibleVerses } from './bible';
 import type { BibleBook, BibleVerse, LibrarySong, LibraryList, QueueState } from './protocol';
 
 const DB_NAME = 'church-remote';
-const DB_VERSION = 6;
+const DB_VERSION = 7;
 const STORE_META = 'meta';
 const STORE_SONGS = 'songs';
 const STORE_LISTS = 'lists';
+const STORE_PRIVATE_LISTS = 'private_lists';
 const STORE_BIBLE_BOOKS = 'bible_books';
 const STORE_BIBLE_VERSES = 'bible_verses';
 const STORE_PENDING = 'pending_mutations';
@@ -87,6 +88,9 @@ function openDb(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_SERVERS)) {
         db.createObjectStore(STORE_SERVERS, { keyPath: 'server_key' });
+      }
+      if (!db.objectStoreNames.contains(STORE_PRIVATE_LISTS)) {
+        db.createObjectStore(STORE_PRIVATE_LISTS, { keyPath: 'name' });
       }
 
       // Migration v3 → v4: move meta['creds'] into STORE_SERVERS
@@ -620,6 +624,40 @@ export async function loadAllLists(): Promise<LibraryList[]> {
   });
 }
 
+// ── Private Lists ──────────────────────────────────────────────────
+
+export async function putPrivateLists(lists: LibraryList[]): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PRIVATE_LISTS, 'readwrite');
+    const store = tx.objectStore(STORE_PRIVATE_LISTS);
+    store.clear();
+    for (const l of lists) store.put(l);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function loadAllPrivateLists(): Promise<LibraryList[]> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PRIVATE_LISTS, 'readonly');
+    const req = tx.objectStore(STORE_PRIVATE_LISTS).getAll();
+    req.onsuccess = () => resolve((req.result ?? []) as LibraryList[]);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function clearPrivateLists(): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PRIVATE_LISTS, 'readwrite');
+    tx.objectStore(STORE_PRIVATE_LISTS).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 // ── Per-server data cache (snapshot/restore on server switch) ──────
 
 export async function snapshotServerData(serverKey: string): Promise<void> {
@@ -720,6 +758,7 @@ export interface BackupData {
   exported_at: number;
   songs: LibrarySong[];
   lists: LibraryList[];
+  private_lists?: LibraryList[];
   bible_books: BibleBook[];
   bible_verses: BibleVerse[];
   bible_version: string | null;
@@ -731,6 +770,7 @@ export interface BackupData {
 export async function exportBackup(): Promise<BackupData> {
   const songs = await loadAllSongs();
   const lists = await loadAllLists();
+  const privateLists = await loadAllPrivateLists();
   const bibleBooks = await loadAllBibleBooks();
   const bibleVerses = await loadAllBibleVerses();
   const bibleVersion = await getBibleVersion();
@@ -742,6 +782,7 @@ export async function exportBackup(): Promise<BackupData> {
     exported_at: Date.now(),
     songs,
     lists,
+    private_lists: privateLists,
     bible_books: bibleBooks,
     bible_verses: bibleVerses,
     bible_version: bibleVersion,
@@ -773,10 +814,12 @@ export async function compareBackup(data: BackupData): Promise<BackupComparison>
 export async function importBackup(data: BackupData): Promise<void> {
   await clearSongs();
   await clearLists();
+  await clearPrivateLists();
   await clearBibleBooks();
   await clearBibleVerses();
   if (data.songs.length) await putSongs(data.songs);
   if (data.lists.length) await putLists(data.lists);
+  if (data.private_lists?.length) await putPrivateLists(data.private_lists);
   if (data.bible_books.length) await putBibleBooks(data.bible_books);
   if (data.bible_verses.length) await putBibleVerses(data.bible_verses);
   await setMeta('bible_version', data.bible_version ?? null);

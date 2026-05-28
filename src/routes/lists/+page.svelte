@@ -1,12 +1,13 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
+  import { onMount, tick } from 'svelte';
+  import { goto, afterNavigate } from '$app/navigation';
   import { base } from '$app/paths';
-  import { loadCredentials, addPendingMutation, putLists } from '$lib/db';
+  import { loadCredentials, addPendingMutation, putLists, putPrivateLists } from '$lib/db';
   import { remote } from '$lib/ws';
   import { get } from 'svelte/store';
   import {
-    connStatus, isViewOnly, listsStore, songsStore, canEditKeys, activeModals,
+    connStatus, isViewOnly, listsStore, privateListsStore, songsStore, canEditKeys, activeModals,
+    listsActiveTab, listsSelectedName, listsShowPicker, listsPickerRawQuery, listsScrollY
   } from '$lib/stores';
   import type { LibraryList, LibrarySong } from '$lib/protocol';
   import { normalize, filterSongs, renderMarkdown } from '$lib/search';
@@ -26,12 +27,13 @@
     previewSong = null;
   }
 
-  // enterProjector is handled by SongPreviewModal
+  // State initialized from stores to preserve tab state
+  let activeTab = $state<'public' | 'private'>($listsActiveTab);
+  let selectedName = $state<string | null>($listsSelectedName);
+  let showPicker = $state($listsShowPicker);
+  let rawPickerQuery = $state($listsPickerRawQuery);
 
-  let selectedName = $state<string | null>(null);
-  let showPicker = $state(false);
-  let rawPickerQuery = $state('');
-  let pickerQuery = $state('');
+  let pickerQuery = $state($listsPickerRawQuery);
   let pickerDebounceTimer: number | null = null;
   let dragFrom = $state<number | null>(null);
   let dragOver = $state<number | null>(null);
@@ -39,6 +41,20 @@
   let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
   let promptDialog = $state<{ title: string; initial: string; value: string; resolve: (v: string | null) => void } | null>(null);
   let pickerSearchSlides = $state(false);
+
+  // Sync state back to stores reactively
+  $effect(() => {
+    listsActiveTab.set(activeTab);
+  });
+  $effect(() => {
+    listsSelectedName.set(selectedName);
+  });
+  $effect(() => {
+    listsShowPicker.set(showPicker);
+  });
+  $effect(() => {
+    listsPickerRawQuery.set(rawPickerQuery);
+  });
 
   function showConfirm(message: string): Promise<boolean> {
     return new Promise((resolve) => { confirmDialog = { message, resolve }; });
@@ -91,7 +107,6 @@
     }
   });
 
-  // Layout already calls hydrateFromCache() on startup — no need to repeat here.
   onMount(async () => {
     const creds = await loadCredentials();
     if (!creds?.device_token) {
@@ -101,10 +116,13 @@
     await remote.connect();
   });
 
+  // Dynamically resolve lists and selection based on active tab (Public vs Private)
+  const currentLists = $derived(activeTab === 'public' ? $listsStore : $privateListsStore);
+
   const selectedList = $derived<LibraryList | null>(
     selectedName === null
       ? null
-      : ($listsStore.find((l) => l.name === selectedName) ?? null)
+      : (currentLists.find((l) => l.name === selectedName) ?? null)
   );
 
   function send(cmd: { type: string; payload?: any }) {
@@ -152,10 +170,8 @@
         )
       );
     } else {
-      // list.load_to_queue and list.reorder cannot be applied offline
       return false;
     }
-    // Persist the updated lists to IndexedDB so changes survive tab switches and restarts.
     void putLists(get(listsStore));
     return true;
   }
@@ -168,12 +184,24 @@
     const name = await showPrompt('New list name:');
     if (!name || !name.trim()) return;
     const clean = name.trim().slice(0, 80);
-    if ($listsStore.some((l) => l.name === clean)) {
-      await showConfirm(`"${clean}" already exists.`);
-      return;
+
+    if (activeTab === 'private') {
+      if ($privateListsStore.some((l) => l.name === clean)) {
+        await showConfirm(`"${clean}" already exists.`);
+        return;
+      }
+      const updated = [...$privateListsStore, { name: clean, songs: [] }];
+      privateListsStore.set(updated);
+      await putPrivateLists(updated);
+      selectedName = clean;
+    } else {
+      if ($listsStore.some((l) => l.name === clean)) {
+        await showConfirm(`"${clean}" already exists.`);
+        return;
+      }
+      send({ type: 'list.create', payload: { name: clean } });
+      selectedName = clean;
     }
-    send({ type: 'list.create', payload: { name: clean } });
-    selectedName = clean;
   }
 
   async function renameList() {
@@ -182,30 +210,75 @@
     if (!next || !next.trim()) return;
     const clean = next.trim().slice(0, 80);
     if (clean === selectedList.name) return;
-    send({ type: 'list.rename', payload: { old: selectedList.name, new: clean } });
-    selectedName = clean;
+
+    if (activeTab === 'private') {
+      if ($privateListsStore.some((l) => l.name === clean)) {
+        await showConfirm(`"${clean}" already exists.`);
+        return;
+      }
+      const updated = $privateListsStore.map((l) =>
+        l.name === selectedList.name ? { ...l, name: clean } : l
+      );
+      privateListsStore.set(updated);
+      await putPrivateLists(updated);
+      selectedName = clean;
+    } else {
+      send({ type: 'list.rename', payload: { old: selectedList.name, new: clean } });
+      selectedName = clean;
+    }
   }
 
   async function deleteList() {
     if (!selectedList) return;
     if (!await showConfirm(`Delete list "${selectedList.name}"?`)) return;
-    send({ type: 'list.delete', payload: { name: selectedList.name } });
-    selectedName = null;
+
+    if (activeTab === 'private') {
+      const updated = $privateListsStore.filter((l) => l.name !== selectedList.name);
+      privateListsStore.set(updated);
+      await putPrivateLists(updated);
+      selectedName = null;
+    } else {
+      send({ type: 'list.delete', payload: { name: selectedList.name } });
+      selectedName = null;
+    }
   }
 
   async function loadToQueue() {
     if (!selectedList) return;
     if (!selectedList.songs.length) { await showConfirm('This list is empty.'); return; }
     if (!await showConfirm(`Replace queue with ${selectedList.songs.length} song(s) from "${selectedList.name}"?`)) return;
-    send({ type: 'list.load_to_queue', payload: { list_name: selectedList.name } });
+
+    if (activeTab === 'private') {
+      if ($isViewOnly || $connStatus !== 'open') {
+        alert('Connect to the desktop to perform this action.');
+        return;
+      }
+      remote.send({ type: 'queue.clear' });
+      for (const song of selectedList.songs) {
+        remote.send({ type: 'queue.add', payload: { song_path: song.path } });
+      }
+    } else {
+      send({ type: 'list.load_to_queue', payload: { list_name: selectedList.name } });
+    }
   }
 
   function removeSong(pos: number) {
     if (!selectedList) return;
-    send({
-      type: 'list.remove_song',
-      payload: { list_name: selectedList.name, position: pos },
-    });
+
+    if (activeTab === 'private') {
+      const updated = $privateListsStore.map((l) =>
+        l.name === selectedList.name
+          ? { ...l, songs: l.songs.filter((_, i) => i !== pos) }
+          : l
+      );
+      privateListsStore.set(updated);
+      void putPrivateLists(updated);
+    } else {
+      send({
+        type: 'list.remove_song',
+        payload: { list_name: selectedList.name, position: pos },
+      });
+    }
   }
 
   function onDragStart(e: DragEvent, i: number) {
@@ -227,10 +300,22 @@
     dragFrom = null;
     dragOver = null;
     if (!selectedList || from === null || from === i) return;
-    send({
-      type: 'list.reorder',
-      payload: { list_name: selectedList.name, from, to: i },
-    });
+
+    if (activeTab === 'private') {
+      const songs = [...selectedList.songs];
+      const [moved] = songs.splice(from, 1);
+      songs.splice(i, 0, moved);
+      const updated = $privateListsStore.map((l) =>
+        l.name === selectedList.name ? { ...l, songs } : l
+      );
+      privateListsStore.set(updated);
+      void putPrivateLists(updated);
+    } else {
+      send({
+        type: 'list.reorder',
+        payload: { list_name: selectedList.name, from, to: i },
+      });
+    }
   }
   function onDragEnd() { dragFrom = null; dragOver = null; }
 
@@ -272,6 +357,7 @@
     showPicker = true;
   }
   function closePicker() { showPicker = false; }
+
   function addSong(s: LibrarySong) {
     if (!selectedList) return;
     const alreadyExists = selectedList.songs.some((song) => song.path === s.path);
@@ -279,32 +365,76 @@
       showToast(`"${s.name}" is already in this list`, 'warning');
       return;
     }
-    send({
-      type: 'list.add_song',
-      payload: { list_name: selectedList.name, song_path: s.path },
-    });
-    showToast(`Added "${s.name}"`, 'success');
+
+    if (activeTab === 'private') {
+      const updated = $privateListsStore.map((l) =>
+        l.name === selectedList.name
+          ? { ...l, songs: [...l.songs, { path: s.path, name: s.name, folder: s.folder }] }
+          : l
+      );
+      privateListsStore.set(updated);
+      void putPrivateLists(updated);
+      showToast(`Added "${s.name}"`, 'success');
+    } else {
+      send({
+        type: 'list.add_song',
+        payload: { list_name: selectedList.name, song_path: s.path },
+      });
+      showToast(`Added "${s.name}"`, 'success');
+    }
   }
 
   const songKeyMap = $derived.by(() => new Map($songsStore.map((song) => [song.path, song.key])));
 
-  // updateSongKey is handled by SongPreviewModal
+  // Scroll retention handling
+  function handleScroll() {
+    if (!previewSong && !showPicker) {
+      listsScrollY.set(window.scrollY);
+    }
+  }
+
+  afterNavigate(async () => {
+    await tick();
+    const savedY = get(listsScrollY);
+    if (savedY > 0) {
+      window.scrollTo(0, savedY);
+    }
+  });
 </script>
+
+<svelte:window onscroll={handleScroll} />
 
 <header class="hdr">
   <h1>Lists</h1>
   <div class="actions">
-    <button class="ghost" onclick={createList} disabled={$isViewOnly}>＋ New</button>
+    <button class="ghost" onclick={createList} disabled={activeTab === 'public' && $isViewOnly}>＋ New</button>
   </div>
 </header>
 
-{#if $listsStore.length === 0}
+<div class="tab-switcher">
+  <button
+    class="switch-tab"
+    class:active={activeTab === 'public'}
+    onclick={() => { activeTab = 'public'; selectedName = null; }}
+  >
+    Public
+  </button>
+  <button
+    class="switch-tab"
+    class:active={activeTab === 'private'}
+    onclick={() => { activeTab = 'private'; selectedName = null; }}
+  >
+    Private
+  </button>
+</div>
+
+{#if currentLists.length === 0}
   <section class="panel muted" style="margin-top:12px;">
-    No lists yet. Tap <b>＋ New</b> to create one.
+    No {activeTab} lists yet. Tap <b>＋ New</b> to create one.
   </section>
 {:else}
   <div class="chips">
-    {#each $listsStore as l (l.name)}
+    {#each currentLists as l (l.name)}
       <button
         class="chip"
         class:active={selectedName === l.name}
@@ -321,13 +451,13 @@
   <section class="list-head">
     <div class="list-title">{selectedList.name}</div>
     <div class="list-actions">
-      <button class="ghost" onclick={renameList} disabled={$isViewOnly}>✎ Rename</button>
-      <button class="ghost" onclick={deleteList} disabled={$isViewOnly}>✕ Delete</button>
+      <button class="ghost" onclick={renameList} disabled={activeTab === 'public' && $isViewOnly}>✎ Rename</button>
+      <button class="ghost" onclick={deleteList} disabled={activeTab === 'public' && $isViewOnly}>✕ Delete</button>
     </div>
   </section>
 
   <section class="row">
-    <button class="ghost" onclick={openPicker} disabled={$isViewOnly || $songsStore.length === 0}>
+    <button class="ghost" onclick={openPicker} disabled={(activeTab === 'public' && $isViewOnly) || $songsStore.length === 0}>
       ＋ Add song
     </button>
     <button class="accent" onclick={loadToQueue} disabled={$isViewOnly || $connStatus !== 'open' || selectedList.songs.length === 0}>
@@ -345,7 +475,7 @@
         <li
           class="song-row"
           class:drop={dragOver === i}
-          draggable={!$isViewOnly}
+          draggable={activeTab === 'private' || !$isViewOnly}
           ondragstart={(e) => onDragStart(e, i)}
           ondragover={(e) => onDragOver(e, i)}
           ondrop={(e) => onDrop(e, i)}
@@ -372,7 +502,7 @@
             class="rm"
             aria-label="Remove from list"
             onclick={() => removeSong(i)}
-            disabled={$isViewOnly}
+            disabled={activeTab === 'public' && $isViewOnly}
           >✕</button>
         </li>
       {/each}
@@ -511,6 +641,36 @@
 {/if}
 
 <style>
+  .tab-switcher {
+    display: flex;
+    background: rgba(22, 22, 30, 0.6);
+    border: 1px solid rgba(48, 48, 74, 0.4);
+    border-radius: 14px;
+    padding: 3px;
+    margin-bottom: 16px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .switch-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-radius: 11px;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 12px;
+    transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .switch-tab.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(233, 69, 96, 0.35);
+  }
+  .switch-tab:hover:not(.active) {
+    color: var(--text-primary);
+  }
+
   .hdr { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 4px 0 10px; }
   h1 { margin: 0; font-size: 22px; font-weight: 700; }
   .actions { display: flex; gap: 8px; }

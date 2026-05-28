@@ -16,6 +16,7 @@ import {
   loadAllBibleBooks,
   loadAllBibleVerses,
   loadAllLists,
+  loadAllPrivateLists,
   loadAllSongs,
   putBibleBooks,
   putBibleVerses,
@@ -32,6 +33,7 @@ import {
   bibleVersesStore,
   bibleVersionStore,
   listsStore,
+  privateListsStore,
   queueState,
   songsStore,
   syncStatus,
@@ -208,9 +210,10 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
 
 /** Load whatever is in IndexedDB into the Svelte stores (for offline UI). */
 export async function hydrateFromCache(): Promise<void> {
-  const [songs, lists, bibleBooks, bibleVerses, bibleVersion, cachedQueue] = await Promise.all([
+  const [songs, lists, privateLists, bibleBooks, bibleVerses, bibleVersion, cachedQueue] = await Promise.all([
     loadAllSongs(),
     loadAllLists(),
+    loadAllPrivateLists(),
     loadAllBibleBooks(),
     loadAllBibleVerses(),
     getBibleVersion(),
@@ -218,6 +221,7 @@ export async function hydrateFromCache(): Promise<void> {
   ]);
   songsStore.set(songs);
   listsStore.set(lists);
+  privateListsStore.set(privateLists);
   bibleBooksStore.set(bibleBooks);
   bibleVersesStore.set(bibleVerses);
   bibleVersionStore.set(bibleVersion);

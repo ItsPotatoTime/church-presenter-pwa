@@ -63,3 +63,13 @@ export const libraryBibleCurrentChapter: Writable<number | null> = writable(null
 export const libraryBibleRawQuery: Writable<string> = writable('');
 export const libraryBibleSearchMode: Writable<'reference' | 'text'> = writable('reference');
 
+// Private lists store
+export const privateListsStore: Writable<LibraryList[]> = writable([]);
+
+// Saved state for Lists page to support view preservation and scroll retention
+export const listsActiveTab: Writable<'public' | 'private'> = writable('public');
+export const listsSelectedName: Writable<string | null> = writable(null);
+export const listsShowPicker: Writable<boolean> = writable(false);
+export const listsPickerRawQuery: Writable<string> = writable('');
+export const listsScrollY: Writable<number> = writable(0);
+

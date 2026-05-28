@@ -6,7 +6,7 @@
   import { beforeNavigate, goto } from '$app/navigation';
   import { getOrCreateDeviceId, loadCredentials } from '$lib/db';
   import { hydrateFromCache, isReducedDataConnection, syncNow } from '$lib/sync';
-  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY } from '$lib/stores';
+  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY } from '$lib/stores';
 
   let { children } = $props();
   let paired = $state(false);
@@ -95,6 +95,10 @@
           libraryScrollY.set(0);
           window.scrollTo({ top: 0, behavior: 'smooth' });
         }
+      } else if (t.key === 'lists') {
+        e.preventDefault();
+        listsScrollY.set(0);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       }
     }
   }
