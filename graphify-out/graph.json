@@ -6,34 +6,34 @@
     {
       "label": "vite.config.ts",
       "file_type": "code",
-      "source_file": "vite.config.ts",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/vite.config.ts",
       "source_location": "L1",
-      "id": "vite_config_ts",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_vite_config_ts",
       "community": 11,
       "norm_label": "vite.config.ts"
     },
     {
       "label": "svelte.config.js",
       "file_type": "code",
-      "source_file": "svelte.config.js",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/svelte.config.js",
       "source_location": "L1",
-      "id": "svelte_config_js",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_svelte_config_js",
       "community": 12,
       "norm_label": "svelte.config.js"
     },
     {
       "label": "main.py",
       "file_type": "code",
-      "source_file": "tests/main.py",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/tests/main.py",
       "source_location": "L1",
-      "id": "tests_main_py",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_tests_main_py",
       "community": 9,
       "norm_label": "main.py"
     },
     {
       "label": "main()",
       "file_type": "code",
-      "source_file": "tests/main.py",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/tests/main.py",
       "source_location": "L1",
       "id": "tests_main_main",
       "community": 9,
@@ -42,16 +42,16 @@
     {
       "label": "echo_server.py",
       "file_type": "code",
-      "source_file": "tests/echo_server.py",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/tests/echo_server.py",
       "source_location": "L1",
-      "id": "tests_echo_server_py",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_tests_echo_server_py",
       "community": 8,
       "norm_label": "echo_server.py"
     },
     {
       "label": "handler()",
       "file_type": "code",
-      "source_file": "tests/echo_server.py",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/tests/echo_server.py",
       "source_location": "L17",
       "id": "tests_echo_server_handler",
       "community": 8,
@@ -60,7 +60,7 @@
     {
       "label": "main()",
       "file_type": "code",
-      "source_file": "tests/echo_server.py",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/tests/echo_server.py",
       "source_location": "L30",
       "id": "tests_echo_server_main",
       "community": 8,
@@ -69,7 +69,7 @@
     {
       "label": "Phase 0 WebSocket echo server.  Run this, then `cloudflared tunnel --url http://",
       "file_type": "rationale",
-      "source_file": "tests/echo_server.py",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/tests/echo_server.py",
       "source_location": "L1",
       "id": "tests_echo_server_rationale_1",
       "community": 8,
@@ -78,9 +78,9 @@
     {
       "label": "+page.svelte",
       "file_type": "code",
-      "source_file": "src/routes/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/+page.svelte",
       "source_location": "L1",
-      "id": "src_routes_page_svelte",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_page_svelte",
       "community": 3,
       "norm_label": "+page.svelte"
     },
@@ -114,7 +114,7 @@
     {
       "label": "$lib/db",
       "file_type": "code",
-      "source_file": "src/lib/db",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/db",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_db",
       "community": 3,
@@ -123,7 +123,7 @@
     {
       "label": "$lib/stores",
       "file_type": "code",
-      "source_file": "src/lib/stores",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/stores",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_stores",
       "community": 3,
@@ -141,9 +141,9 @@
     {
       "label": "+layout.ts",
       "file_type": "code",
-      "source_file": "src/routes/+layout.ts",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/+layout.ts",
       "source_location": "L1",
-      "id": "src_routes_layout_ts",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_layout_ts",
       "community": 13,
       "norm_label": "+layout.ts"
     },
@@ -169,7 +169,7 @@
       "label": "active",
       "file_type": "code",
       "source_file": "src/routes/+layout.svelte",
-      "source_location": "L85",
+      "source_location": "L87",
       "id": "routes_layout_active",
       "community": 3,
       "norm_label": "active"
@@ -179,7 +179,7 @@
       "file_type": "code",
       "source_file": "src/app.css",
       "confidence": "EXTRACTED",
-      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_app_css",
+      "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_app_css",
       "community": 3,
       "norm_label": "../app.css"
     },
@@ -193,27 +193,45 @@
       "norm_label": "$app/stores"
     },
     {
+      "label": "$lib/db",
+      "file_type": "code",
+      "source_file": "src/lib/db",
+      "confidence": "EXTRACTED",
+      "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_db",
+      "community": 3,
+      "norm_label": "$lib/db"
+    },
+    {
       "label": "$lib/sync",
       "file_type": "code",
       "source_file": "src/lib/sync",
       "confidence": "EXTRACTED",
-      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_sync",
-      "community": 3,
+      "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_sync",
+      "community": 2,
       "norm_label": "$lib/sync"
+    },
+    {
+      "label": "$lib/stores",
+      "file_type": "code",
+      "source_file": "src/lib/stores",
+      "confidence": "EXTRACTED",
+      "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_stores",
+      "community": 3,
+      "norm_label": "$lib/stores"
     },
     {
       "label": "+page.svelte",
       "file_type": "code",
-      "source_file": "src/routes/settings/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
       "source_location": "L1",
-      "id": "src_routes_settings_page_svelte",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_settings_page_svelte",
       "community": 3,
       "norm_label": "+page.svelte"
     },
     {
       "label": "data",
       "file_type": "code",
-      "source_file": "src/routes/settings/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
       "source_location": "L126",
       "id": "settings_page_data",
       "community": 3,
@@ -222,11 +240,20 @@
     {
       "label": "$lib/ws",
       "file_type": "code",
-      "source_file": "src/lib/ws",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/ws",
       "confidence": "EXTRACTED",
       "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_ws",
       "community": 3,
       "norm_label": "$lib/ws"
+    },
+    {
+      "label": "$lib/sync",
+      "file_type": "code",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/sync",
+      "confidence": "EXTRACTED",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_sync",
+      "community": 3,
+      "norm_label": "$lib/sync"
     },
     {
       "label": "+page.svelte",
@@ -238,11 +265,110 @@
       "norm_label": "+page.svelte"
     },
     {
+      "label": "showConfirm()",
+      "file_type": "code",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L13",
+      "id": "queue_page_showconfirm",
+      "community": 3,
+      "norm_label": "showconfirm()"
+    },
+    {
+      "label": "send()",
+      "file_type": "code",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L23",
+      "id": "queue_page_send",
+      "community": 3,
+      "norm_label": "send()"
+    },
+    {
+      "label": "tapJump()",
+      "file_type": "code",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L28",
+      "id": "queue_page_tapjump",
+      "community": 3,
+      "norm_label": "tapjump()"
+    },
+    {
+      "label": "remove()",
+      "file_type": "code",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L35",
+      "id": "queue_page_remove",
+      "community": 3,
+      "norm_label": "remove()"
+    },
+    {
+      "label": "clearAll()",
+      "file_type": "code",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L41",
+      "id": "queue_page_clearall",
+      "community": 3,
+      "norm_label": "clearall()"
+    },
+    {
+      "label": "ghostStyle",
+      "file_type": "code",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L51",
+      "id": "queue_page_ghoststyle",
+      "community": 3,
+      "norm_label": "ghoststyle"
+    },
+    {
+      "label": "itemShift()",
+      "file_type": "code",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L62",
+      "id": "queue_page_itemshift",
+      "community": 3,
+      "norm_label": "itemshift()"
+    },
+    {
+      "label": "onGripDown()",
+      "file_type": "code",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L71",
+      "id": "queue_page_ongripdown",
+      "community": 3,
+      "norm_label": "ongripdown()"
+    },
+    {
+      "label": "onDragMove()",
+      "file_type": "code",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L97",
+      "id": "queue_page_ondragmove",
+      "community": 3,
+      "norm_label": "ondragmove()"
+    },
+    {
+      "label": "onDragEnd()",
+      "file_type": "code",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L112",
+      "id": "queue_page_ondragend",
+      "community": 3,
+      "norm_label": "ondragend()"
+    },
+    {
+      "label": "$lib/ws",
+      "file_type": "code",
+      "source_file": "src/lib/ws",
+      "confidence": "EXTRACTED",
+      "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_ws",
+      "community": 3,
+      "norm_label": "$lib/ws"
+    },
+    {
       "label": "+page.svelte",
       "file_type": "code",
-      "source_file": "src/routes/pair/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/pair/+page.svelte",
       "source_location": "L1",
-      "id": "src_routes_pair_page_svelte",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_pair_page_svelte",
       "community": 3,
       "norm_label": "+page.svelte"
     },
@@ -265,20 +391,11 @@
       "norm_label": "+page.svelte"
     },
     {
-      "label": "off",
-      "file_type": "code",
-      "source_file": "src/routes/live/+page.svelte",
-      "source_location": "L100",
-      "id": "live_page_off",
-      "community": 3,
-      "norm_label": "off"
-    },
-    {
       "label": "$lib/search",
       "file_type": "code",
       "source_file": "src/lib/search",
       "confidence": "EXTRACTED",
-      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_search",
+      "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_search",
       "community": 3,
       "norm_label": "$lib/search"
     },
@@ -295,7 +412,7 @@
       "label": "if()",
       "file_type": "code",
       "source_file": "src/routes/lists/+page.svelte",
-      "source_location": "L51",
+      "source_location": "L220",
       "id": "lists_page_if",
       "community": 3,
       "norm_label": "if()"
@@ -305,9 +422,19 @@
       "file_type": "code",
       "source_file": "src/lib/protocol",
       "confidence": "EXTRACTED",
-      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_protocol",
-      "community": 3,
+      "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_protocol",
+      "community": 6,
       "norm_label": "$lib/protocol"
+    },
+    {
+      "label": "ProjectorOverlay.svelte",
+      "file_type": "code",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "confidence": "EXTRACTED",
+      "source_location": "L1",
+      "id": "src_lib_projectoroverlay_svelte",
+      "community": 6,
+      "norm_label": "projectoroverlay.svelte"
     },
     {
       "label": "+page.svelte",
@@ -322,7 +449,7 @@
       "label": "hasLibrary",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L60",
+      "source_location": "L64",
       "id": "library_page_haslibrary",
       "community": 2,
       "norm_label": "haslibrary"
@@ -331,7 +458,7 @@
       "label": "hasBibleData",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L61",
+      "source_location": "L65",
       "id": "library_page_hasbibledata",
       "community": 2,
       "norm_label": "hasbibledata"
@@ -340,7 +467,7 @@
       "label": "bibleBookMap",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L62",
+      "source_location": "L66",
       "id": "library_page_biblebookmap",
       "community": 2,
       "norm_label": "biblebookmap"
@@ -349,7 +476,7 @@
       "label": "currentBibleBook",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L63",
+      "source_location": "L67",
       "id": "library_page_currentbiblebook",
       "community": 2,
       "norm_label": "currentbiblebook"
@@ -358,7 +485,7 @@
       "label": "currentBibleVerses",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L66",
+      "source_location": "L70",
       "id": "library_page_currentbibleverses",
       "community": 2,
       "norm_label": "currentbibleverses"
@@ -367,7 +494,7 @@
       "label": "currentBibleChapters",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L74",
+      "source_location": "L78",
       "id": "library_page_currentbiblechapters",
       "community": 2,
       "norm_label": "currentbiblechapters"
@@ -376,7 +503,7 @@
       "label": "obs",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L112",
+      "source_location": "L120",
       "id": "library_page_obs",
       "community": 2,
       "norm_label": "obs"
@@ -385,7 +512,7 @@
       "label": "slidesFor()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L140",
+      "source_location": "L148",
       "id": "library_page_slidesfor",
       "community": 2,
       "norm_label": "slidesfor()"
@@ -394,7 +521,7 @@
       "label": "hasQuery",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L146",
+      "source_location": "L156",
       "id": "library_page_hasquery",
       "community": 2,
       "norm_label": "hasquery"
@@ -403,7 +530,7 @@
       "label": "grouped",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L151",
+      "source_location": "L161",
       "id": "library_page_grouped",
       "community": 2,
       "norm_label": "grouped"
@@ -412,7 +539,7 @@
       "label": "q",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L165",
+      "source_location": "L175",
       "id": "library_page_q",
       "community": 2,
       "norm_label": "q"
@@ -421,7 +548,7 @@
       "label": "[]",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L167",
+      "source_location": "L177",
       "id": "library_page",
       "community": 2,
       "norm_label": "[]"
@@ -430,7 +557,7 @@
       "label": "normalizedSlides",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L182",
+      "source_location": "L196",
       "id": "library_page_normalizedslides",
       "community": 2,
       "norm_label": "normalizedslides"
@@ -439,7 +566,7 @@
       "label": "hitIndex",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L185",
+      "source_location": "L199",
       "id": "library_page_hitindex",
       "community": 2,
       "norm_label": "hitindex"
@@ -448,7 +575,7 @@
       "label": "start",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L187",
+      "source_location": "L201",
       "id": "library_page_start",
       "community": 2,
       "norm_label": "start"
@@ -457,7 +584,7 @@
       "label": "end",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L188",
+      "source_location": "L202",
       "id": "library_page_end",
       "community": 2,
       "norm_label": "end"
@@ -466,7 +593,7 @@
       "label": "verses",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L228",
+      "source_location": "L242",
       "id": "library_page_verses",
       "community": 2,
       "norm_label": "verses"
@@ -475,7 +602,7 @@
       "label": "bibleVerseRef()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L285",
+      "source_location": "L299",
       "id": "library_page_bibleverseref",
       "community": 2,
       "norm_label": "bibleverseref()"
@@ -484,7 +611,7 @@
       "label": "addToQueue()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L289",
+      "source_location": "L303",
       "id": "library_page_addtoqueue",
       "community": 2,
       "norm_label": "addtoqueue()"
@@ -493,7 +620,7 @@
       "label": "addBibleVerseToQueue()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L293",
+      "source_location": "L307",
       "id": "library_page_addbibleversetoqueue",
       "community": 2,
       "norm_label": "addbibleversetoqueue()"
@@ -502,7 +629,7 @@
       "label": "openPreview()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L302",
+      "source_location": "L316",
       "id": "library_page_openpreview",
       "community": 2,
       "norm_label": "openpreview()"
@@ -511,16 +638,25 @@
       "label": "closePreview()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L306",
+      "source_location": "L320",
       "id": "library_page_closepreview",
       "community": 2,
       "norm_label": "closepreview()"
     },
     {
+      "label": "enterProjector()",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L325",
+      "id": "library_page_enterprojector",
+      "community": 2,
+      "norm_label": "enterprojector()"
+    },
+    {
       "label": "openBibleMenu()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L310",
+      "source_location": "L343",
       "id": "library_page_openbiblemenu",
       "community": 2,
       "norm_label": "openbiblemenu()"
@@ -529,7 +665,7 @@
       "label": "closeBibleMenu()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L319",
+      "source_location": "L352",
       "id": "library_page_closebiblemenu",
       "community": 2,
       "norm_label": "closebiblemenu()"
@@ -538,7 +674,7 @@
       "label": "enterBibleBook()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L325",
+      "source_location": "L358",
       "id": "library_page_enterbiblebook",
       "community": 2,
       "norm_label": "enterbiblebook()"
@@ -547,7 +683,7 @@
       "label": "enterBibleChapter()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L332",
+      "source_location": "L365",
       "id": "library_page_enterbiblechapter",
       "community": 2,
       "norm_label": "enterbiblechapter()"
@@ -556,7 +692,7 @@
       "label": "resetBibleNavigation()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L338",
+      "source_location": "L371",
       "id": "library_page_resetbiblenavigation",
       "community": 2,
       "norm_label": "resetbiblenavigation()"
@@ -565,17 +701,134 @@
       "label": "bibleStatusText()",
       "file_type": "code",
       "source_file": "src/routes/library/+page.svelte",
-      "source_location": "L343",
+      "source_location": "L376",
       "id": "library_page_biblestatustext",
       "community": 2,
       "norm_label": "biblestatustext()"
+    },
+    {
+      "label": "importUrl",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L391",
+      "id": "library_page_importurl",
+      "community": 2,
+      "norm_label": "importurl"
+    },
+    {
+      "label": "importLoading",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L392",
+      "id": "library_page_importloading",
+      "community": 2,
+      "norm_label": "importloading"
+    },
+    {
+      "label": "songTitle",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L395",
+      "id": "library_page_songtitle",
+      "community": 2,
+      "norm_label": "songtitle"
+    },
+    {
+      "label": "songFolder",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L396",
+      "id": "library_page_songfolder",
+      "community": 2,
+      "norm_label": "songfolder"
+    },
+    {
+      "label": "songLyrics",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L397",
+      "id": "library_page_songlyrics",
+      "community": 2,
+      "norm_label": "songlyrics"
+    },
+    {
+      "label": "saveLoading",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L399",
+      "id": "library_page_saveloading",
+      "community": 2,
+      "norm_label": "saveloading"
+    },
+    {
+      "label": "showOverwriteConfirm",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L401",
+      "id": "library_page_showoverwriteconfirm",
+      "community": 2,
+      "norm_label": "showoverwriteconfirm"
+    },
+    {
+      "label": "openWriteSongMenu()",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L403",
+      "id": "library_page_openwritesongmenu",
+      "community": 2,
+      "norm_label": "openwritesongmenu()"
+    },
+    {
+      "label": "closeWriteSongMenu()",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L416",
+      "id": "library_page_closewritesongmenu",
+      "community": 2,
+      "norm_label": "closewritesongmenu()"
+    },
+    {
+      "label": "handleImportUrl()",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L420",
+      "id": "library_page_handleimporturl",
+      "community": 2,
+      "norm_label": "handleimporturl()"
+    },
+    {
+      "label": "handleSaveSong()",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L451",
+      "id": "library_page_handlesavesong",
+      "community": 1,
+      "norm_label": "handlesavesong()"
+    },
+    {
+      "label": "ALL_KEYS",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L487",
+      "id": "library_page_all_keys",
+      "community": 2,
+      "norm_label": "all_keys"
+    },
+    {
+      "label": "updateSongKey()",
+      "file_type": "code",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L489",
+      "id": "library_page_updatesongkey",
+      "community": 2,
+      "norm_label": "updatesongkey()"
     },
     {
       "label": "$lib/bible",
       "file_type": "code",
       "source_file": "src/lib/bible",
       "confidence": "EXTRACTED",
-      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_bible",
+      "id": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_bible",
       "community": 2,
       "norm_label": "$lib/bible"
     },
@@ -592,7 +845,7 @@
       "label": "RECONNECT_BACKOFF_MS",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L44",
+      "source_location": "L45",
       "id": "lib_ws_reconnect_backoff_ms",
       "community": 0,
       "norm_label": "reconnect_backoff_ms"
@@ -601,7 +854,7 @@
       "label": "PairParams",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L47",
+      "source_location": "L48",
       "id": "lib_ws_pairparams",
       "community": 0,
       "norm_label": "pairparams"
@@ -610,133 +863,142 @@
       "label": "RemoteClient",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L54",
+      "source_location": "L55",
       "id": "lib_ws_remoteclient",
-      "community": 6,
+      "community": 5,
       "norm_label": "remoteclient"
     },
     {
       "label": ".constructor()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L67",
+      "source_location": "L69",
       "id": "lib_ws_remoteclient_constructor",
-      "community": 6,
+      "community": 5,
       "norm_label": ".constructor()"
     },
     {
       "label": ".connect()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L101",
+      "source_location": "L103",
       "id": "lib_ws_remoteclient_connect",
-      "community": 6,
+      "community": 5,
       "norm_label": ".connect()"
     },
     {
       "label": ".pair()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L116",
+      "source_location": "L118",
       "id": "lib_ws_remoteclient_pair",
-      "community": 6,
+      "community": 5,
       "norm_label": ".pair()"
     },
     {
       "label": ".disconnect()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L130",
+      "source_location": "L132",
       "id": "lib_ws_remoteclient_disconnect",
-      "community": 6,
+      "community": 5,
       "norm_label": ".disconnect()"
     },
     {
       "label": ".unpair()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L135",
+      "source_location": "L137",
       "id": "lib_ws_remoteclient_unpair",
-      "community": 6,
+      "community": 5,
       "norm_label": ".unpair()"
     },
     {
       "label": ".send()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L141",
+      "source_location": "L143",
       "id": "lib_ws_remoteclient_send",
-      "community": 6,
+      "community": 5,
       "norm_label": ".send()"
     },
     {
       "label": ".sendRaw()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L147",
+      "source_location": "L149",
       "id": "lib_ws_remoteclient_sendraw",
-      "community": 6,
+      "community": 5,
       "norm_label": ".sendraw()"
+    },
+    {
+      "label": ".sendRequest()",
+      "file_type": "code",
+      "source_file": "src/lib/ws.ts",
+      "source_location": "L157",
+      "id": "lib_ws_remoteclient_sendrequest",
+      "community": 5,
+      "norm_label": ".sendrequest()"
     },
     {
       "label": ".isOpen()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L154",
+      "source_location": "L186",
       "id": "lib_ws_remoteclient_isopen",
-      "community": 6,
+      "community": 5,
       "norm_label": ".isopen()"
     },
     {
       "label": ".tearDown()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L161",
+      "source_location": "L193",
       "id": "lib_ws_remoteclient_teardown",
-      "community": 6,
+      "community": 5,
       "norm_label": ".teardown()"
     },
     {
       "label": ".buildUrl()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L183",
+      "source_location": "L219",
       "id": "lib_ws_remoteclient_buildurl",
-      "community": 6,
+      "community": 5,
       "norm_label": ".buildurl()"
     },
     {
       "label": ".pickEndpoint()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L189",
+      "source_location": "L225",
       "id": "lib_ws_remoteclient_pickendpoint",
-      "community": 6,
+      "community": 5,
       "norm_label": ".pickendpoint()"
     },
     {
       "label": ".openSocket()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L208",
+      "source_location": "L244",
       "id": "lib_ws_remoteclient_opensocket",
-      "community": 6,
+      "community": 5,
       "norm_label": ".opensocket()"
     },
     {
       "label": ".scheduleReconnect()",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L444",
+      "source_location": "L505",
       "id": "lib_ws_remoteclient_schedulereconnect",
-      "community": 6,
+      "community": 5,
       "norm_label": ".schedulereconnect()"
     },
     {
       "label": "remote",
       "file_type": "code",
       "source_file": "src/lib/ws.ts",
-      "source_location": "L461",
+      "source_location": "L522",
       "id": "lib_ws_remote",
       "community": 0,
       "norm_label": "remote"
@@ -744,16 +1006,16 @@
     {
       "label": "theme.ts",
       "file_type": "code",
-      "source_file": "src/lib/theme.ts",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/theme.ts",
       "source_location": "L1",
-      "id": "src_lib_theme_ts",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_theme_ts",
       "community": 10,
       "norm_label": "theme.ts"
     },
     {
       "label": "PALETTE",
       "file_type": "code",
-      "source_file": "src/lib/theme.ts",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/theme.ts",
       "source_location": "L3",
       "id": "lib_theme_palette",
       "community": 10,
@@ -765,7 +1027,7 @@
       "source_file": "src/lib/sync.ts",
       "source_location": "L1",
       "id": "src_lib_sync_ts",
-      "community": 4,
+      "community": 0,
       "norm_label": "sync.ts"
     },
     {
@@ -774,7 +1036,7 @@
       "source_file": "src/lib/sync.ts",
       "source_location": "L40",
       "id": "lib_sync_pendingresolver",
-      "community": 4,
+      "community": 0,
       "norm_label": "pendingresolver"
     },
     {
@@ -783,7 +1045,7 @@
       "source_file": "src/lib/sync.ts",
       "source_location": "L42",
       "id": "lib_sync_pending",
-      "community": 4,
+      "community": 0,
       "norm_label": "pending"
     },
     {
@@ -801,7 +1063,7 @@
       "source_file": "src/lib/sync.ts",
       "source_location": "L54",
       "id": "lib_sync_requestsync",
-      "community": 4,
+      "community": 0,
       "norm_label": "requestsync()"
     },
     {
@@ -810,7 +1072,7 @@
       "source_file": "src/lib/sync.ts",
       "source_location": "L86",
       "id": "lib_sync_syncfull",
-      "community": 4,
+      "community": 0,
       "norm_label": "syncfull()"
     },
     {
@@ -819,7 +1081,7 @@
       "source_file": "src/lib/sync.ts",
       "source_location": "L91",
       "id": "lib_sync_syncnow",
-      "community": 4,
+      "community": 1,
       "norm_label": "syncnow()"
     },
     {
@@ -828,7 +1090,7 @@
       "source_file": "src/lib/sync.ts",
       "source_location": "L102",
       "id": "lib_sync_isreduceddataconnection",
-      "community": 4,
+      "community": 0,
       "norm_label": "isreduceddataconnection()"
     },
     {
@@ -844,9 +1106,9 @@
       "label": "hydrateFromCache()",
       "file_type": "code",
       "source_file": "src/lib/sync.ts",
-      "source_location": "L200",
+      "source_location": "L210",
       "id": "lib_sync_hydratefromcache",
-      "community": 4,
+      "community": 1,
       "norm_label": "hydratefromcache()"
     },
     {
@@ -994,19 +1256,19 @@
       "norm_label": "servername"
     },
     {
-      "label": "liveFollowEnabled",
+      "label": "canEditKeys",
       "file_type": "code",
       "source_file": "src/lib/stores.ts",
-      "source_location": "L47",
-      "id": "lib_stores_livefollowenabled",
+      "source_location": "L45",
+      "id": "lib_stores_caneditkeys",
       "community": 0,
-      "norm_label": "livefollowenabled"
+      "norm_label": "caneditkeys"
     },
     {
       "label": "isViewOnly",
       "file_type": "code",
       "source_file": "src/lib/stores.ts",
-      "source_location": "L50",
+      "source_location": "L48",
       "id": "lib_stores_isviewonly",
       "community": 0,
       "norm_label": "isviewonly"
@@ -1060,7 +1322,7 @@
       "label": "filterSongs()",
       "file_type": "code",
       "source_file": "src/lib/search.ts",
-      "source_location": "L88",
+      "source_location": "L104",
       "id": "lib_search_filtersongs",
       "community": 7,
       "norm_label": "filtersongs()"
@@ -1114,7 +1376,7 @@
       "label": "AuthFail",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L30",
+      "source_location": "L31",
       "id": "lib_protocol_authfail",
       "community": 0,
       "norm_label": "authfail"
@@ -1123,7 +1385,7 @@
       "label": "LiveState",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L40",
+      "source_location": "L41",
       "id": "lib_protocol_livestate",
       "community": 0,
       "norm_label": "livestate"
@@ -1132,7 +1394,7 @@
       "label": "BibleRef",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L54",
+      "source_location": "L55",
       "id": "lib_protocol_bibleref",
       "community": 0,
       "norm_label": "bibleref"
@@ -1141,7 +1403,7 @@
       "label": "QueueItem",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L60",
+      "source_location": "L61",
       "id": "lib_protocol_queueitem",
       "community": 0,
       "norm_label": "queueitem"
@@ -1150,7 +1412,7 @@
       "label": "QueueState",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L69",
+      "source_location": "L70",
       "id": "lib_protocol_queuestate",
       "community": 0,
       "norm_label": "queuestate"
@@ -1159,7 +1421,7 @@
       "label": "BibleBook",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L76",
+      "source_location": "L77",
       "id": "lib_protocol_biblebook",
       "community": 0,
       "norm_label": "biblebook"
@@ -1168,7 +1430,7 @@
       "label": "BibleVerse",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L82",
+      "source_location": "L83",
       "id": "lib_protocol_bibleverse",
       "community": 0,
       "norm_label": "bibleverse"
@@ -1177,7 +1439,7 @@
       "label": "BibleSyncData",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L90",
+      "source_location": "L92",
       "id": "lib_protocol_biblesyncdata",
       "community": 0,
       "norm_label": "biblesyncdata"
@@ -1186,7 +1448,7 @@
       "label": "LibrarySong",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L97",
+      "source_location": "L99",
       "id": "lib_protocol_librarysong",
       "community": 0,
       "norm_label": "librarysong"
@@ -1195,7 +1457,7 @@
       "label": "LibraryList",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L106",
+      "source_location": "L112",
       "id": "lib_protocol_librarylist",
       "community": 0,
       "norm_label": "librarylist"
@@ -1204,7 +1466,7 @@
       "label": "SyncRequest",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L112",
+      "source_location": "L118",
       "id": "lib_protocol_syncrequest",
       "community": 0,
       "norm_label": "syncrequest"
@@ -1213,7 +1475,7 @@
       "label": "SyncFull",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L118",
+      "source_location": "L124",
       "id": "lib_protocol_syncfull",
       "community": 0,
       "norm_label": "syncfull"
@@ -1222,7 +1484,7 @@
       "label": "SyncDelta",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L125",
+      "source_location": "L131",
       "id": "lib_protocol_syncdelta",
       "community": 0,
       "norm_label": "syncdelta"
@@ -1231,7 +1493,7 @@
       "label": "ListsState",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L135",
+      "source_location": "L141",
       "id": "lib_protocol_listsstate",
       "community": 0,
       "norm_label": "listsstate"
@@ -1240,7 +1502,7 @@
       "label": "ExclusiveChanged",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L140",
+      "source_location": "L146",
       "id": "lib_protocol_exclusivechanged",
       "community": 0,
       "norm_label": "exclusivechanged"
@@ -1249,7 +1511,7 @@
       "label": "ClientCommand",
       "file_type": "code",
       "source_file": "src/lib/protocol.ts",
-      "source_location": "L146",
+      "source_location": "L152",
       "id": "lib_protocol_clientcommand",
       "community": 0,
       "norm_label": "clientcommand"
@@ -1404,7 +1666,7 @@
       "source_file": "src/lib/db.ts",
       "source_location": "L415",
       "id": "lib_db_getorcreatedeviceid",
-      "community": 6,
+      "community": 5,
       "norm_label": "getorcreatedeviceid()"
     },
     {
@@ -1422,7 +1684,7 @@
       "source_file": "src/lib/db.ts",
       "source_location": "L431",
       "id": "lib_db_getlastsyncts",
-      "community": 4,
+      "community": 1,
       "norm_label": "getlastsyncts()"
     },
     {
@@ -1467,14 +1729,14 @@
       "source_file": "src/lib/db.ts",
       "source_location": "L488",
       "id": "lib_db_loadallsongs",
-      "community": 4,
+      "community": 1,
       "norm_label": "loadallsongs()"
     },
     {
       "label": "getAllSongPaths()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L498",
+      "source_location": "L507",
       "id": "lib_db_getallsongpaths",
       "community": 1,
       "norm_label": "getallsongpaths()"
@@ -1483,7 +1745,7 @@
       "label": "putBibleBooks()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L510",
+      "source_location": "L519",
       "id": "lib_db_putbiblebooks",
       "community": 1,
       "norm_label": "putbiblebooks()"
@@ -1492,16 +1754,16 @@
       "label": "loadAllBibleBooks()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L522",
+      "source_location": "L531",
       "id": "lib_db_loadallbiblebooks",
-      "community": 4,
+      "community": 1,
       "norm_label": "loadallbiblebooks()"
     },
     {
       "label": "clearBibleBooks()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L532",
+      "source_location": "L541",
       "id": "lib_db_clearbiblebooks",
       "community": 1,
       "norm_label": "clearbiblebooks()"
@@ -1510,7 +1772,7 @@
       "label": "putBibleVerses()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L542",
+      "source_location": "L551",
       "id": "lib_db_putbibleverses",
       "community": 1,
       "norm_label": "putbibleverses()"
@@ -1519,16 +1781,16 @@
       "label": "loadAllBibleVerses()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L554",
+      "source_location": "L563",
       "id": "lib_db_loadallbibleverses",
-      "community": 4,
+      "community": 1,
       "norm_label": "loadallbibleverses()"
     },
     {
       "label": "clearBibleVerses()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L564",
+      "source_location": "L573",
       "id": "lib_db_clearbibleverses",
       "community": 1,
       "norm_label": "clearbibleverses()"
@@ -1537,16 +1799,16 @@
       "label": "getBibleVersion()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L574",
+      "source_location": "L583",
       "id": "lib_db_getbibleversion",
-      "community": 4,
+      "community": 1,
       "norm_label": "getbibleversion()"
     },
     {
       "label": "setBibleVersion()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L578",
+      "source_location": "L587",
       "id": "lib_db_setbibleversion",
       "community": 1,
       "norm_label": "setbibleversion()"
@@ -1555,7 +1817,7 @@
       "label": "putLists()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L592",
+      "source_location": "L601",
       "id": "lib_db_putlists",
       "community": 1,
       "norm_label": "putlists()"
@@ -1564,25 +1826,25 @@
       "label": "loadAllLists()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L604",
+      "source_location": "L613",
       "id": "lib_db_loadalllists",
-      "community": 4,
+      "community": 1,
       "norm_label": "loadalllists()"
     },
     {
       "label": "snapshotServerData()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L616",
+      "source_location": "L625",
       "id": "lib_db_snapshotserverdata",
-      "community": 4,
+      "community": 1,
       "norm_label": "snapshotserverdata()"
     },
     {
       "label": "restoreServerData()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L628",
+      "source_location": "L637",
       "id": "lib_db_restoreserverdata",
       "community": 1,
       "norm_label": "restoreserverdata()"
@@ -1591,25 +1853,25 @@
       "label": "cacheQueueState()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L642",
+      "source_location": "L651",
       "id": "lib_db_cachequeuestate",
-      "community": 0,
+      "community": 1,
       "norm_label": "cachequeuestate()"
     },
     {
       "label": "getCachedQueueState()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L651",
+      "source_location": "L660",
       "id": "lib_db_getcachedqueuestate",
-      "community": 4,
+      "community": 1,
       "norm_label": "getcachedqueuestate()"
     },
     {
       "label": "clearLists()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L658",
+      "source_location": "L667",
       "id": "lib_db_clearlists",
       "community": 1,
       "norm_label": "clearlists()"
@@ -1618,7 +1880,7 @@
       "label": "PendingMutation",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L670",
+      "source_location": "L679",
       "id": "lib_db_pendingmutation",
       "community": 1,
       "norm_label": "pendingmutation"
@@ -1627,7 +1889,7 @@
       "label": "addPendingMutation()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L677",
+      "source_location": "L686",
       "id": "lib_db_addpendingmutation",
       "community": 1,
       "norm_label": "addpendingmutation()"
@@ -1636,7 +1898,7 @@
       "label": "getPendingMutations()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L687",
+      "source_location": "L696",
       "id": "lib_db_getpendingmutations",
       "community": 1,
       "norm_label": "getpendingmutations()"
@@ -1645,7 +1907,7 @@
       "label": "clearPendingMutations()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L697",
+      "source_location": "L706",
       "id": "lib_db_clearpendingmutations",
       "community": 1,
       "norm_label": "clearpendingmutations()"
@@ -1654,7 +1916,7 @@
       "label": "BackupData",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L709",
+      "source_location": "L718",
       "id": "lib_db_backupdata",
       "community": 1,
       "norm_label": "backupdata"
@@ -1663,16 +1925,16 @@
       "label": "exportBackup()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L722",
+      "source_location": "L731",
       "id": "lib_db_exportbackup",
-      "community": 4,
+      "community": 1,
       "norm_label": "exportbackup()"
     },
     {
       "label": "BackupComparison",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L745",
+      "source_location": "L754",
       "id": "lib_db_backupcomparison",
       "community": 1,
       "norm_label": "backupcomparison"
@@ -1681,16 +1943,16 @@
       "label": "compareBackup()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L752",
+      "source_location": "L761",
       "id": "lib_db_comparebackup",
-      "community": 4,
+      "community": 1,
       "norm_label": "comparebackup()"
     },
     {
       "label": "importBackup()",
       "file_type": "code",
       "source_file": "src/lib/db.ts",
-      "source_location": "L764",
+      "source_location": "L773",
       "id": "lib_db_importbackup",
       "community": 1,
       "norm_label": "importbackup()"
@@ -1698,16 +1960,16 @@
     {
       "label": "bible.ts",
       "file_type": "code",
-      "source_file": "src/lib/bible.ts",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/bible.ts",
       "source_location": "L1",
-      "id": "src_lib_bible_ts",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_bible_ts",
       "community": 0,
       "norm_label": "bible.ts"
     },
     {
       "label": "compareBibleVerses()",
       "file_type": "code",
-      "source_file": "src/lib/bible.ts",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/bible.ts",
       "source_location": "L3",
       "id": "lib_bible_comparebibleverses",
       "community": 0,
@@ -1716,167 +1978,447 @@
     {
       "label": "sortBibleVerses()",
       "file_type": "code",
-      "source_file": "src/lib/bible.ts",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/bible.ts",
       "source_location": "L11",
       "id": "lib_bible_sortbibleverses",
-      "community": 1,
+      "community": 0,
       "norm_label": "sortbibleverses()"
+    },
+    {
+      "label": "lines",
+      "file_type": "code",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L57",
+      "id": "lib_projectoroverlay_lines",
+      "community": 6,
+      "norm_label": "lines"
+    },
+    {
+      "label": "cleaned",
+      "file_type": "code",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L66",
+      "id": "lib_projectoroverlay_cleaned",
+      "community": 6,
+      "norm_label": "cleaned"
+    },
+    {
+      "label": "canvas",
+      "file_type": "code",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L106",
+      "id": "lib_projectoroverlay_canvas",
+      "community": 6,
+      "norm_label": "canvas"
+    },
+    {
+      "label": "ctx",
+      "file_type": "code",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L107",
+      "id": "lib_projectoroverlay_ctx",
+      "community": 6,
+      "norm_label": "ctx"
+    },
+    {
+      "label": "mid",
+      "file_type": "code",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L118",
+      "id": "lib_projectoroverlay_mid",
+      "community": 6,
+      "norm_label": "mid"
+    },
+    {
+      "label": "cleanLine",
+      "file_type": "code",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L124",
+      "id": "lib_projectoroverlay_cleanline",
+      "community": 6,
+      "norm_label": "cleanline"
+    },
+    {
+      "label": "markerSize",
+      "file_type": "code",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L137",
+      "id": "lib_projectoroverlay_markersize",
+      "community": 6,
+      "norm_label": "markersize"
+    },
+    {
+      "label": "prev()",
+      "file_type": "code",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L193",
+      "id": "lib_projectoroverlay_prev",
+      "community": 6,
+      "norm_label": "prev()"
+    },
+    {
+      "label": "handleVisibilityChange()",
+      "file_type": "code",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L251",
+      "id": "lib_projectoroverlay_handlevisibilitychange",
+      "community": 6,
+      "norm_label": "handlevisibilitychange()"
+    },
+    {
+      "label": "handleFullscreenChange()",
+      "file_type": "code",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L256",
+      "id": "lib_projectoroverlay_handlefullscreenchange",
+      "community": 6,
+      "norm_label": "handlefullscreenchange()"
+    },
+    {
+      "label": "README.md",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L1",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_readme_md",
+      "community": 4,
+      "norm_label": "readme.md"
+    },
+    {
+      "label": "Church Presenter \u2014 Phone Remote (PWA)",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L1",
+      "id": "phone_remote_readme_church_presenter_phone_remote_pwa",
+      "community": 4,
+      "norm_label": "church presenter \u2014 phone remote (pwa)"
+    },
+    {
+      "label": "Development Workflow",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L9",
+      "id": "phone_remote_readme_development_workflow",
+      "community": 4,
+      "norm_label": "development workflow"
+    },
+    {
+      "label": "Features",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L15",
+      "id": "phone_remote_readme_features",
+      "community": 4,
+      "norm_label": "features"
+    },
+    {
+      "label": "Live Slide Control",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L17",
+      "id": "phone_remote_readme_live_slide_control",
+      "community": 4,
+      "norm_label": "live slide control"
+    },
+    {
+      "label": "Library Browser",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L25",
+      "id": "phone_remote_readme_library_browser",
+      "community": 4,
+      "norm_label": "library browser"
+    },
+    {
+      "label": "Queue Management",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L34",
+      "id": "phone_remote_readme_queue_management",
+      "community": 4,
+      "norm_label": "queue management"
+    },
+    {
+      "label": "Lists (Playlists)",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L40",
+      "id": "phone_remote_readme_lists_playlists",
+      "community": 4,
+      "norm_label": "lists (playlists)"
+    },
+    {
+      "label": "Connection",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L47",
+      "id": "phone_remote_readme_connection",
+      "community": 4,
+      "norm_label": "connection"
+    },
+    {
+      "label": "Multi-Phone & Access Control",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L53",
+      "id": "phone_remote_readme_multi_phone_access_control",
+      "community": 4,
+      "norm_label": "multi-phone & access control"
+    },
+    {
+      "label": "Offline Support",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L58",
+      "id": "phone_remote_readme_offline_support",
+      "community": 4,
+      "norm_label": "offline support"
+    },
+    {
+      "label": "Pairing",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L65",
+      "id": "phone_remote_readme_pairing",
+      "community": 4,
+      "norm_label": "pairing"
+    },
+    {
+      "label": "Connection Modes",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L76",
+      "id": "phone_remote_readme_connection_modes",
+      "community": 4,
+      "norm_label": "connection modes"
+    },
+    {
+      "label": "Dev Setup",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L87",
+      "id": "phone_remote_readme_dev_setup",
+      "community": 4,
+      "norm_label": "dev setup"
+    },
+    {
+      "label": "code:bash (cd phone-remote)",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L89",
+      "id": "phone_remote_readme_codeblock_1",
+      "community": 4,
+      "norm_label": "code:bash (cd phone-remote)"
+    },
+    {
+      "label": "Tech Stack",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
+      "source_location": "L101",
+      "id": "phone_remote_readme_tech_stack",
+      "community": 4,
+      "norm_label": "tech stack"
+    },
+    {
+      "label": "README.md",
+      "file_type": "document",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/tests/README.md",
+      "source_location": "L1",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_tests_readme_md",
+      "community": 14,
+      "norm_label": "readme.md"
+    },
+    {
+      "label": "ALL_KEYS",
+      "file_type": "code",
+      "source_file": "src/routes/lists/+page.svelte",
+      "source_location": "L234",
+      "community": 3,
+      "norm_label": "all_keys",
+      "id": "lists_page_all_keys"
+    },
+    {
+      "label": "updateSongKey()",
+      "file_type": "code",
+      "source_file": "src/routes/lists/+page.svelte",
+      "source_location": "L236",
+      "community": 3,
+      "norm_label": "updatesongkey()",
+      "id": "lists_page_updatesongkey"
+    },
+    {
+      "label": "vite.config.ts",
+      "file_type": "code",
+      "source_file": "vite.config.ts",
+      "source_location": "L1",
+      "community": 15,
+      "norm_label": "vite.config.ts",
+      "id": "vite_config_ts"
+    },
+    {
+      "label": "svelte.config.js",
+      "file_type": "code",
+      "source_file": "svelte.config.js",
+      "source_location": "L1",
+      "community": 16,
+      "norm_label": "svelte.config.js",
+      "id": "svelte_config_js"
+    },
+    {
+      "label": "main.py",
+      "file_type": "code",
+      "source_file": "tests/main.py",
+      "source_location": "L1",
+      "community": 9,
+      "norm_label": "main.py",
+      "id": "tests_main_py"
+    },
+    {
+      "label": "echo_server.py",
+      "file_type": "code",
+      "source_file": "tests/echo_server.py",
+      "source_location": "L1",
+      "community": 8,
+      "norm_label": "echo_server.py",
+      "id": "tests_echo_server_py"
+    },
+    {
+      "label": "+page.svelte",
+      "file_type": "code",
+      "source_file": "src/routes/+page.svelte",
+      "source_location": "L1",
+      "community": 3,
+      "norm_label": "+page.svelte",
+      "id": "src_routes_page_svelte"
+    },
+    {
+      "label": "+layout.ts",
+      "file_type": "code",
+      "source_file": "src/routes/+layout.ts",
+      "source_location": "L1",
+      "community": 17,
+      "norm_label": "+layout.ts",
+      "id": "src_routes_layout_ts"
+    },
+    {
+      "label": "../app.css",
+      "file_type": "code",
+      "source_file": "src/app.css",
+      "confidence": "EXTRACTED",
+      "community": 3,
+      "norm_label": "../app.css",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_app_css"
+    },
+    {
+      "label": "+page.svelte",
+      "file_type": "code",
+      "source_file": "src/routes/settings/+page.svelte",
+      "source_location": "L1",
+      "community": 3,
+      "norm_label": "+page.svelte",
+      "id": "src_routes_settings_page_svelte"
+    },
+    {
+      "label": "+page.svelte",
+      "file_type": "code",
+      "source_file": "src/routes/pair/+page.svelte",
+      "source_location": "L1",
+      "community": 3,
+      "norm_label": "+page.svelte",
+      "id": "src_routes_pair_page_svelte"
+    },
+    {
+      "label": "off",
+      "file_type": "code",
+      "source_file": "src/routes/live/+page.svelte",
+      "source_location": "L100",
+      "community": 3,
+      "norm_label": "off",
+      "id": "live_page_off"
+    },
+    {
+      "label": "$lib/search",
+      "file_type": "code",
+      "source_file": "src/lib/search",
+      "confidence": "EXTRACTED",
+      "community": 3,
+      "norm_label": "$lib/search",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_search"
+    },
+    {
+      "label": "$lib/protocol",
+      "file_type": "code",
+      "source_file": "src/lib/protocol",
+      "confidence": "EXTRACTED",
+      "community": 2,
+      "norm_label": "$lib/protocol",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_protocol"
+    },
+    {
+      "label": "$lib/bible",
+      "file_type": "code",
+      "source_file": "src/lib/bible",
+      "confidence": "EXTRACTED",
+      "community": 2,
+      "norm_label": "$lib/bible",
+      "id": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_bible"
+    },
+    {
+      "label": "theme.ts",
+      "file_type": "code",
+      "source_file": "src/lib/theme.ts",
+      "source_location": "L1",
+      "community": 10,
+      "norm_label": "theme.ts",
+      "id": "src_lib_theme_ts"
+    },
+    {
+      "label": "liveFollowEnabled",
+      "file_type": "code",
+      "source_file": "src/lib/stores.ts",
+      "source_location": "L47",
+      "community": 0,
+      "norm_label": "livefollowenabled",
+      "id": "lib_stores_livefollowenabled"
+    },
+    {
+      "label": "bible.ts",
+      "file_type": "code",
+      "source_file": "src/lib/bible.ts",
+      "source_location": "L1",
+      "community": 0,
+      "norm_label": "bible.ts",
+      "id": "src_lib_bible_ts"
     },
     {
       "label": "README.md",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L1",
-      "id": "readme_md",
-      "community": 5,
-      "norm_label": "readme.md"
-    },
-    {
-      "label": "Church Presenter \u2014 Phone Remote (PWA)",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L1",
-      "id": "phone_remote_readme_church_presenter_phone_remote_pwa",
-      "community": 5,
-      "norm_label": "church presenter \u2014 phone remote (pwa)"
-    },
-    {
-      "label": "Development Workflow",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L9",
-      "id": "phone_remote_readme_development_workflow",
-      "community": 5,
-      "norm_label": "development workflow"
-    },
-    {
-      "label": "Features",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L15",
-      "id": "phone_remote_readme_features",
-      "community": 5,
-      "norm_label": "features"
-    },
-    {
-      "label": "Live Slide Control",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L17",
-      "id": "phone_remote_readme_live_slide_control",
-      "community": 5,
-      "norm_label": "live slide control"
-    },
-    {
-      "label": "Library Browser",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L25",
-      "id": "phone_remote_readme_library_browser",
-      "community": 5,
-      "norm_label": "library browser"
-    },
-    {
-      "label": "Queue Management",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L34",
-      "id": "phone_remote_readme_queue_management",
-      "community": 5,
-      "norm_label": "queue management"
-    },
-    {
-      "label": "Lists (Playlists)",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L40",
-      "id": "phone_remote_readme_lists_playlists",
-      "community": 5,
-      "norm_label": "lists (playlists)"
-    },
-    {
-      "label": "Connection",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L47",
-      "id": "phone_remote_readme_connection",
-      "community": 5,
-      "norm_label": "connection"
-    },
-    {
-      "label": "Multi-Phone & Access Control",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L53",
-      "id": "phone_remote_readme_multi_phone_access_control",
-      "community": 5,
-      "norm_label": "multi-phone & access control"
-    },
-    {
-      "label": "Offline Support",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L58",
-      "id": "phone_remote_readme_offline_support",
-      "community": 5,
-      "norm_label": "offline support"
-    },
-    {
-      "label": "Pairing",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L65",
-      "id": "phone_remote_readme_pairing",
-      "community": 5,
-      "norm_label": "pairing"
-    },
-    {
-      "label": "Connection Modes",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L76",
-      "id": "phone_remote_readme_connection_modes",
-      "community": 5,
-      "norm_label": "connection modes"
-    },
-    {
-      "label": "Dev Setup",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L87",
-      "id": "phone_remote_readme_dev_setup",
-      "community": 5,
-      "norm_label": "dev setup"
-    },
-    {
-      "label": "code:bash (cd phone-remote)",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L89",
-      "id": "phone_remote_readme_codeblock_1",
-      "community": 5,
-      "norm_label": "code:bash (cd phone-remote)"
-    },
-    {
-      "label": "Tech Stack",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": "L101",
-      "id": "phone_remote_readme_tech_stack",
-      "community": 5,
-      "norm_label": "tech stack"
+      "community": 4,
+      "norm_label": "readme.md",
+      "id": "readme_md"
     },
     {
       "label": "README.md",
       "file_type": "document",
       "source_file": "tests/README.md",
       "source_location": "L1",
-      "id": "tests_readme_md",
-      "community": 14,
-      "norm_label": "readme.md"
+      "community": 18,
+      "norm_label": "readme.md",
+      "id": "tests_readme_md"
     }
   ],
   "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/tests/main.py",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_tests_main_py",
+      "target": "tests_main_main"
+    },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
@@ -1886,6 +2428,36 @@
       "confidence_score": 1.0,
       "source": "tests_main_py",
       "target": "tests_main_main"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/tests/echo_server.py",
+      "source_location": "L17",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_tests_echo_server_py",
+      "target": "tests_echo_server_handler"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/tests/echo_server.py",
+      "source_location": "L30",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_tests_echo_server_py",
+      "target": "tests_echo_server_main"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/tests/echo_server.py",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "tests_echo_server_rationale_1",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_tests_echo_server_py"
     },
     {
       "relation": "contains",
@@ -1920,49 +2492,49 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_page_svelte",
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_page_svelte",
       "target": "svelte"
     },
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_page_svelte",
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_page_svelte",
       "target": "navigation"
     },
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_page_svelte",
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_page_svelte",
       "target": "paths"
     },
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_page_svelte",
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_page_svelte",
       "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_db"
     },
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_page_svelte",
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_page_svelte",
       "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_stores"
     },
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_page_svelte",
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_page_svelte",
       "target": "jsqr"
     },
     {
@@ -1976,9 +2548,9 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/settings/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_settings_page_svelte",
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_settings_page_svelte",
       "target": "svelte"
     },
     {
@@ -1992,9 +2564,9 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/pair/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/pair/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_pair_page_svelte",
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_pair_page_svelte",
       "target": "svelte"
     },
     {
@@ -2024,9 +2596,41 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "svelte"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_page_svelte",
+      "target": "svelte"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "src/routes/settings/+page.svelte",
       "confidence_score": 1.0,
       "source": "src_routes_settings_page_svelte",
+      "target": "svelte"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/pair/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_pair_page_svelte",
+      "target": "svelte"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_settings_page_svelte",
       "target": "navigation"
     },
     {
@@ -2040,9 +2644,9 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/pair/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/pair/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_pair_page_svelte",
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_pair_page_svelte",
       "target": "navigation"
     },
     {
@@ -2067,6 +2671,30 @@
       "source_file": "src/routes/library/+page.svelte",
       "confidence_score": 1.0,
       "source": "src_routes_library_page_svelte",
+      "target": "navigation"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_page_svelte",
+      "target": "navigation"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/settings/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_settings_page_svelte",
+      "target": "navigation"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/pair/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_pair_page_svelte",
       "target": "navigation"
     },
     {
@@ -2080,9 +2708,9 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/settings/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_settings_page_svelte",
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_settings_page_svelte",
       "target": "paths"
     },
     {
@@ -2096,9 +2724,9 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/pair/+page.svelte",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/pair/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_pair_page_svelte",
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_pair_page_svelte",
       "target": "paths"
     },
     {
@@ -2124,6 +2752,54 @@
       "confidence_score": 1.0,
       "source": "src_routes_library_page_svelte",
       "target": "paths"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_page_svelte",
+      "target": "paths"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/settings/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_settings_page_svelte",
+      "target": "paths"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/pair/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_pair_page_svelte",
+      "target": "paths"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_settings_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_db"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/pair/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_pair_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_db"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_db"
     },
     {
       "relation": "imports_from",
@@ -2184,6 +2860,30 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_settings_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_stores"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/pair/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_pair_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_stores"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_stores"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "src/routes/+layout.svelte",
       "confidence_score": 1.0,
       "source": "src_routes_layout_svelte",
@@ -2236,6 +2936,22 @@
       "confidence_score": 1.0,
       "source": "src_routes_library_page_svelte",
       "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_stores"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/pair/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_pair_page_svelte",
+      "target": "jsqr"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_page_svelte",
+      "target": "jsqr"
     },
     {
       "relation": "imports_from",
@@ -2271,7 +2987,7 @@
       "source_file": "src/routes/+layout.svelte",
       "confidence_score": 1.0,
       "source": "src_routes_layout_svelte",
-      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_app_css"
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_app_css"
     },
     {
       "relation": "imports_from",
@@ -2280,6 +2996,38 @@
       "confidence_score": 1.0,
       "source": "src_routes_layout_svelte",
       "target": "stores"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/+layout.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_layout_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_db"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/+layout.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_layout_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_sync"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/+layout.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_layout_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_stores"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/+layout.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_layout_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_app_css"
     },
     {
       "relation": "imports_from",
@@ -2303,6 +3051,22 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/pair/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_pair_page_svelte",
+      "target": "stores"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "stores"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
       "source_file": "src/routes/pair/+page.svelte",
       "confidence_score": 1.0,
       "source": "src_routes_pair_page_svelte",
@@ -2311,10 +3075,26 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/settings/+page.svelte",
+      "source_file": "src/routes/queue/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_settings_page_svelte",
-      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_sync"
+      "source": "src_routes_queue_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_db"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/live/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_live_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_db"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/lists/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_lists_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_db"
     },
     {
       "relation": "imports_from",
@@ -2322,6 +3102,72 @@
       "source_file": "src/routes/library/+page.svelte",
       "confidence_score": 1.0,
       "source": "src_routes_library_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_db"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_sync"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_queue_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_stores"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/live/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_live_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_stores"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/lists/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_lists_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_stores"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_stores"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
+      "source_location": "L126",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_settings_page_svelte",
+      "target": "settings_page_data"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_settings_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_ws"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/settings/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_settings_page_svelte",
       "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_sync"
     },
     {
@@ -2333,6 +3179,14 @@
       "confidence_score": 1.0,
       "source": "src_routes_settings_page_svelte",
       "target": "settings_page_data"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/pair/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_pair_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_ws"
     },
     {
       "relation": "imports_from",
@@ -2385,9 +3239,234 @@
     {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
-      "source_file": "src/routes/pair/+page.svelte",
+      "source_file": "src/routes/settings/+page.svelte",
       "confidence_score": 1.0,
-      "source": "src_routes_pair_page_svelte",
+      "source": "src_routes_settings_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_sync"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_sync"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L13",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_queue_page_svelte",
+      "target": "queue_page_showconfirm"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L23",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_queue_page_svelte",
+      "target": "queue_page_send"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L28",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_queue_page_svelte",
+      "target": "queue_page_tapjump"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L35",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_queue_page_svelte",
+      "target": "queue_page_remove"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L41",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_queue_page_svelte",
+      "target": "queue_page_clearall"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L51",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_queue_page_svelte",
+      "target": "queue_page_ghoststyle"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L62",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_queue_page_svelte",
+      "target": "queue_page_itemshift"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L71",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_queue_page_svelte",
+      "target": "queue_page_ongripdown"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L97",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_queue_page_svelte",
+      "target": "queue_page_ondragmove"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L112",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_queue_page_svelte",
+      "target": "queue_page_ondragend"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_queue_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_ws"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L31",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "queue_page_tapjump",
+      "target": "queue_page_showconfirm"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L37",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "queue_page_remove",
+      "target": "queue_page_showconfirm"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L42",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "queue_page_clearall",
+      "target": "queue_page_showconfirm"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L32",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "queue_page_tapjump",
+      "target": "queue_page_send"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L38",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "queue_page_remove",
+      "target": "queue_page_send"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L42",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "queue_page_clearall",
+      "target": "queue_page_send"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/queue/+page.svelte",
+      "source_location": "L123",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "queue_page_ondragend",
+      "target": "queue_page_send"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/live/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_live_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_ws"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/lists/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_lists_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_ws"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_ws"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/routes/pair/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_routes_pair_page_svelte",
       "target": "store"
     },
     {
@@ -2421,6 +3500,22 @@
       "target": "store"
     },
     {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/pair/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_pair_page_svelte",
+      "target": "store"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/live/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_live_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_search"
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/routes/live/+page.svelte",
@@ -2444,7 +3539,7 @@
       "source_file": "src/routes/lists/+page.svelte",
       "confidence_score": 1.0,
       "source": "src_routes_lists_page_svelte",
-      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_search"
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_search"
     },
     {
       "relation": "imports_from",
@@ -2452,7 +3547,15 @@
       "source_file": "src/routes/library/+page.svelte",
       "confidence_score": 1.0,
       "source": "src_routes_library_page_svelte",
-      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_search"
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_search"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_search"
     },
     {
       "relation": "contains",
@@ -2470,6 +3573,50 @@
       "source_file": "src/routes/lists/+page.svelte",
       "confidence_score": 1.0,
       "source": "src_routes_lists_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_protocol"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/lists/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_lists_page_svelte",
+      "target": "src_lib_projectoroverlay_svelte"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/lists/+page.svelte",
+      "source_location": "L234",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_lists_page_svelte",
+      "target": "lists_page_all_keys"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/lists/+page.svelte",
+      "source_location": "L236",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_lists_page_svelte",
+      "target": "lists_page_updatesongkey"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/lists/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_lists_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_search"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/lists/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_lists_page_svelte",
       "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_protocol"
     },
     {
@@ -2478,7 +3625,123 @@
       "source_file": "src/routes/library/+page.svelte",
       "confidence_score": 1.0,
       "source": "src_routes_library_page_svelte",
-      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_protocol"
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_protocol"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_protocol"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "src_lib_projectoroverlay_svelte"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L111",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_lines"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L66",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_cleaned"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L106",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_canvas"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L107",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_ctx"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L118",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_mid"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L124",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_cleanline"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L137",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_markersize"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L193",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_prev"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L251",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_handlevisibilitychange"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ProjectorOverlay.svelte",
+      "source_location": "L256",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_projectoroverlay_svelte",
+      "target": "lib_projectoroverlay_handlefullscreenchange"
     },
     {
       "relation": "contains",
@@ -2704,6 +3967,16 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L325",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_enterprojector"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
       "source_location": "L310",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -2761,12 +4034,177 @@
       "target": "library_page_biblestatustext"
     },
     {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L391",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_importurl"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L392",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_importloading"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L395",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_songtitle"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L396",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_songfolder"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L397",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_songlyrics"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L399",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_saveloading"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L401",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_showoverwriteconfirm"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L403",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_openwritesongmenu"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L416",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_closewritesongmenu"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L420",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_handleimporturl"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L451",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_handlesavesong"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L487",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_all_keys"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L489",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "library_page_updatesongkey"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "home_potato_seafile_projects_python_churchpresenterredesign_phone_remote_src_lib_bible"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_search"
+    },
+    {
+      "relation": "imports_from",
+      "confidence": "EXTRACTED",
+      "source_file": "src/routes/library/+page.svelte",
+      "confidence_score": 1.0,
+      "source": "src_routes_library_page_svelte",
+      "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_protocol"
+    },
+    {
       "relation": "imports_from",
       "confidence": "EXTRACTED",
       "source_file": "src/routes/library/+page.svelte",
       "confidence_score": 1.0,
       "source": "src_routes_library_page_svelte",
       "target": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_bible"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "src/routes/library/+page.svelte",
+      "source_location": "L473",
+      "weight": 1.0,
+      "source": "library_page_handlesavesong",
+      "target": "lib_sync_syncnow"
     },
     {
       "relation": "imports_from",
@@ -3110,6 +4548,17 @@
       "target": "lib_stores_servername"
     },
     {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ws.ts",
+      "source_location": "L31",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_ws_ts",
+      "target": "lib_stores_caneditkeys"
+    },
+    {
       "relation": "imports_from",
       "context": "import",
       "confidence": "EXTRACTED",
@@ -3240,6 +4689,16 @@
       "confidence_score": 1.0,
       "source": "lib_ws_remoteclient",
       "target": "lib_ws_remoteclient_sendraw"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/ws.ts",
+      "source_location": "L157",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "lib_ws_remoteclient",
+      "target": "lib_ws_remoteclient_sendrequest"
     },
     {
       "relation": "method",
@@ -3454,6 +4913,16 @@
       "confidence_score": 1.0,
       "source": "src_lib_sync_ts",
       "target": "lib_ws_remote"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/theme.ts",
+      "source_location": "L3",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_theme_ts",
+      "target": "lib_theme_palette"
     },
     {
       "relation": "contains",
@@ -4001,6 +5470,61 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/lib/sync.ts",
+      "source_location": "L116",
+      "weight": 1.0,
+      "source": "lib_sync_dosync",
+      "target": "lib_db_loadallsongs"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/lib/sync.ts",
+      "source_location": "L117",
+      "weight": 1.0,
+      "source": "lib_sync_dosync",
+      "target": "lib_db_loadalllists"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/lib/sync.ts",
+      "source_location": "L118",
+      "weight": 1.0,
+      "source": "lib_sync_dosync",
+      "target": "lib_db_loadallbiblebooks"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/lib/sync.ts",
+      "source_location": "L119",
+      "weight": 1.0,
+      "source": "lib_sync_dosync",
+      "target": "lib_db_loadallbibleverses"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/lib/sync.ts",
+      "source_location": "L140",
+      "weight": 1.0,
+      "source": "lib_sync_dosync",
+      "target": "lib_db_getbibleversion"
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/lib/sync.ts",
       "source_location": "L125",
       "weight": 1.0,
       "source": "lib_sync_dosync",
@@ -4104,17 +5628,6 @@
       "weight": 1.0,
       "source": "lib_sync_dosync",
       "target": "lib_db_setbibleversion"
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "src/lib/sync.ts",
-      "source_location": "L140",
-      "weight": 1.0,
-      "source": "lib_sync_dosync",
-      "target": "lib_db_getbibleversion"
     },
     {
       "relation": "calls",
@@ -4446,11 +5959,11 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/lib/stores.ts",
-      "source_location": "L47",
+      "source_location": "L45",
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_stores_ts",
-      "target": "lib_stores_livefollowenabled"
+      "target": "lib_stores_caneditkeys"
     },
     {
       "relation": "contains",
@@ -4461,6 +5974,16 @@
       "confidence_score": 1.0,
       "source": "src_lib_stores_ts",
       "target": "lib_stores_isviewonly"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/lib/stores.ts",
+      "source_location": "L47",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "src_lib_stores_ts",
+      "target": "lib_stores_livefollowenabled"
     },
     {
       "relation": "contains",
@@ -4798,6 +6321,17 @@
       "weight": 1.0,
       "confidence_score": 1.0,
       "source": "src_lib_db_ts",
+      "target": "lib_protocol_bibleverse"
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/bible.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_bible_ts",
       "target": "lib_protocol_bibleverse"
     },
     {
@@ -6350,6 +7884,26 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/bible.ts",
+      "source_location": "L3",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_bible_ts",
+      "target": "lib_bible_comparebibleverses"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/src/lib/bible.ts",
+      "source_location": "L11",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_src_lib_bible_ts",
+      "target": "lib_bible_sortbibleverses"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
       "source_file": "src/lib/bible.ts",
       "source_location": "L3",
       "weight": 1.0,
@@ -6370,11 +7924,11 @@
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
-      "source_file": "README.md",
+      "source_file": "/home/potato/Seafile/My Library/Projects/Python/ChurchPresenterRedesign/phone-remote/README.md",
       "source_location": "L1",
       "weight": 1.0,
       "confidence_score": 1.0,
-      "source": "readme_md",
+      "source": "home_potato_seafile_my_library_projects_python_churchpresenterredesign_phone_remote_readme_md",
       "target": "phone_remote_readme_church_presenter_phone_remote_pwa"
     },
     {
@@ -6436,6 +7990,16 @@
       "confidence_score": 1.0,
       "source": "phone_remote_readme_church_presenter_phone_remote_pwa",
       "target": "phone_remote_readme_tech_stack"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L1",
+      "weight": 1.0,
+      "confidence_score": 1.0,
+      "source": "readme_md",
+      "target": "phone_remote_readme_church_presenter_phone_remote_pwa"
     },
     {
       "relation": "contains",
@@ -6519,5 +8083,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "1e2e03e4d38c99a52ba01d39bab369c3278836d7"
+  "built_at_commit": "1f75c139cc1ba4f2d2efd8c4f5adc6d69aec9de9"
 }

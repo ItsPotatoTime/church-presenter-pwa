@@ -48,7 +48,9 @@
 
   let selectedName = $state<string | null>(null);
   let showPicker = $state(false);
+  let rawPickerQuery = $state('');
   let pickerQuery = $state('');
+  let pickerDebounceTimer: number | null = null;
   let dragFrom = $state<number | null>(null);
   let dragOver = $state<number | null>(null);
 
@@ -207,14 +209,38 @@
   function onDragEnd() { dragFrom = null; dragOver = null; }
 
   // ── Song picker (adds song(s) to current list) ──
+
+  $effect(() => {
+    const value = rawPickerQuery;
+    if (pickerDebounceTimer !== null) clearTimeout(pickerDebounceTimer);
+    pickerDebounceTimer = window.setTimeout(() => {
+      pickerQuery = value;
+    }, 180);
+    return () => {
+      if (pickerDebounceTimer !== null) clearTimeout(pickerDebounceTimer);
+    };
+  });
+
   const pickerFiltered = $derived.by<ScoredResult<LibrarySong>[]>(() => {
     const q = pickerQuery.trim();
-    if (!q) return $songsStore.map((s) => ({ item: s, score: 0, snippet: '' }));
-    return filterSongs(q, $songsStore, pickerSearchSlides);
+    if (!q) return $songsStore.slice(0, 100).map((s) => ({ item: s, score: 0, snippet: '' }));
+    return filterSongs(q, $songsStore, pickerSearchSlides, 100);
   });
+
+  let toast = $state<{ message: string; type: 'success' | 'warning' } | null>(null);
+  let toastTimer: number | null = null;
+
+  function showToast(message: string, type: 'success' | 'warning' = 'success') {
+    if (toastTimer !== null) clearTimeout(toastTimer);
+    toast = { message, type };
+    toastTimer = window.setTimeout(() => {
+      toast = null;
+    }, 2500);
+  }
 
   function openPicker() {
     if (!selectedList) return;
+    rawPickerQuery = '';
     pickerQuery = '';
     pickerSearchSlides = false;
     showPicker = true;
@@ -222,11 +248,16 @@
   function closePicker() { showPicker = false; }
   function addSong(s: LibrarySong) {
     if (!selectedList) return;
+    const alreadyExists = selectedList.songs.some((song) => song.path === s.path);
+    if (alreadyExists) {
+      showToast(`"${s.name}" is already in this list`, 'warning');
+      return;
+    }
     send({
       type: 'list.add_song',
       payload: { list_name: selectedList.name, song_path: s.path },
     });
-    closePicker();
+    showToast(`Added "${s.name}"`, 'success');
   }
 
   const songKeyMap = $derived.by(() => new Map($songsStore.map((song) => [song.path, song.key])));
@@ -372,7 +403,7 @@
         <input
           type="text"
           placeholder="Search songs…"
-          bind:value={pickerQuery}
+          bind:value={rawPickerQuery}
           autocomplete="off"
           autocapitalize="off"
           autocorrect="off"
@@ -533,6 +564,17 @@
 
 {#if showProjector && previewSong}
   <ProjectorOverlay song={previewSong} onclose={() => { showProjector = false; }} />
+{/if}
+
+{#if toast}
+  <div class="toast" class:warning={toast.type === 'warning'}>
+    {#if toast.type === 'warning'}
+      <span class="icon">⚠️</span>
+    {:else}
+      <span class="icon">✓</span>
+    {/if}
+    <span class="msg">{toast.message}</span>
+  </div>
 {/if}
 
 <style>
@@ -741,5 +783,45 @@
     flex: 1;
     padding: 13px;
     font-size: 15px;
+  }
+
+  /* Toast alerts */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--panel);
+    border: 1px solid var(--success);
+    border-radius: 99px;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+    z-index: 1000;
+    animation: toast-fade-in 150ms ease-out;
+  }
+  .toast.warning {
+    border-color: var(--warning);
+  }
+  .toast .icon {
+    font-size: 14px;
+  }
+  .toast.warning .icon {
+    color: var(--warning);
+  }
+  .toast:not(.warning) .icon {
+    color: var(--success);
+  }
+  .toast .msg {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+  @keyframes toast-fade-in {
+    from { transform: translate(-50%, 15px); opacity: 0; }
+    to { transform: translate(-50%, 0); opacity: 1; }
   }
 </style>

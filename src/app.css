@@ -135,6 +135,7 @@ input[type="text"]:focus, input[type="url"]:focus {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  align-self: center;
   height: 18px;
   padding: 0 6px;
   border-radius: 4px;
@@ -143,5 +144,5 @@ input[type="text"]:focus, input[type="url"]:focus {
   background: color-mix(in srgb, var(--accent) 15%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
   color: var(--accent);
-  line-height: 1;
+  line-height: normal;
 }
