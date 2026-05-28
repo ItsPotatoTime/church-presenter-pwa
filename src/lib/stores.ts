@@ -42,10 +42,6 @@ export const myDeviceId: Writable<string | null> = writable(null);
 
 export const serverName: Writable<string> = writable('ChurchPresenter');
 
-// Phone-local toggle: when false, phone sends `live.follow {enabled:false}` so
-// the desktop skips pushing `live.state` to us.
-export const liveFollowEnabled: Writable<boolean> = writable(true);
-
 export const canEditKeys: Writable<boolean> = writable(false);
 
 /** True when a *different* phone holds exclusive control — this phone is view-only. */

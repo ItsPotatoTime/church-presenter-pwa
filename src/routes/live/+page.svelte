@@ -7,7 +7,7 @@
   import { renderMarkdown } from '$lib/search';
   import {
     connStatus, connEndpoint, connError, liveState,
-    isViewOnly, liveFollowEnabled,
+    isViewOnly,
   } from '$lib/stores';
 
   let textVisible = $state(true);
@@ -22,16 +22,12 @@
     await remote.connect();
   });
 
-  // Re-send live.follow whenever connection opens or toggle changes.
+  // Re-send live.follow whenever connection opens.
   // No dedup guard: server resets the flag on disconnect so we must resend on every open.
   $effect(() => {
     if ($connStatus !== 'open') return;
-    remote.send({ type: 'live.follow', payload: { enabled: $liveFollowEnabled } });
+    remote.send({ type: 'live.follow', payload: { enabled: true } });
   });
-
-  function toggleFollow() {
-    liveFollowEnabled.update((v) => !v);
-  }
 
   // What "Follow" does: when ON, this phone auto-updates to show the live slide.
   // When OFF, the phone display freezes so the operator can read without it jumping.
@@ -95,17 +91,6 @@
       </div>
     </div>
     <div class="pills">
-      <button
-        class="pill follow-btn"
-        class:off={!$liveFollowEnabled}
-        onclick={toggleFollow}
-        aria-pressed={$liveFollowEnabled}
-        title={$liveFollowEnabled
-          ? 'Following live — phone updates when slide changes (tap to freeze)'
-          : 'Frozen — phone stays on current slide (tap to follow again)'}
-      >
-        {$liveFollowEnabled ? '👁 Follow' : '🚫 Frozen'}
-      </button>
       <span class="pill {statusClass}">{statusLabel}</span>
       {#if $connEndpoint}<span class="pill">{$connEndpoint}</span>{/if}
     </div>
@@ -274,14 +259,4 @@
   .pill.ok   { color: var(--success); border-color: var(--success); }
   .pill.warn { color: var(--warning); border-color: var(--warning); }
   .pill.err  { color: var(--danger);  border-color: var(--danger); }
-  button.pill.follow-btn {
-    cursor: pointer;
-    background: transparent;
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  button.pill.follow-btn.off {
-    color: var(--text-secondary);
-    border-color: var(--border);
-  }
 </style>
