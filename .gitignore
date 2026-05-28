@@ -9,3 +9,4 @@ dist
 .vercel
 .vite
 tests/__pycache__
+graphify-out/
