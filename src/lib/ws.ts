@@ -103,6 +103,7 @@ class RemoteClient {
       connStatus.set('idle');
       return;
     }
+    canEditKeys.set(!!creds.can_edit_keys);
     this.openSocket(creds, null);
   }
 
@@ -308,6 +309,7 @@ class RemoteClient {
           device_token: pairToken ? p.device_token : creds.device_token,
           server_name: p.server_name,
           paired_at: creds.paired_at ?? Date.now(),
+          can_edit_keys: !!p.can_edit_keys,
         };
         this._triedServerKeys.clear(); // successful auth — reset cycling state
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
@@ -371,6 +373,7 @@ class RemoteClient {
               const switched = await switchServer(next.server_key);
               if (switched && isCurrent()) {
                 this.forceClose = false;
+                canEditKeys.set(!!switched.can_edit_keys);
                 this.openSocket(switched, null);
               }
             } else {
@@ -420,6 +423,13 @@ class RemoteClient {
       if (msg.type === 'device.permission_changed') {
         const p = msg.payload as { can_edit_keys: boolean };
         canEditKeys.set(!!p.can_edit_keys);
+        void (async () => {
+          const c = await loadCredentials();
+          if (c && isCurrent()) {
+            c.can_edit_keys = !!p.can_edit_keys;
+            await saveCredentials(c);
+          }
+        })();
         return;
       }
 

@@ -4,6 +4,7 @@
   import { remote } from '$lib/ws';
   import { connStatus, isViewOnly, songsStore, canEditKeys, activeModals } from '$lib/stores';
   import ProjectorOverlay from '$lib/ProjectorOverlay.svelte';
+  import { putSongs, addPendingMutation } from '$lib/db';
 
   // Svelte 5 props
   let { song, onclose } = $props<{
@@ -32,24 +33,46 @@
   }
 
   async function updateSongKey(songPath: string, key: string | null) {
-    if (!$canEditKeys || $isViewOnly) return;
+    if (!$canEditKeys || ($connStatus === 'open' && $isViewOnly)) return;
+    
+    // 1. Optimistically update local store and component state
+    songsStore.update(songs => {
+      return songs.map(s => {
+        if (s.path === songPath) {
+          return { ...s, key };
+        }
+        return s;
+      });
+    });
+    song.key = key; // Keep local prop up to date
+    
+    // 2. Persist in local IndexedDB songs store so the key change survives offline app reloads
     try {
-      const res = await remote.sendRequest('song.set_key', { song_path: songPath, key });
-      if (res.ok) {
-        songsStore.update(songs => {
-          return songs.map(s => {
-            if (s.path === songPath) {
-              return { ...s, key };
-            }
-            return s;
-          });
-        });
-        song.key = key; // Keep local prop up to date
-      } else {
-        console.error('Failed to set key:', res.error);
+      const songToSave = $songsStore.find(s => s.path === songPath);
+      if (songToSave) {
+        await putSongs([songToSave]);
       }
     } catch (err) {
-      console.error('Error setting key:', err);
+      console.error('Failed to save key in local IndexedDB:', err);
+    }
+
+    // 3. Send to server or queue as pending mutation
+    if ($connStatus === 'open') {
+      try {
+        const res = await remote.sendRequest('song.set_key', { song_path: songPath, key });
+        if (!res.ok) {
+          console.error('Failed to set key on server:', res.error);
+        }
+      } catch (err) {
+        console.error('Error setting key on server:', err);
+      }
+    } else {
+      // Offline: queue a pending mutation to sync later
+      try {
+        await addPendingMutation({ type: 'song.set_key', payload: { song_path: songPath, key } });
+      } catch (err) {
+        console.error('Failed to queue offline key update:', err);
+      }
     }
   }
 

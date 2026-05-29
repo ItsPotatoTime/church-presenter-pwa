@@ -38,6 +38,7 @@ export interface Credentials {
   paired_at?: number;
   // Present when loaded from the servers store (multi-device support)
   server_key?: string;
+  can_edit_keys?: boolean;
 }
 
 export interface ServerEntry {
@@ -57,6 +58,7 @@ export interface ServerEntry {
   cached_bible_version?: string | null;
   cached_queue?: QueueState | null;
   last_sync_ts?: number;
+  can_edit_keys?: boolean;
 }
 
 // ── DB open / upgrade ──────────────────────────────────────────────
@@ -304,6 +306,7 @@ export async function saveCredentials(c: Credentials): Promise<void> {
         server_name: c.server_name ?? existing.server_name,
         paired_at: c.paired_at ?? existing.paired_at,
         last_used: Date.now(),
+        can_edit_keys: c.can_edit_keys ?? existing.can_edit_keys,
       };
       await _saveServer(updated);
       _credCache = _entryToCredentials(updated);
@@ -322,6 +325,7 @@ export async function saveCredentials(c: Credentials): Promise<void> {
     server_name: c.server_name,
     paired_at: c.paired_at,
     last_used: Date.now(),
+    can_edit_keys: c.can_edit_keys,
   };
   await _saveServer(entry);
   await setMeta('active_server_key', serverKey);
@@ -426,6 +430,7 @@ function _entryToCredentials(e: ServerEntry): Credentials {
     server_name: e.server_name,
     paired_at: e.paired_at,
     server_key: e.server_key,
+    can_edit_keys: e.can_edit_keys,
   };
 }
 

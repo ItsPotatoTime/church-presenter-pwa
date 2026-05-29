@@ -7,7 +7,7 @@
   import { beforeNavigate, goto } from '$app/navigation';
   import { getOrCreateDeviceId, loadCredentialsResilient } from '$lib/db';
   import { hydrateFromCache, isReducedDataConnection, syncNow } from '$lib/sync';
-  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY } from '$lib/stores';
+  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY, canEditKeys } from '$lib/stores';
 
   let { children } = $props();
   let paired = $state(false);
@@ -84,6 +84,9 @@
 
     const creds = await loadCredentialsResilient();
     paired = !!creds && !!creds.device_token;
+    if (creds) {
+      canEditKeys.set(!!creds.can_edit_keys);
+    }
     if (paired) {
       // Load library cache so Library/Queue show something even offline.
       try {
