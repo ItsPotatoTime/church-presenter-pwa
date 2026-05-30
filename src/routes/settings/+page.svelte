@@ -151,6 +151,45 @@
     };
     input.click();
   }
+
+  let checkingUpdate = $state(false);
+
+  async function checkForUpdates() {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+      alert('Service workers are not supported by this browser/device.');
+      return;
+    }
+
+    checkingUpdate = true;
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      if (!reg) {
+        alert('App is running in non-PWA mode (no service worker).');
+        checkingUpdate = false;
+        return;
+      }
+
+      let updateFound = false;
+      reg.onupdatefound = () => {
+        updateFound = true;
+      };
+
+      await reg.update();
+
+      setTimeout(() => {
+        checkingUpdate = false;
+        if (reg.installing || reg.waiting || updateFound) {
+          alert('Update found! Installing and updating app...');
+        } else {
+          alert('You are on the latest version.');
+        }
+      }, 1200);
+
+    } catch (err: any) {
+      checkingUpdate = false;
+      alert('Update check failed: ' + (err?.message ?? err));
+    }
+  }
 </script>
 
 <header>
@@ -269,6 +308,16 @@
     Re-pair (scan new QR)
   </button>
   <button class="ghost fw" onclick={unpair}>Forget this server</button>
+</section>
+
+<section class="panel" style="margin-top:12px;">
+  <h2>Updates</h2>
+  <p class="muted small" style="margin:0 0 10px;">
+    Check if a newer version of the PWA is available on GitHub Pages.
+  </p>
+  <button class="ghost fw" onclick={checkForUpdates} disabled={checkingUpdate}>
+    {checkingUpdate ? 'Checking for updates...' : 'Check for Updates'}
+  </button>
 </section>
 
 <section class="panel" style="margin-top:12px;">
