@@ -27,6 +27,7 @@
     myDeviceId,
     syncStatus,
     songsStore,
+    debugMode,
   } from '$lib/stores';
 
   let creds = $state<Credentials | null>(null);
@@ -259,6 +260,10 @@
   <div class="row">
     <span class="muted">Device ID</span>
     <span class="mono">{$myDeviceId ?? '—'}</span>
+  </div>
+  <div class="row" style="align-items: center; justify-content: space-between;">
+    <span class="muted">Debug mode</span>
+    <input type="checkbox" bind:checked={$debugMode} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);" />
   </div>
   <button class="ghost fw" onclick={repair}>
     Re-pair (scan new QR)

@@ -7,7 +7,7 @@
   import { beforeNavigate, goto } from '$app/navigation';
   import { getOrCreateDeviceId, loadCredentialsResilient } from '$lib/db';
   import { hydrateFromCache, isReducedDataConnection, syncNow } from '$lib/sync';
-  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY, canEditKeys } from '$lib/stores';
+  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY, canEditKeys, debugMode } from '$lib/stores';
 
   let { children } = $props();
   let paired = $state(false);
@@ -310,7 +310,7 @@
   </div>
 {/if}
 
-{#if ready}
+{#if ready && $debugMode}
   <button 
     style="position: fixed; right: 16px; bottom: calc(80px + env(safe-area-inset-bottom, 0)); width: 32px; height: 32px; border-radius: 50%; background: rgba(30, 30, 40, 0.55); border: 1px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; font-size: 14px; z-index: 99999; cursor: pointer; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: all 150ms; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.25);"
     onclick={() => showDebugDrawer = true}

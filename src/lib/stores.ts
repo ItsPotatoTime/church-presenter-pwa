@@ -45,6 +45,16 @@ export const serverName: Writable<string> = writable('ChurchPresenter');
 export const canEditKeys: Writable<boolean> = writable(false);
 export const canEditSongs: Writable<boolean> = writable(false);
 
+export const debugMode: Writable<boolean> = writable(
+  typeof window !== 'undefined' ? localStorage.getItem('debug_mode') === 'true' : false
+);
+
+if (typeof window !== 'undefined') {
+  debugMode.subscribe((value) => {
+    localStorage.setItem('debug_mode', String(value));
+  });
+}
+
 /** True when a *different* phone holds exclusive control — this phone is view-only. */
 export const isViewOnly: Readable<boolean> = derived(
   [exclusiveDeviceId, myDeviceId],
