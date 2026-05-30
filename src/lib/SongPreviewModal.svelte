@@ -2,8 +2,9 @@
   import type { LibrarySong } from '$lib/protocol';
   import { renderMarkdown } from '$lib/search';
   import { remote } from '$lib/ws';
-  import { connStatus, isViewOnly, songsStore, canEditKeys, activeModals } from '$lib/stores';
+  import { connStatus, isViewOnly, songsStore, canEditKeys, canEditSongs, activeModals } from '$lib/stores';
   import ProjectorOverlay from '$lib/ProjectorOverlay.svelte';
+  import SongEditorModal from '$lib/SongEditorModal.svelte';
   import { putSongs, addPendingMutation } from '$lib/db';
 
   // Svelte 5 props
@@ -13,6 +14,7 @@
   }>();
 
   let showProjector = $state(false);
+  let showEditor = $state(false);
 
   // Register close handler for back gestures
   $effect(() => {
@@ -134,22 +136,33 @@
         <button class="ghost" style="padding: 6px 12px; font-size: 13px; flex-shrink: 0;" onclick={onclose}>Close</button>
       </div>
       
-      <div style="display: flex; gap: 8px; width: 100%; margin-top: 4px; margin-bottom: 8px;">
+      <div style="display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 4px; margin-bottom: 8px;">
         <button
           class="accent"
-          style="flex: 2; padding: 10px 14px; font-size: 14px;"
+          style="width: 100%; padding: 10px 14px; font-size: 14px;"
           onclick={() => { addToQueue(song.path); onclose(); }}
           disabled={$connStatus !== 'open' || $isViewOnly}
         >
           + Add to queue
         </button>
-        <button
-          class="ghost"
-          style="flex: 1; padding: 10px 14px; font-size: 14px; border-color: var(--accent); color: var(--accent);"
-          onclick={enterProjector}
-        >
-          Projector Show
-        </button>
+        <div style="display: flex; gap: 8px; width: 100%;">
+          <button
+            class="ghost"
+            style="flex: 1; padding: 10px 14px; font-size: 14px; border-color: var(--border); color: var(--text-secondary);"
+            onclick={enterProjector}
+          >
+            Projector Show
+          </button>
+          {#if $canEditSongs && !$isViewOnly}
+            <button
+              class="ghost"
+              style="flex: 1; padding: 10px 14px; font-size: 14px; border-color: var(--accent); color: var(--accent); font-weight: 600;"
+              onclick={() => showEditor = true}
+            >
+              Edit Song
+            </button>
+          {/if}
+        </div>
       </div>
     </div>
     {#each song.slide_texts as slide, i (i)}
@@ -164,6 +177,10 @@
 
 {#if showProjector}
   <ProjectorOverlay {song} onclose={() => { showProjector = false; }} />
+{/if}
+
+{#if showEditor}
+  <SongEditorModal {song} onclose={() => showEditor = false} />
 {/if}
 
 <style>

@@ -43,6 +43,7 @@ export const myDeviceId: Writable<string | null> = writable(null);
 export const serverName: Writable<string> = writable('ChurchPresenter');
 
 export const canEditKeys: Writable<boolean> = writable(false);
+export const canEditSongs: Writable<boolean> = writable(false);
 
 /** True when a *different* phone holds exclusive control — this phone is view-only. */
 export const isViewOnly: Readable<boolean> = derived(

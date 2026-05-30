@@ -39,6 +39,7 @@ import {
   queueState,
   serverName,
   canEditKeys,
+  canEditSongs,
 } from './stores';
 import { handleSyncMessage } from './sync';
 
@@ -104,6 +105,7 @@ class RemoteClient {
       return;
     }
     canEditKeys.set(!!creds.can_edit_keys);
+    canEditSongs.set(!!creds.can_edit_songs);
     this.openSocket(creds, null);
   }
 
@@ -310,12 +312,14 @@ class RemoteClient {
           server_name: p.server_name,
           paired_at: creds.paired_at ?? Date.now(),
           can_edit_keys: !!p.can_edit_keys,
+          can_edit_songs: !!p.can_edit_songs,
         };
         this._triedServerKeys.clear(); // successful auth — reset cycling state
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
         exclusiveDeviceName.set(null);
         serverName.set(p.server_name || 'ChurchPresenter');
         canEditKeys.set(!!p.can_edit_keys);
+        canEditSongs.set(!!p.can_edit_songs);
         this.backoffIdx = 0;
 
         // Persist credentials first, THEN flush mutations, THEN mark open.
@@ -421,12 +425,14 @@ class RemoteClient {
       }
 
       if (msg.type === 'device.permission_changed') {
-        const p = msg.payload as { can_edit_keys: boolean };
+        const p = msg.payload as { can_edit_keys: boolean; can_edit_songs: boolean };
         canEditKeys.set(!!p.can_edit_keys);
+        canEditSongs.set(!!p.can_edit_songs);
         void (async () => {
           const c = await loadCredentials();
           if (c && isCurrent()) {
             c.can_edit_keys = !!p.can_edit_keys;
+            c.can_edit_songs = !!p.can_edit_songs;
             await saveCredentials(c);
           }
         })();

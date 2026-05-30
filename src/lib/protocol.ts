@@ -26,6 +26,7 @@ export interface AuthOk {
   version: string;
   exclusive_device_id?: string | null;
   can_edit_keys?: boolean;
+  can_edit_songs?: boolean;
 }
 
 export interface AuthFail {
@@ -175,4 +176,5 @@ export type ClientCommand =
   | { type: 'live.font_size'; payload: { delta: number } }
   | { type: 'song.fetch_rc'; id?: string; payload: { url: string } }
   | { type: 'song.create'; id?: string; payload: { name: string; slide_texts: string[]; chorus_index?: number | number[] | null; folder?: string; overwrite?: boolean } }
+  | { type: 'song.update'; id?: string; payload: { song_path: string; name: string; slide_texts: string[]; chorus_index?: number | null; chorus_ranges?: number[][] | null; end_slide_index?: number | null; auto_chorus_enabled?: boolean } }
   | { type: 'song.set_key'; payload: { song_path: string; key: string | null } };

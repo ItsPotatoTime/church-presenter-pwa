@@ -39,6 +39,7 @@ export interface Credentials {
   // Present when loaded from the servers store (multi-device support)
   server_key?: string;
   can_edit_keys?: boolean;
+  can_edit_songs?: boolean;
 }
 
 export interface ServerEntry {
@@ -59,6 +60,7 @@ export interface ServerEntry {
   cached_queue?: QueueState | null;
   last_sync_ts?: number;
   can_edit_keys?: boolean;
+  can_edit_songs?: boolean;
 }
 
 // ── DB open / upgrade ──────────────────────────────────────────────
@@ -307,6 +309,7 @@ export async function saveCredentials(c: Credentials): Promise<void> {
         paired_at: c.paired_at ?? existing.paired_at,
         last_used: Date.now(),
         can_edit_keys: c.can_edit_keys ?? existing.can_edit_keys,
+        can_edit_songs: c.can_edit_songs ?? existing.can_edit_songs,
       };
       await _saveServer(updated);
       _credCache = _entryToCredentials(updated);
@@ -326,6 +329,7 @@ export async function saveCredentials(c: Credentials): Promise<void> {
     paired_at: c.paired_at,
     last_used: Date.now(),
     can_edit_keys: c.can_edit_keys,
+    can_edit_songs: c.can_edit_songs,
   };
   await _saveServer(entry);
   await setMeta('active_server_key', serverKey);
@@ -431,6 +435,7 @@ function _entryToCredentials(e: ServerEntry): Credentials {
     paired_at: e.paired_at,
     server_key: e.server_key,
     can_edit_keys: e.can_edit_keys,
+    can_edit_songs: e.can_edit_songs,
   };
 }
 
