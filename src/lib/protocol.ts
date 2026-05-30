@@ -102,6 +102,7 @@ export interface LibrarySong {
   folder: string;
   slide_texts: string[];
   chorus_index?: number;
+  chorus_ranges?: number[][];
   modified_ts?: number;
   normalized_name?: string;
   normalized_folder?: string;
@@ -173,5 +174,5 @@ export type ClientCommand =
   | { type: 'live.toggle_present' }
   | { type: 'live.font_size'; payload: { delta: number } }
   | { type: 'song.fetch_rc'; id?: string; payload: { url: string } }
-  | { type: 'song.create'; id?: string; payload: { name: string; slide_texts: string[]; chorus_index?: number | null; folder?: string; overwrite?: boolean } }
+  | { type: 'song.create'; id?: string; payload: { name: string; slide_texts: string[]; chorus_index?: number | number[] | null; folder?: string; overwrite?: boolean } }
   | { type: 'song.set_key'; payload: { song_path: string; key: string | null } };

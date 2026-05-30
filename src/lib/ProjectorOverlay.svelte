@@ -29,7 +29,55 @@
     return t.toLowerCase().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ').trim();
   };
 
-  const getExpandedSlides = (slideTexts: string[], chorusIndex: number | undefined) => {
+  const getExpandedSlides = (
+    slideTexts: string[],
+    chorusIndex: number | undefined,
+    chorusRanges: number[][] | undefined
+  ) => {
+    if (chorusRanges && chorusRanges.length > 0) {
+      const allChorusIndices = new Set<number>();
+      for (const group of chorusRanges) {
+        for (const idx of group) {
+          allChorusIndices.add(idx);
+        }
+      }
+      if (allChorusIndices.size === 0) {
+        return slideTexts.map((text, i) => ({ text, isChorus: false, originalIndex: i }));
+      }
+
+      const sortedIndices = Array.from(allChorusIndices).sort((a, b) => a - b);
+      const blocks: number[][] = [[sortedIndices[0]]];
+      for (let i = 1; i < sortedIndices.length; i++) {
+        const idx = sortedIndices[i];
+        if (idx === blocks[blocks.length - 1][blocks[blocks.length - 1].length - 1] + 1) {
+          blocks[blocks.length - 1].push(idx);
+        } else {
+          blocks.push([idx]);
+        }
+      }
+      const canonicalBlock = blocks[0] || [];
+      const canonicalTexts = canonicalBlock.map(idx => slideTexts[idx]);
+
+      const result: { text: string; isChorus: boolean; originalIndex: number }[] = [];
+      for (let i = 0; i < slideTexts.length; i++) {
+        const text = slideTexts[i];
+        result.push({ text, isChorus: allChorusIndices.has(i), originalIndex: i });
+        if (!allChorusIndices.has(i)) {
+          const nextIndex = i + 1;
+          if (nextIndex < slideTexts.length && allChorusIndices.has(nextIndex)) {
+            continue;
+          }
+          if (text.endsWith('\u200b')) {
+            continue;
+          }
+          for (let j = 0; j < canonicalBlock.length; j++) {
+            result.push({ text: canonicalTexts[j], isChorus: true, originalIndex: canonicalBlock[j] });
+          }
+        }
+      }
+      return result;
+    }
+
     if (chorusIndex === undefined || chorusIndex < 0 || chorusIndex >= slideTexts.length) {
       return slideTexts.map((text, i) => ({ text, isChorus: false, originalIndex: i }));
     }
@@ -59,7 +107,7 @@
     return result;
   };
 
-  const expandedSlides = $derived(getExpandedSlides(song.slide_texts, song.chorus_index));
+  const expandedSlides = $derived(getExpandedSlides(song.slide_texts, song.chorus_index, song.chorus_ranges));
 
   // End marker detection matches the desktop slide engine regex:
   // _END_MARKER_RE = re.compile(r'[\*✦✤✥•·×✶✸★☆]{3,}\s*$')

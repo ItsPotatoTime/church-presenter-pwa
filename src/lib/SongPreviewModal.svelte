@@ -153,7 +153,7 @@
       </div>
     </div>
     {#each song.slide_texts as slide, i (i)}
-      <div class="slide-prev" class:chorus={song.chorus_index === i}>
+      <div class="slide-prev" class:chorus={song.chorus_index === i || song.chorus_ranges?.some((g: number[]) => g.includes(i))}>
         {#each slide.split('\n') as line}
           <div>{@html renderMarkdown(line) || '\u00A0'}</div>
         {/each}

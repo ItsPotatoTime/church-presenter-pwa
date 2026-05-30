@@ -136,7 +136,7 @@
         if (!confirmed) return;
         await importBackup(data);
         servers = await loadAllServers();
-        creds = await loadCredentials();
+        creds = await loadCredentialsResilient();
         await hydrateFromCache();
         lastSyncTs = await getLastSyncTs();
         if (creds?.device_token) {

@@ -428,7 +428,7 @@
   let songTitle = $state('');
   let songFolder = $state('Written Songs');
   let songLyrics = $state('');
-  let songChorusIndex = $state<number | null>(null);
+  let songChorusIndices = $state<number[]>([]);
   let saveLoading = $state(false);
   let saveError = $state<string | null>(null);
   let showOverwriteConfirm = $state(false);
@@ -441,7 +441,7 @@
     songTitle = '';
     songFolder = 'Written Songs';
     songLyrics = '';
-    songChorusIndex = null;
+    songChorusIndices = [];
     saveError = null;
     showOverwriteConfirm = false;
   }
@@ -466,7 +466,13 @@
       if (res.ok) {
         songTitle = res.title || '';
         songLyrics = (res.slides || []).join('\n\n');
-        songChorusIndex = typeof res.chorus_index === 'number' ? res.chorus_index : null;
+        if (typeof res.chorus_index === 'number') {
+          songChorusIndices = [res.chorus_index];
+        } else if (Array.isArray(res.chorus_index)) {
+          songChorusIndices = res.chorus_index;
+        } else {
+          songChorusIndices = [];
+        }
         writeSongTab = 'manual';
       } else {
         importError = res.error || 'Failed to fetch song from URL';
@@ -501,7 +507,7 @@
       const res = await remote.sendRequest('song.create', {
         name: songTitle.trim(),
         slide_texts: slides,
-        chorus_index: songChorusIndex,
+        chorus_index: songChorusIndices,
         folder: songFolder.trim(),
         overwrite
       });
@@ -921,13 +927,17 @@
               <button
                 type="button"
                 class="slide-prev-item"
-                class:is-chorus={songChorusIndex === i}
+                class:is-chorus={songChorusIndices.includes(i)}
                 onclick={() => {
-                  songChorusIndex = songChorusIndex === i ? null : i;
+                  if (songChorusIndices.includes(i)) {
+                    songChorusIndices = songChorusIndices.filter(idx => idx !== i);
+                  } else {
+                    songChorusIndices = [...songChorusIndices, i];
+                  }
                 }}
               >
                 <div class="slide-prev-badge">
-                  {#if songChorusIndex === i}
+                  {#if songChorusIndices.includes(i)}
                     Chorus
                   {:else}
                     Slide {i + 1}
