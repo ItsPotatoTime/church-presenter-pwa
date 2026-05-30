@@ -55,7 +55,6 @@
 
   let pressedIndex = -1;
   let longPressTimeout: number | undefined;
-  let dragStartEvent: PointerEvent | null = null;
 
   function onPointerDown(e: PointerEvent, index: number) {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
@@ -67,26 +66,25 @@
     pressedIndex = index;
     startX = e.clientX;
     startY = e.clientY;
-    dragStartEvent = e;
 
     // Set timeout for long press (300ms)
     longPressTimeout = window.setTimeout(() => {
       if (pressedIndex === index) {
-        startPointerDrag(index, dragStartEvent!);
+        startPointerDrag(index);
       }
     }, 300);
 
-    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerCancel);
   }
 
-  function startPointerDrag(index: number, e: PointerEvent) {
+  function startPointerDrag(index: number) {
     isPointerDragging = true;
     dragSrcIndex = index;
     dragGhostText = slides[index];
-    currentPointerX = e.clientX;
-    currentPointerY = e.clientY;
+    currentPointerX = startX;
+    currentPointerY = startY;
 
     if (navigator.vibrate) {
       navigator.vibrate(50);
@@ -105,7 +103,10 @@
         clearTimeout(longPressTimeout);
       }
     } else {
-      e.preventDefault();
+      // Prevent default scrolling during active touch dragging
+      if (e.cancelable) {
+        e.preventDefault();
+      }
       currentPointerX = e.clientX;
       currentPointerY = e.clientY;
 
@@ -143,15 +144,16 @@
       dragSrcIndex = null;
       dragOverIndex = null;
     } else {
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
+      const clientX = e ? e.clientX : startX;
+      const clientY = e ? e.clientY : startY;
+      const dx = clientX - startX;
+      const dy = clientY - startY;
       const dist = Math.sqrt(dx * dx + dy * dy);
       if (dist < 8 && pressedIndex !== -1) {
         handleCardClick(pressedIndex);
       }
     }
     pressedIndex = -1;
-    dragStartEvent = null;
   }
 
   function onPointerCancel() {
@@ -161,7 +163,6 @@
     dragSrcIndex = null;
     dragOverIndex = null;
     pressedIndex = -1;
-    dragStartEvent = null;
   }
 
   function cleanupPointerListeners() {

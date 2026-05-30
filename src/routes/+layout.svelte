@@ -16,6 +16,62 @@
   let hasTriggeredSync = $state(false);
   let showUpdateBanner = $state(false);
 
+  // Global debugger console logging overlay
+  let consoleLogs = $state<{ type: 'log' | 'warn' | 'error', text: string, time: string }[]>([]);
+  let showDebugDrawer = $state(false);
+
+  function addLog(type: 'log' | 'warn' | 'error', ...args: any[]) {
+    const text = args.map(arg => {
+      if (typeof arg === 'object') {
+        try {
+          return JSON.stringify(arg, null, 2);
+        } catch {
+          return String(arg);
+        }
+      }
+      return String(arg);
+    }).join(' ');
+    
+    const time = new Date().toLocaleTimeString();
+    consoleLogs = [...consoleLogs, { type, text, time }];
+    if (consoleLogs.length > 200) {
+      consoleLogs = consoleLogs.slice(-200);
+    }
+  }
+
+  function setupConsoleInterceptor() {
+    if (typeof window === 'undefined') return;
+
+    const originalLog = console.log;
+    const originalWarn = console.warn;
+    const originalError = console.error;
+
+    console.log = (...args) => {
+      originalLog.apply(console, args);
+      addLog('log', ...args);
+    };
+    console.warn = (...args) => {
+      originalWarn.apply(console, args);
+      addLog('warn', ...args);
+    };
+    console.error = (...args) => {
+      originalError.apply(console, args);
+      addLog('error', ...args);
+    };
+
+    window.addEventListener('error', (e) => {
+      addLog('error', 'Unhandled error:', e.message, `at ${e.filename}:${e.lineno}:${e.colno}`, e.error?.stack || '');
+    });
+
+    window.addEventListener('unhandledrejection', (e) => {
+      addLog('error', 'Unhandled Promise rejection:', e.reason?.message || e.reason, e.reason?.stack || '');
+    });
+  }
+
+  if (typeof window !== 'undefined') {
+    setupConsoleInterceptor();
+  }
+
   // Foolproof dynamic chunk error handlers
   function handleChunkError(e: ErrorEvent) {
     if (e.message && (e.message.includes('Failed to fetch dynamically imported module') || e.message.includes('Importing a module script failed'))) {
@@ -224,6 +280,44 @@
       </a>
     {/each}
   </nav>
+{/if}
+
+{#if showDebugDrawer}
+  <div class="debug-drawer" style="position: fixed; inset: 0; background: rgba(11, 11, 13, 0.96); z-index: 100000; color: #fff; display: flex; flex-direction: column; font-family: monospace; font-size: 11px; padding: calc(16px + env(safe-area-inset-top, 0)) 16px 16px; box-sizing: border-box;">
+    <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; margin-bottom: 8px; flex-shrink: 0;">
+      <h3 style="margin: 0; font-size: 14px;">🐛 Console Debug Logs</h3>
+      <div style="display: flex; gap: 8px;">
+        <button style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 6px 10px; border-radius: 6px; cursor: pointer;" onclick={() => {
+          const txt = consoleLogs.map(l => `[${l.time}] [${l.type.toUpperCase()}] ${l.text}`).join('\n');
+          navigator.clipboard.writeText(txt).then(() => alert('Copied logs to clipboard!'));
+        }}>Copy</button>
+        <button style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; padding: 6px 10px; border-radius: 6px; cursor: pointer;" onclick={() => consoleLogs = []}>Clear</button>
+        <button style="background: var(--accent); border: none; color: #fff; padding: 6px 12px; border-radius: 6px; font-weight: bold; cursor: pointer;" onclick={() => showDebugDrawer = false}>Close</button>
+      </div>
+    </div>
+    <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;">
+      {#each consoleLogs as log}
+        <div style="border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px; white-space: pre-wrap; line-height: 1.3;">
+          <span style="color: #6b7280; font-size: 9px; margin-right: 4px;">[{log.time}]</span>
+          <span style="color: {log.type === 'error' ? '#f87171' : log.type === 'warn' ? '#fbbf24' : '#60a5fa'}; font-weight: bold; margin-right: 4px;">[{log.type.toUpperCase()}]</span>
+          <span>{log.text}</span>
+        </div>
+      {/each}
+      {#if consoleLogs.length === 0}
+        <div style="color: #6b7280; text-align: center; margin-top: 40px;">No console logs captured yet.</div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
+{#if ready}
+  <button 
+    style="position: fixed; right: 16px; bottom: calc(80px + env(safe-area-inset-bottom, 0)); width: 32px; height: 32px; border-radius: 50%; background: rgba(30, 30, 40, 0.55); border: 1px solid rgba(255,255,255,0.15); display: flex; align-items: center; justify-content: center; font-size: 14px; z-index: 99999; cursor: pointer; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); transition: all 150ms; padding: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.25);"
+    onclick={() => showDebugDrawer = true}
+    title="Open console debugger"
+  >
+    🐛
+  </button>
 {/if}
 
 <style>
