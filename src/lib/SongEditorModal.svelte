@@ -40,34 +40,142 @@
     };
   });
 
-  // Reordering: HTML5 Drag & Drop State
-  let dragIndex = $state<number | null>(null);
-  
-  // Reordering: Tap-to-Pickup State (ideal for mobile touch)
-  let pickedUpIndex = $state<number | null>(null);
+  import { onDestroy } from 'svelte';
 
-  function handleDragStart(index: number, e: DragEvent) {
-    dragIndex = index;
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', index.toString());
+  // Reordering: Pointer-event drag-to-reorder state with long-press
+  let dragSrcIndex = $state<number | null>(null);
+  let dragOverIndex = $state<number | null>(null);
+  let isPointerDragging = $state(false);
+
+  let startX = 0;
+  let startY = 0;
+  let currentPointerX = $state(0);
+  let currentPointerY = $state(0);
+  let dragGhostText = $state('');
+
+  let pressedIndex = -1;
+  let longPressTimeout: number | undefined;
+  let dragStartEvent: PointerEvent | null = null;
+
+  function onPointerDown(e: PointerEvent, index: number) {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+    // Check if clicked on a button or interactive element
+    const target = e.target as HTMLElement;
+    if (target.closest('button') || target.closest('a') || target.closest('textarea') || target.closest('input')) return;
+
+    pressedIndex = index;
+    startX = e.clientX;
+    startY = e.clientY;
+    dragStartEvent = e;
+
+    // Set timeout for long press (300ms)
+    longPressTimeout = window.setTimeout(() => {
+      if (pressedIndex === index) {
+        startPointerDrag(index, dragStartEvent!);
+      }
+    }, 300);
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
+  }
+
+  function startPointerDrag(index: number, e: PointerEvent) {
+    isPointerDragging = true;
+    dragSrcIndex = index;
+    dragGhostText = slides[index];
+    currentPointerX = e.clientX;
+    currentPointerY = e.clientY;
+
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
     }
   }
 
-  function handleDragOver(index: number, e: DragEvent) {
-    e.preventDefault();
+  function onPointerMove(e: PointerEvent) {
+    if (pressedIndex === -1) return;
+
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (!isPointerDragging) {
+      if (dist > 8) {
+        clearTimeout(longPressTimeout);
+      }
+    } else {
+      e.preventDefault();
+      currentPointerX = e.clientX;
+      currentPointerY = e.clientY;
+
+      const els = document.querySelectorAll('.slide-thumb');
+      let foundOverIndex = -1;
+      for (let i = 0; i < els.length; i++) {
+        const rect = els[i].getBoundingClientRect();
+        if (
+          e.clientX >= rect.left &&
+          e.clientX <= rect.right &&
+          e.clientY >= rect.top &&
+          e.clientY <= rect.bottom
+        ) {
+          foundOverIndex = i;
+          break;
+        }
+      }
+      if (foundOverIndex !== -1 && foundOverIndex !== dragSrcIndex) {
+        dragOverIndex = foundOverIndex;
+      } else {
+        dragOverIndex = null;
+      }
+    }
   }
 
-  function handleDragEnd() {
-    dragIndex = null;
+  function onPointerUp(e: PointerEvent) {
+    clearTimeout(longPressTimeout);
+    cleanupPointerListeners();
+
+    if (isPointerDragging) {
+      if (dragSrcIndex !== null && dragOverIndex !== null && dragSrcIndex !== dragOverIndex) {
+        performMove(dragSrcIndex, dragOverIndex);
+      }
+      isPointerDragging = false;
+      dragSrcIndex = null;
+      dragOverIndex = null;
+    } else {
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 8 && pressedIndex !== -1) {
+        handleCardClick(pressedIndex);
+      }
+    }
+    pressedIndex = -1;
+    dragStartEvent = null;
   }
 
-  function handleDrop(index: number, e: DragEvent) {
-    e.preventDefault();
-    if (dragIndex === null || dragIndex === index) return;
-    performMove(dragIndex, index);
-    dragIndex = null;
+  function onPointerCancel() {
+    clearTimeout(longPressTimeout);
+    cleanupPointerListeners();
+    isPointerDragging = false;
+    dragSrcIndex = null;
+    dragOverIndex = null;
+    pressedIndex = -1;
+    dragStartEvent = null;
   }
+
+  function cleanupPointerListeners() {
+    window.removeEventListener('pointermove', onPointerMove);
+    window.removeEventListener('pointerup', onPointerUp);
+    window.removeEventListener('pointercancel', onPointerCancel);
+  }
+
+  onDestroy(() => {
+    cleanupPointerListeners();
+  });
+
+  // Reordering: Tap-to-Pickup State (ideal for mobile touch)
+  let pickedUpIndex = $state<number | null>(null);
 
   function performMove(src: number, dst: number) {
     if (src === dst || src < 0 || src >= slides.length || dst < 0 || dst >= slides.length) return;
@@ -346,16 +454,13 @@
           class:chorus={chorusIndices.has(i)}
           class:end={endSlideIndex === i}
           class:dimmed={endSlideIndex !== null && i > endSlideIndex}
-          class:dragging={dragIndex === i}
+          class:dragging={dragSrcIndex === i}
+          class:drag-over={dragOverIndex === i}
           class:in-transit={pickedUpIndex === i}
           role="button"
           tabindex="0"
-          draggable="true"
-          ondragstart={(e) => handleDragStart(i, e)}
-          ondragover={(e) => handleDragOver(i, e)}
-          ondragend={handleDragEnd}
-          ondrop={(e) => handleDrop(i, e)}
-          onclick={() => handleCardClick(i)}
+          style="touch-action: none;"
+          onpointerdown={(e) => onPointerDown(e, i)}
           onkeydown={(e) => { if (e.key === 'Enter') handleCardClick(i); }}
         >
           <div class="thumb-header">
@@ -440,6 +545,22 @@
       </div>
     {/if}
   </div>
+
+  {#if isPointerDragging && dragSrcIndex !== null}
+    <div
+      class="drag-ghost-slide"
+      style="position: fixed; top: {currentPointerY - 45}px; left: {currentPointerX - 65}px; pointer-events: none; z-index: 10000; transform: scale(1.05); opacity: 0.85;"
+    >
+      <div class="thumb-header">
+        <span class="thumb-index">#{dragSrcIndex + 1}</span>
+      </div>
+      <div class="thumb-preview">
+        {#each dragGhostText.split('\n').slice(0, 3) as line}
+          <div class="preview-line">{@html renderMarkdown(line) || '\u00A0'}</div>
+        {/each}
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -870,5 +991,26 @@
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(-5px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Floating Drag Ghost Slide */
+  .drag-ghost-slide {
+    width: 130px;
+    height: 95px;
+    background: var(--elevated, #1c1c22);
+    border: 1px solid var(--accent, #7c3aed);
+    border-radius: 8px;
+    padding: 8px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-sizing: border-box;
+  }
+
+  .slide-thumb.drag-over {
+    border-color: var(--accent, #7c3aed);
+    box-shadow: 0 0 12px rgba(124, 58, 237, 0.4);
+    transform: scale(1.02);
   }
 </style>
