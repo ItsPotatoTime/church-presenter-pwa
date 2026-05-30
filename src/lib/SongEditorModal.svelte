@@ -14,26 +14,18 @@
   // State
   let slides = $state([...song.slide_texts]);
   let songName = $state(song.name);
-  let selectedIndex = $state<number | null>(slides.length > 0 ? 0 : null);
-  let showMobileEditor = $state(false);
+  let selectedIndex = $state<number | null>(null);
   let isVirtual = $derived(song.path.startsWith('virtual://') || song.path.startsWith('virtual:'));
 
-  // Initialize chorus indices
-  const initialChorus = new Set<number>();
-  if (song.chorus_index !== undefined && song.chorus_index !== null) {
-    initialChorus.add(song.chorus_index);
-  }
-  if (song.chorus_ranges) {
-    for (const range of song.chorus_ranges) {
-      for (const idx of range) {
-        initialChorus.add(idx);
-      }
-    }
-  }
-  let chorusIndices = $state<Set<number>>(initialChorus);
-
-  // Initialize end slide index if slides were previously limited
-  // However, on PWA we only get the visible slides, so we allow marking any index as end.
+  // Initialize chorus groups
+  let chorusGroups = $state<number[][]>(
+    song.chorus_ranges && song.chorus_ranges.length > 0 
+      ? song.chorus_ranges.map(g => [...g]) 
+      : (song.chorus_index !== undefined && song.chorus_index !== null 
+          ? [[song.chorus_index]] 
+          : [])
+  );
+  let chorusIndices = $derived(new Set(chorusGroups.flat()));
   let endSlideIndex = $state<number | null>(null);
 
   // Register close handler for back gestures
@@ -48,14 +40,16 @@
     };
   });
 
-  // Drag and drop state
+  // Reordering: HTML5 Drag & Drop State
   let dragIndex = $state<number | null>(null);
+  
+  // Reordering: Tap-to-Pickup State (ideal for mobile touch)
+  let pickedUpIndex = $state<number | null>(null);
 
   function handleDragStart(index: number, e: DragEvent) {
     dragIndex = index;
     if (e.dataTransfer) {
       e.dataTransfer.effectAllowed = 'move';
-      // Set dummy text for Firefox drag support
       e.dataTransfer.setData('text/plain', index.toString());
     }
   }
@@ -64,113 +58,140 @@
     e.preventDefault();
   }
 
+  function handleDragEnd() {
+    dragIndex = null;
+  }
+
   function handleDrop(index: number, e: DragEvent) {
     e.preventDefault();
     if (dragIndex === null || dragIndex === index) return;
+    performMove(dragIndex, index);
+    dragIndex = null;
+  }
 
-    // Reorder slides
+  function performMove(src: number, dst: number) {
+    if (src === dst || src < 0 || src >= slides.length || dst < 0 || dst >= slides.length) return;
+
+    // Move in slides array
     const items = [...slides];
-    const [removed] = items.splice(dragIndex, 1);
-    items.splice(index, 0, removed);
+    const [removed] = items.splice(src, 1);
+    items.splice(dst, 0, removed);
     slides = items;
 
-    // Map chorus indices
-    const newChorus = new Set<number>();
-    chorusIndices.forEach(idx => {
-      if (idx === dragIndex) {
-        newChorus.add(index);
-      } else if (dragIndex < index) {
-        if (idx > dragIndex && idx <= index) {
-          newChorus.add(idx - 1);
-        } else {
-          newChorus.add(idx);
-        }
-      } else { // dragIndex > index
-        if (idx >= index && idx < dragIndex) {
-          newChorus.add(idx + 1);
-        } else {
-          newChorus.add(idx);
-        }
+    // Shift chorus groups
+    const remapIndex = (idx: number) => {
+      if (idx === src) return dst;
+      if (src < dst) {
+        if (idx > src && idx <= dst) return idx - 1;
+      } else {
+        if (idx >= dst && idx < src) return idx + 1;
       }
+      return idx;
+    };
+    chorusGroups = chorusGroups.map(group => {
+      return group.map(remapIndex).sort((a, b) => a - b);
     });
-    chorusIndices = newChorus;
 
-    // Map end slide
-    if (endSlideIndex === dragIndex) {
-      endSlideIndex = index;
+    // Shift end slide index
+    if (endSlideIndex === src) {
+      endSlideIndex = dst;
     } else if (endSlideIndex !== null) {
-      if (dragIndex < index) {
-        if (endSlideIndex > dragIndex && endSlideIndex <= index) {
+      if (src < dst) {
+        if (endSlideIndex > src && endSlideIndex <= dst) {
           endSlideIndex--;
         }
       } else {
-        if (endSlideIndex >= index && endSlideIndex < dragIndex) {
+        if (endSlideIndex >= dst && endSlideIndex < src) {
           endSlideIndex++;
         }
       }
     }
 
-    if (selectedIndex === dragIndex) {
-      selectedIndex = index;
+    // Shift selected index
+    if (selectedIndex === src) {
+      selectedIndex = dst;
     } else if (selectedIndex !== null) {
-      if (dragIndex < index) {
-        if (selectedIndex > dragIndex && selectedIndex <= index) {
+      if (src < dst) {
+        if (selectedIndex > src && selectedIndex <= dst) {
           selectedIndex--;
         }
       } else {
-        if (selectedIndex >= index && selectedIndex < dragIndex) {
+        if (selectedIndex >= dst && selectedIndex < src) {
           selectedIndex++;
         }
       }
     }
-
-    dragIndex = null;
   }
 
-  function moveSlide(index: number, direction: 'up' | 'down') {
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= slides.length) return;
-
-    const items = [...slides];
-    const [removed] = items.splice(index, 1);
-    items.splice(targetIndex, 0, removed);
-    slides = items;
-
-    // Swap chorus index memberships
-    const newChorus = new Set<number>();
-    chorusIndices.forEach(idx => {
-      if (idx === index) {
-        newChorus.add(targetIndex);
-      } else if (idx === targetIndex) {
-        newChorus.add(index);
+  function handleCardClick(index: number) {
+    if (pickedUpIndex !== null) {
+      if (pickedUpIndex === index) {
+        // Cancel pickup
+        pickedUpIndex = null;
       } else {
-        newChorus.add(idx);
+        // Place slide here
+        performMove(pickedUpIndex, index);
+        pickedUpIndex = null;
       }
-    });
-    chorusIndices = newChorus;
-
-    // Swap end slide
-    if (endSlideIndex === index) {
-      endSlideIndex = targetIndex;
-    } else if (endSlideIndex === targetIndex) {
-      endSlideIndex = index;
+    } else {
+      // Toggle selection
+      if (selectedIndex === index) {
+        selectedIndex = null;
+      } else {
+        selectedIndex = index;
+      }
     }
+  }
 
-    // Swap selected
-    if (selectedIndex === index) {
-      selectedIndex = targetIndex;
-    } else if (selectedIndex === targetIndex) {
-      selectedIndex = index;
+  function togglePickup(index: number) {
+    if (pickedUpIndex === index) {
+      pickedUpIndex = null;
+    } else {
+      pickedUpIndex = index;
+    }
+  }
+
+  function handleTextInput(text: string) {
+    if (selectedIndex === null) return;
+    slides[selectedIndex] = text;
+
+    // Chorus sync: propagate edits across all linked chorus slides in the same group
+    const group = chorusGroups.find(g => g.includes(selectedIndex!));
+    if (group) {
+      group.forEach(idx => {
+        if (idx !== selectedIndex) {
+          slides[idx] = text;
+        }
+      });
     }
   }
 
   function toggleChorus(index: number) {
-    if (chorusIndices.has(index)) {
-      chorusIndices.delete(index);
+    const existingGroupIdx = chorusGroups.findIndex(g => g.includes(index));
+    if (existingGroupIdx !== -1) {
+      // Remove it from the group
+      chorusGroups[existingGroupIdx] = chorusGroups[existingGroupIdx].filter(idx => idx !== index);
+      // Clean up empty groups or groups with size < 2
+      if (chorusGroups[existingGroupIdx].length < 2) {
+        chorusGroups.splice(existingGroupIdx, 1);
+      }
     } else {
-      chorusIndices.add(index);
+      // Mark Chorus: Add it to a group
+      if (chorusGroups.length > 0) {
+        chorusGroups[0].push(index);
+        chorusGroups[0].sort((a, b) => a - b);
+      } else {
+        chorusGroups.push([index]);
+      }
+      
+      // Optional: Copy the text of the first chorus slide to this new one if it's currently blank
+      const flatIndices = chorusGroups.flat();
+      const firstChorusIdx = flatIndices.find(idx => idx !== index && slides[idx].trim());
+      if (firstChorusIdx !== undefined && !slides[index].trim()) {
+        slides[index] = slides[firstChorusIdx];
+      }
     }
-    chorusIndices = new Set(chorusIndices); // trigger reactivity
+    chorusGroups = [...chorusGroups];
   }
 
   function toggleEndSlide(index: number) {
@@ -189,26 +210,23 @@
     slides.splice(index, 1);
     slides = [...slides];
 
-    // Shift chorus indices
-    const newChorus = new Set<number>();
-    chorusIndices.forEach(idx => {
-      if (idx === index) return; // removed
-      if (idx > index) {
-        newChorus.add(idx - 1);
-      } else {
-        newChorus.add(idx);
-      }
-    });
-    chorusIndices = newChorus;
+    // Shift chorus groups
+    chorusGroups = chorusGroups
+      .map(group => {
+        return group
+          .filter(idx => idx !== index)
+          .map(idx => (idx > index ? idx - 1 : idx));
+      })
+      .filter(group => group.length > 0);
 
-    // Shift end slide index
+    // Shift end slide
     if (endSlideIndex === index) {
       endSlideIndex = null;
     } else if (endSlideIndex !== null && endSlideIndex > index) {
       endSlideIndex--;
     }
 
-    // Adjust selected index
+    // Shift selection
     if (selectedIndex === index) {
       selectedIndex = Math.min(index, slides.length - 1);
     } else if (selectedIndex !== null && selectedIndex > index) {
@@ -217,26 +235,13 @@
   }
 
   function addSlide() {
-    slides = [...slides, 'New Slide Text'];
+    slides = [...slides, ''];
     selectedIndex = slides.length - 1;
-  }
-
-  function computeChorusRanges(chorusSet: Set<number>): number[][] {
-    const sorted = Array.from(chorusSet).sort((a, b) => a - b);
-    const groups: number[][] = [];
-    let currentGroup: number[] = [];
-    for (const idx of sorted) {
-      if (currentGroup.length === 0 || idx === currentGroup[currentGroup.length - 1] + 1) {
-        currentGroup.push(idx);
-      } else {
-        groups.push(currentGroup);
-        currentGroup = [idx];
-      }
-    }
-    if (currentGroup.length > 0) {
-      groups.push(currentGroup);
-    }
-    return groups;
+    // Scroll list to end
+    setTimeout(() => {
+      const el = document.querySelector('.slides-list');
+      if (el) el.scrollLeft = el.scrollWidth;
+    }, 50);
   }
 
   async function handleSave() {
@@ -245,8 +250,9 @@
       return;
     }
 
-    const ranges = computeChorusRanges(chorusIndices);
-    const primaryChorusIndex = ranges.length > 0 && ranges[0].length > 0 ? ranges[0][0] : null;
+    // Filter out groups with length < 2 (as a group needs at least 2 linked slides)
+    const ranges = chorusGroups.filter(g => g.length >= 2);
+    const primaryChorusIndex = ranges.length > 0 ? ranges[0][0] : (chorusGroups.flat()[0] ?? null);
 
     const payload = {
       song_path: song.path,
@@ -255,12 +261,12 @@
       chorus_index: primaryChorusIndex,
       chorus_ranges: ranges.length > 0 ? ranges : null,
       end_slide_index: endSlideIndex,
-      auto_chorus_enabled: chorusIndices.size > 0,
+      auto_chorus_enabled: chorusGroups.length > 0,
     };
 
-    // 1. Optimistically update local PWA store
-    songsStore.update(songsList => {
-      return songsList.map(s => {
+    // 1. Update client store
+    songsStore.update(list => {
+      return list.map(s => {
         if (s.path === song.path) {
           return {
             ...s,
@@ -274,39 +280,32 @@
       });
     });
 
-    // Mirror props to the parent preview modal
     song.name = payload.name;
     song.slide_texts = slides;
     song.chorus_index = primaryChorusIndex ?? undefined;
     song.chorus_ranges = ranges.length > 0 ? ranges : undefined;
 
-    // 2. Persist in IndexedDB local cache
+    // 2. Persist local
     try {
-      const currentSongData = $songsStore.find(s => s.path === song.path);
-      if (currentSongData) {
-        await putSongs([currentSongData]);
-      }
+      const current = $songsStore.find(s => s.path === song.path);
+      if (current) await putSongs([current]);
     } catch (err) {
-      console.error('Failed to save song locally in IndexedDB:', err);
+      console.error('Failed to save in IndexedDB:', err);
     }
 
-    // 3. Dispatch to desktop or queue offline mutation
+    // 3. Sync or queue
     if ($connStatus === 'open') {
       try {
         const res = await remote.sendRequest('song.update', payload);
-        if (!res.ok) {
-          console.error('Failed to update song on server:', res.error);
-          alert(`Error saving to desktop: ${res.error}`);
-        }
+        if (!res.ok) alert(`Save error: ${res.error}`);
       } catch (err) {
-        console.error('Error sending song update request:', err);
+        console.error('Save failed:', err);
       }
     } else {
-      // Offline mode: queue pending mutation
       try {
         await addPendingMutation({ type: 'song.update', payload });
       } catch (err) {
-        console.error('Failed to queue offline update:', err);
+        console.error('Mutation queue failed:', err);
       }
     }
 
@@ -315,189 +314,139 @@
 </script>
 
 <div class="editor-overlay">
+  <!-- Top Bar -->
   <div class="editor-header">
-    <div class="header-left">
-      <button class="header-btn cancel" onclick={onclose}>Cancel</button>
-    </div>
+    <button class="header-btn cancel" onclick={onclose}>Cancel</button>
     <div class="header-title">
       {#if isVirtual}
-        <input
-          type="text"
-          bind:value={songName}
-          class="title-input"
-          placeholder="Edit Song Title"
-        />
+        <input type="text" bind:value={songName} class="title-input" placeholder="Song Title" />
       {:else}
         <span class="title-display">{songName} <span class="file-badge">PPTX</span></span>
       {/if}
     </div>
-    <div class="header-right">
-      <button class="header-btn save" onclick={handleSave}>Save</button>
-    </div>
+    <button class="header-btn save" onclick={handleSave}>Save</button>
   </div>
 
-  <div class="editor-layout">
-    <!-- Left Pane: Slide List & Sorting -->
-    <div class="slides-pane">
-      <div class="pane-header">
-        <h3>Slides ({slides.length})</h3>
-        <button class="add-btn" onclick={addSlide}>+ Add Slide</button>
-      </div>
+  <!-- Reorder Helper Info Banner -->
+  {#if pickedUpIndex !== null}
+    <div class="pickup-banner">
+      <span>Picked up slide #{pickedUpIndex + 1}. Tap another position to place it.</span>
+      <button class="cancel-pickup" onclick={() => pickedUpIndex = null}>Cancel</button>
+    </div>
+  {/if}
 
-      <div class="slides-list">
-        {#each slides as slide, i (i)}
-          <div
-            class="slide-card"
-            class:selected={selectedIndex === i}
-            class:chorus={chorusIndices.has(i)}
-            class:end={endSlideIndex === i}
-            class:dimmed={endSlideIndex !== null && i > endSlideIndex}
-            class:dragging={dragIndex === i}
-            role="button"
-            tabindex="0"
-            draggable="true"
-            ondragstart={(e) => handleDragStart(i, e)}
-            ondragover={(e) => handleDragOver(i, e)}
-            ondrop={(e) => handleDrop(i, e)}
-            onclick={() => { selectedIndex = i; }}
-            onkeydown={(e) => { if (e.key === 'Enter') selectedIndex = i; }}
-          >
-            <!-- Drag Handle / Number -->
-            <div class="slide-num">
-              <span class="drag-icon">⋮⋮</span>
-              <span class="num-lbl">{i + 1}</span>
-            </div>
-
-            <!-- Slide Content Preview -->
-            <div class="slide-body-prev">
-              {#each slide.split('\n').slice(0, 3) as line}
-                <div class="line-prev">{@html renderMarkdown(line) || '\u00A0'}</div>
-              {/each}
-              {#if slide.split('\n').length > 3}
-                <div class="more-indicator">...</div>
+  <!-- Filmstrip Layout Container -->
+  <div class="editor-container" class:has-selection={selectedIndex !== null}>
+    <!-- Slides list (vertical grid when no selection, horizontal filmstrip when has selection) -->
+    <div class="slides-list">
+      {#each slides as slide, i (i)}
+        <div
+          class="slide-thumb"
+          class:selected={selectedIndex === i}
+          class:chorus={chorusIndices.has(i)}
+          class:end={endSlideIndex === i}
+          class:dimmed={endSlideIndex !== null && i > endSlideIndex}
+          class:dragging={dragIndex === i}
+          class:in-transit={pickedUpIndex === i}
+          role="button"
+          tabindex="0"
+          draggable="true"
+          ondragstart={(e) => handleDragStart(i, e)}
+          ondragover={(e) => handleDragOver(i, e)}
+          ondragend={handleDragEnd}
+          ondrop={(e) => handleDrop(i, e)}
+          onclick={() => handleCardClick(i)}
+          onkeydown={(e) => { if (e.key === 'Enter') handleCardClick(i); }}
+        >
+          <div class="thumb-header">
+            <span class="thumb-index">#{i + 1}</span>
+            <div class="badge-row">
+              {#if chorusIndices.has(i)}
+                <span class="mini-badge purple">C</span>
+              {/if}
+              {#if endSlideIndex === i}
+                <span class="mini-badge orange">E</span>
               {/if}
             </div>
-
-            <!-- Actions Row -->
-            <div class="slide-actions" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
-              <button
-                class="action-btn chorus-toggle"
-                class:active={chorusIndices.has(i)}
-                onclick={() => toggleChorus(i)}
-                title="Toggle Chorus"
-              >
-                Chorus
-              </button>
-              <button
-                class="action-btn end-toggle"
-                class:active={endSlideIndex === i}
-                onclick={() => toggleEndSlide(i)}
-                title="Mark as End"
-              >
-                End
-              </button>
-              
-              <div class="reorder-btns">
-                <button
-                  class="reorder-btn"
-                  disabled={i === 0}
-                  onclick={() => moveSlide(i, 'up')}
-                  title="Move Up"
-                >
-                  ▲
-                </button>
-                <button
-                  class="reorder-btn"
-                  disabled={i === slides.length - 1}
-                  onclick={() => moveSlide(i, 'down')}
-                  title="Move Down"
-                >
-                  ▼
-                </button>
-              </div>
-
-              <button
-                class="edit-btn"
-                onclick={() => { selectedIndex = i; showMobileEditor = true; }}
-                title="Edit Text"
-              >
-                ✎
-              </button>
-              <button
-                class="delete-btn"
-                onclick={() => deleteSlide(i)}
-                title="Delete Slide"
-              >
-                🗑
-              </button>
-            </div>
           </div>
-        {/each}
-      </div>
+          <div class="thumb-preview">
+            {#each slide.split('\n').slice(0, 3) as line}
+              <div class="preview-line">{@html renderMarkdown(line) || '\u00A0'}</div>
+            {/each}
+          </div>
+        </div>
+      {/each}
+      
+      <!-- Add Slide Thumbnail -->
+      <button class="add-card-thumb" onclick={addSlide} title="Add Slide">
+        <span class="add-icon">+</span>
+        <span class="add-text">Add Slide</span>
+      </button>
     </div>
 
-    <!-- Right Pane: Desktop Slide Editor (Hidden on Mobile) -->
-    <div class="textarea-pane">
-      {#if selectedIndex !== null}
-        <div class="editor-container">
-          <div class="editor-headline">
-            <span>Editing Slide {selectedIndex + 1}</span>
-            <div class="badge-row">
-              {#if chorusIndices.has(selectedIndex)}
-                <span class="badge chorus-badge">CHORUS</span>
-              {/if}
-              {#if endSlideIndex === selectedIndex}
-                <span class="badge end-badge">END SLIDE</span>
-              {/if}
-            </div>
+    <!-- Bottom Pane: Active Slide Controls & Text Editor -->
+    {#if selectedIndex !== null}
+      <div class="editor-workspace">
+        <div class="workspace-card">
+          <div class="workspace-header">
+            <h3>Editing Slide #{selectedIndex + 1}</h3>
+            {#if chorusIndices.has(selectedIndex)}
+              <span class="status-banner chorus-sync-notice">♻ Mirroring: Edits will copy to all choruses</span>
+            {/if}
           </div>
+          
+          <!-- Text Edit Box -->
           <textarea
             value={slides[selectedIndex]}
-            oninput={(e) => {
-              if (selectedIndex !== null) {
-                slides[selectedIndex] = e.currentTarget.value;
-              }
-            }}
-            placeholder="Type slide text here..."
-            class="editor-textarea"
+            oninput={(e) => handleTextInput(e.currentTarget.value)}
+            placeholder="Type slide lyrics here..."
+            class="lyrics-textarea"
           ></textarea>
+
+          <!-- Slide Controls Row -->
+          <div class="controls-row">
+            <button
+              class="control-btn chorus-toggle"
+              class:active={chorusIndices.has(selectedIndex)}
+              onclick={() => toggleChorus(selectedIndex!)}
+            >
+              🎤 {chorusIndices.has(selectedIndex) ? 'Clear Chorus' : 'Mark Chorus'}
+            </button>
+
+            <button
+              class="control-btn end-toggle"
+              class:active={endSlideIndex === selectedIndex}
+              onclick={() => toggleEndSlide(selectedIndex!)}
+            >
+              🚩 {endSlideIndex === selectedIndex ? 'Clear End' : 'Mark as End'}
+            </button>
+
+            <button
+              class="control-btn move-toggle"
+              class:active={pickedUpIndex === selectedIndex}
+              onclick={() => togglePickup(selectedIndex!)}
+            >
+              ⇅ {pickedUpIndex === selectedIndex ? 'Placing Slide...' : 'Pick Up to Move'}
+            </button>
+
+            <button
+              class="control-btn delete-btn"
+              onclick={() => deleteSlide(selectedIndex!)}
+            >
+              🗑 Delete Slide
+            </button>
+          </div>
         </div>
-      {:else}
-        <div class="no-selection">
-          Select a slide to edit its text.
-        </div>
-      {/if}
-    </div>
+      </div>
+    {/if}
   </div>
 </div>
-
-<!-- Mobile Text Editor Modal (Overlay) -->
-{#if showMobileEditor && selectedIndex !== null}
-  <div class="mobile-editor-overlay" onclick={() => showMobileEditor = false} onkeydown={(e) => { if (e.key === 'Escape') showMobileEditor = false; }}>
-    <div class="mobile-editor-dialog" onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.stopPropagation()}>
-      <div class="dialog-head">
-        <h4>Edit Slide {selectedIndex + 1}</h4>
-        <button class="close-dialog" onclick={() => showMobileEditor = false}>Done</button>
-      </div>
-      <textarea
-        value={slides[selectedIndex]}
-        oninput={(e) => {
-          if (selectedIndex !== null) {
-            slides[selectedIndex] = e.currentTarget.value;
-          }
-        }}
-        placeholder="Type slide text here..."
-        class="dialog-textarea"
-      ></textarea>
-    </div>
-  </div>
-{/if}
 
 <style>
   .editor-overlay {
     position: fixed;
     inset: 0;
-    background: var(--bg, #121214);
+    background: var(--bg, #0b0b0d);
     color: var(--text, #f3f4f6);
     z-index: 110;
     display: flex;
@@ -507,12 +456,13 @@
 
   .editor-header {
     height: 60px;
-    background: var(--panel, #1e1e24);
-    border-bottom: 1px solid var(--border, #2d2d34);
+    background: var(--panel, #15151a);
+    border-bottom: 1px solid var(--border, #24242b);
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 16px;
+    flex-shrink: 0;
   }
 
   .header-btn {
@@ -550,8 +500,8 @@
   }
 
   .title-input {
-    background: var(--elevated, #18181c);
-    border: 1px solid var(--border, #2d2d34);
+    background: var(--elevated, #1c1c22);
+    border: 1px solid var(--border, #24242b);
     border-radius: 6px;
     color: #ffffff;
     padding: 6px 12px;
@@ -574,7 +524,7 @@
   }
 
   .file-badge {
-    background: rgba(255,255,255,0.08);
+    background: rgba(255, 255, 255, 0.08);
     font-size: 11px;
     font-weight: 500;
     padding: 2px 6px;
@@ -582,143 +532,169 @@
     color: var(--text-secondary);
   }
 
-  .editor-layout {
-    display: grid;
-    grid-template-columns: 1fr;
-    height: calc(100% - 60px);
-    overflow: hidden;
-  }
-
-  @media (min-width: 768px) {
-    .editor-layout {
-      grid-template-columns: 380px 1fr;
-    }
-  }
-
-  /* Left Pane: Slide Cards List */
-  .slides-pane {
-    border-right: 1px solid var(--border, #2d2d34);
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
-    background: var(--bg);
-  }
-
-  .pane-header {
+  /* Pickup Reorder Banner */
+  .pickup-banner {
+    background: color-mix(in srgb, var(--accent, #7c3aed) 20%, #0d0d12);
+    border-bottom: 1px solid var(--accent, #7c3aed);
+    color: #dfdfff;
+    padding: 10px 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border, #2d2d34);
-    background: var(--surface, #15151a);
+    font-size: 13px;
+    font-weight: 500;
+    animation: fadeIn 200ms ease;
   }
 
-  .pane-header h3 {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text-secondary);
-  }
-
-  .add-btn {
-    background: transparent;
-    border: 1px solid var(--accent, #7c3aed);
-    color: var(--accent, #7c3aed);
+  .cancel-pickup {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
     padding: 4px 10px;
-    font-size: 12px;
-    font-weight: 600;
-    border-radius: 6px;
+    border-radius: 4px;
+    font-size: 11px;
     cursor: pointer;
-    transition: background 150ms ease;
-  }
-  .add-btn:hover {
-    background: rgba(124, 58, 237, 0.08);
   }
 
-  .slides-list {
+  .editor-container {
     flex: 1;
-    overflow-y: auto;
-    padding: 12px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    overflow: hidden;
   }
 
-  .slide-card {
-    background: var(--elevated, #18181c);
-    border: 1px solid var(--border, #2d2d34);
+  /* Slides List Container */
+  .slides-list {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
+    transition: all 200ms ease-in-out;
+  }
+
+  /* Grid layout when NO selection (shows overview) */
+  .editor-container:not(.has-selection) .slides-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+    background: var(--bg, #0b0b0d);
+  }
+
+  /* Horizontal filmstrip layout when HAS selection */
+  .editor-container.has-selection .slides-list {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding: 16px;
+    background: var(--surface, #111115);
+    border-bottom: 1px solid var(--border, #24242b);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .slide-thumb {
+    background: var(--elevated, #1c1c22);
+    border: 1px solid var(--border, #24242b);
     border-radius: 8px;
-    padding: 10px;
+    padding: 8px;
+    cursor: pointer;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    cursor: pointer;
+    justify-content: space-between;
+    transition: all 150ms ease;
+    box-sizing: border-box;
     position: relative;
     user-select: none;
-    transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
-  }
-  
-  .slide-card:hover {
-    border-color: var(--border-light, #4b5563);
   }
 
-  .slide-card.selected {
+  /* Thumbnail dimensions when NO selection */
+  .editor-container:not(.has-selection) .slide-thumb {
+    height: 110px;
+  }
+
+  /* Thumbnail dimensions when HAS selection */
+  .editor-container.has-selection .slide-thumb {
+    flex: 0 0 145px;
+    height: 105px;
+  }
+
+  .slide-thumb:hover {
+    border-color: var(--border-light, #3f3f46);
+  }
+
+  .slide-thumb.selected {
     border-color: var(--accent, #7c3aed);
-    box-shadow: 0 0 0 1px var(--accent);
+    box-shadow: 0 0 10px rgba(124, 58, 237, 0.4);
   }
 
-  .slide-card.chorus {
-    background: var(--chorus-tint, rgba(124, 58, 237, 0.1));
+  .slide-thumb.chorus {
+    background: var(--chorus-tint, rgba(124, 58, 237, 0.08));
     border-color: var(--chorus-border, rgba(124, 58, 237, 0.3));
   }
-  .slide-card.chorus.selected {
+  .slide-thumb.chorus.selected {
     border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
   }
 
-  .slide-card.end {
+  .slide-thumb.end {
     border-color: #f97316;
   }
-  .slide-card.end.selected {
+  .slide-thumb.end.selected {
     border-color: #f97316;
-    box-shadow: 0 0 0 1px #f97316;
+    box-shadow: 0 0 10px rgba(249, 115, 22, 0.4);
   }
 
-  .slide-card.dimmed {
+  .slide-thumb.dimmed {
     opacity: 0.35;
   }
 
-  .slide-card.dragging {
-    opacity: 0.5;
-    transform: scale(0.98);
+  .slide-thumb.dragging {
+    opacity: 0.4;
     border-style: dashed;
   }
 
-  .slide-num {
+  .slide-thumb.in-transit {
+    border: 2px dashed var(--accent, #7c3aed);
+    box-shadow: 0 0 15px rgba(124, 58, 237, 0.3);
+    animation: pulse 1.5s infinite;
+  }
+
+  .thumb-header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: space-between;
     font-size: 11px;
     font-weight: 700;
-    color: var(--text-secondary);
+    color: var(--text-secondary, #9ca3af);
   }
 
-  .drag-icon {
-    font-size: 14px;
-    letter-spacing: -1px;
-    cursor: grab;
-    color: #4b5563;
+  .badge-row {
+    display: flex;
+    gap: 4px;
   }
 
-  .slide-body-prev {
-    font-size: 12.5px;
-    line-height: 1.4;
+  .mini-badge {
+    font-size: 9px;
+    font-weight: 800;
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: white;
+  }
+  .mini-badge.purple { background: var(--accent, #7c3aed); }
+  .mini-badge.orange { background: #f97316; }
+
+  .thumb-preview {
+    font-size: 11px;
+    line-height: 1.3;
     white-space: pre-wrap;
-    color: var(--text);
+    overflow: hidden;
+    flex-grow: 1;
+    margin-top: 6px;
+    color: var(--text, #f3f4f6);
   }
 
-  .line-prev {
+  .preview-line {
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
@@ -726,142 +702,92 @@
     -webkit-box-orient: vertical;
   }
 
-  .more-indicator {
-    font-size: 11px;
-    color: var(--text-secondary);
-    margin-top: 2px;
-  }
-
-  .slide-actions {
+  .add-card-thumb {
+    border: 2px dashed var(--border, #24242b);
+    background: transparent;
+    border-radius: 8px;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 6px;
-    border-top: 1px solid rgba(255,255,255,0.04);
-    padding-top: 8px;
-    margin-top: 2px;
-  }
-
-  .action-btn {
-    border: 1px solid var(--border);
-    background: transparent;
-    border-radius: 4px;
-    padding: 3px 8px;
-    font-size: 11px;
-    font-weight: 600;
+    justify-content: center;
+    gap: 4px;
     cursor: pointer;
-    color: var(--text-secondary);
     transition: all 150ms ease;
+    color: var(--text-secondary, #9ca3af);
   }
 
-  .action-btn.chorus-toggle.active {
-    background: var(--accent, #7c3aed);
-    color: white;
-    border-color: var(--accent);
+  /* Add Slide dimensions when NO selection */
+  .editor-container:not(.has-selection) .add-card-thumb {
+    height: 110px;
   }
 
-  .action-btn.end-toggle.active {
-    background: #f97316;
-    color: white;
-    border-color: #f97316;
-  }
-
-  .reorder-btns {
-    display: flex;
-    gap: 2px;
-  }
-
-  .reorder-btn {
-    background: rgba(255,255,255,0.04);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 2px 5px;
-    font-size: 9px;
-    cursor: pointer;
-    color: var(--text-secondary);
-  }
-  .reorder-btn:disabled {
-    opacity: 0.2;
-    cursor: not-allowed;
-  }
-
-  .edit-btn, .delete-btn {
-    background: transparent;
-    border: none;
-    font-size: 12px;
-    cursor: pointer;
-    padding: 4px 6px;
-    border-radius: 4px;
-    transition: background 150ms ease;
+  /* Add Slide dimensions when HAS selection */
+  .editor-container.has-selection .add-card-thumb {
+    flex: 0 0 145px;
+    height: 105px;
   }
   
-  .edit-btn {
-    color: #3b82f6;
-    margin-left: auto;
-  }
-  .edit-btn:hover { background: rgba(59, 130, 246, 0.08); }
-
-  .delete-btn {
-    color: #ef4444;
-  }
-  .delete-btn:hover { background: rgba(239, 68, 68, 0.08); }
-
-  /* Right Pane: Slide Text Editor Area */
-  .textarea-pane {
-    background: var(--surface, #15151a);
-    display: none;
-    height: 100%;
-    padding: 24px;
-    box-sizing: border-box;
+  .add-card-thumb:hover {
+    border-color: var(--accent, #7c3aed);
+    color: var(--accent, #7c3aed);
+    background: rgba(124, 58, 237, 0.03);
   }
 
-  @media (min-width: 768px) {
-    .textarea-pane {
-      display: block;
-    }
+  .add-icon { font-size: 20px; font-weight: 700; }
+  .add-text { font-size: 11px; font-weight: 600; }
+
+  /* Bottom Area: Workspace Editor */
+  .editor-workspace {
+    flex: 1;
+    background: var(--bg, #0b0b0d);
+    display: flex;
+    flex-direction: column;
+    padding: 16px;
+    overflow-y: auto;
   }
 
-  .editor-container {
+  .workspace-card {
     display: flex;
     flex-direction: column;
     gap: 12px;
     height: 100%;
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto;
   }
 
-  .editor-headline {
+  .workspace-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 14px;
-    font-weight: 700;
-    color: var(--text-secondary);
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
-  .badge-row {
-    display: flex;
-    gap: 6px;
+  .workspace-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
   }
 
-  .badge {
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 6px;
+  .status-banner {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
     border-radius: 4px;
   }
 
-  .chorus-badge {
-    background: var(--accent);
-    color: white;
+  .chorus-sync-notice {
+    background: rgba(124, 58, 237, 0.15);
+    color: #c080ff;
+    border: 1px solid rgba(124, 58, 237, 0.3);
   }
 
-  .end-badge {
-    background: #f97316;
-    color: white;
-  }
-
-  .editor-textarea {
+  .lyrics-textarea {
     flex: 1;
-    background: var(--elevated, #18181c);
-    border: 1px solid var(--border, #2d2d34);
+    min-height: 180px;
+    background: var(--elevated, #1c1c22);
+    border: 1px solid var(--border, #24242b);
     border-radius: 8px;
     color: #ffffff;
     font-family: inherit;
@@ -870,83 +796,79 @@
     padding: 16px;
     outline: none;
     resize: none;
+    box-sizing: border-box;
     transition: border-color 150ms ease;
   }
-  .editor-textarea:focus {
+  .lyrics-textarea:focus {
     border-color: var(--accent, #7c3aed);
   }
 
-  .no-selection {
+  .controls-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+
+  .control-btn {
+    flex: 1 1 120px;
+    background: var(--panel, #15151a);
+    border: 1px solid var(--border, #24242b);
+    color: var(--text-secondary, #9ca3af);
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100%;
-    color: var(--text-secondary);
-    font-size: 15px;
+    gap: 6px;
+    transition: all 150ms ease;
   }
 
-  /* Mobile Editor Overlay */
-  .mobile-editor-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.6);
-    z-index: 120;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    padding: 16px;
+  .control-btn:hover {
+    background: rgba(255,255,255,0.03);
+    border-color: var(--border-light, #3f3f46);
   }
 
-  .mobile-editor-dialog {
-    background: var(--panel, #1e1e24);
-    border: 1px solid var(--border, #2d2d34);
-    border-radius: 12px;
-    width: 100%;
-    max-width: 480px;
-    height: 80vh;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
-  }
-
-  .dialog-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border, #2d2d34);
-  }
-
-  .dialog-head h4 {
-    margin: 0;
-    font-size: 15px;
-    font-weight: 700;
-  }
-
-  .close-dialog {
+  .control-btn.chorus-toggle.active {
     background: var(--accent, #7c3aed);
     color: white;
-    border: none;
-    padding: 6px 12px;
-    font-size: 13px;
-    font-weight: 700;
-    border-radius: 6px;
-    cursor: pointer;
+    border-color: var(--accent);
   }
 
-  .dialog-textarea {
-    flex: 1;
-    background: var(--bg, #121214);
-    border: none;
+  .control-btn.end-toggle.active {
+    background: #f97316;
     color: white;
-    padding: 16px;
-    font-family: inherit;
-    font-size: 15px;
-    line-height: 1.5;
-    outline: none;
-    resize: none;
+    border-color: #f97316;
+  }
+
+  .control-btn.move-toggle.active {
+    background: #3b82f6;
+    color: white;
+    border-color: #3b82f6;
+  }
+
+  .control-btn.delete-btn {
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #f87171;
+  }
+  .control-btn.delete-btn:hover {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: #ef4444;
+  }
+
+  /* No selection view removed */
+
+  @keyframes pulse {
+    0% { border-color: rgba(124, 58, 237, 0.5); }
+    50% { border-color: rgba(124, 58, 237, 1); }
+    100% { border-color: rgba(124, 58, 237, 0.5); }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-5px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 </style>
