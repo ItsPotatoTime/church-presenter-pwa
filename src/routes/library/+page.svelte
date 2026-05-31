@@ -7,7 +7,7 @@
   import { sortBibleVerses } from '$lib/bible';
   import { loadCredentialsResilient } from '$lib/db';
   import type { BibleBook, BibleVerse, LibrarySong } from '$lib/protocol';
-  import { normalize, renderMarkdown } from '$lib/search';
+  import { filterSongs, normalize, renderMarkdown } from '$lib/search';
   import { isReducedDataConnection, syncFull, syncNow } from '$lib/sync';
   import {
     bibleBooksStore,
@@ -177,33 +177,9 @@
     }
   });
 
-  type Entry = {
-    s: LibrarySong;
-    nName: string;
-    nFolder: string;
-    nSlides: string[] | null;
-  };
-
-  const index = $derived.by<Entry[]>(() =>
-    $songsStore.map((song) => ({
-      s: song,
-      nName: song.normalized_name ?? normalize(song.name),
-      nFolder: song.normalized_folder ?? normalize(song.folder),
-      nSlides: song.normalized_blob ? song.normalized_blob.split(' | ') : null,
-    })),
-  );
-
-  function slidesFor(entry: Entry): string[] {
-    if (entry.nSlides) return entry.nSlides;
-    entry.nSlides = entry.s.normalized_blob
-      ? entry.s.normalized_blob.split(' | ')
-      : (entry.s.slide_texts ?? []).map(normalize);
-    return entry.nSlides;
-  }
-
   const hasQuery = $derived(normalize(query).length > 0);
   const browseSongs = $derived<LibrarySong[]>(
-    hasQuery ? [] : index.slice(0, renderCount).map((entry) => entry.s),
+    hasQuery ? [] : $songsStore.slice(0, renderCount),
   );
 
   const grouped = $derived.by(() => {
@@ -222,44 +198,15 @@
   const searchData = $derived.by<{ items: SongResult[]; overflow: boolean }>(() => {
     const q = normalize(query);
     if (!q) return { items: [], overflow: false };
-    const names: SongResult[] = [];
-    const folders: SongResult[] = [];
-    const slideHits: SongResult[] = [];
-    let overflow = false;
-
-    for (const entry of index) {
-      if (names.length + folders.length + slideHits.length >= MAX_RESULTS) {
-        overflow = true;
-        break;
-      }
-      if (entry.nName.includes(q)) {
-        names.push({ s: entry.s, score: 3, snippet: '' });
-      } else if (entry.nFolder.includes(q)) {
-        folders.push({ s: entry.s, score: 2, snippet: '' });
-      } else if (searchSlides) {
-        // Fast rejection check using pre-normalized blob
-        if (entry.s.normalized_blob && !entry.s.normalized_blob.includes(q)) {
-          continue;
-        }
-        const normalizedSlides = slidesFor(entry);
-        for (let slideIndex = 0; slideIndex < normalizedSlides.length; slideIndex++) {
-          if (normalizedSlides[slideIndex] && normalizedSlides[slideIndex].includes(q)) {
-            const hitIndex = normalizedSlides[slideIndex].indexOf(q);
-            const raw = entry.s.slide_texts[slideIndex] ?? '';
-            const start = Math.max(0, hitIndex - 20);
-            const end = Math.min(raw.length, hitIndex + q.length + 40);
-            const snippet =
-              (start > 0 ? '...' : '') +
-              raw.slice(start, end).trim() +
-              (end < raw.length ? '...' : '');
-            slideHits.push({ s: entry.s, score: 1, snippet });
-            break;
-          }
-        }
-      }
-    }
-
-    return { items: [...names, ...folders, ...slideHits], overflow };
+    const results = filterSongs(query, $songsStore, searchSlides, Number.POSITIVE_INFINITY);
+    return {
+      items: results.slice(0, MAX_RESULTS).map((result) => ({
+        s: result.item,
+        score: result.score,
+        snippet: result.snippet,
+      })),
+      overflow: results.length > MAX_RESULTS,
+    };
   });
 
   const searchResults = $derived(searchData.items);
