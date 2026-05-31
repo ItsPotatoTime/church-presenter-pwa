@@ -7,7 +7,7 @@
   import { beforeNavigate, goto } from '$app/navigation';
   import { getOrCreateDeviceId, loadCredentialsResilient } from '$lib/db';
   import { hydrateFromCache, isReducedDataConnection, syncNow } from '$lib/sync';
-  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY, canEditKeys, debugMode } from '$lib/stores';
+  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY, canEditKeys, debugMode, managerAccessCountdown } from '$lib/stores';
 
   let { children } = $props();
   let paired = $state(false);
@@ -155,11 +155,38 @@
     ready = true;
   });
 
+  let countdownInterval: any = null;
+  $effect(() => {
+    const val = $managerAccessCountdown;
+    if (val > 0) {
+      if (!countdownInterval) {
+        countdownInterval = setInterval(() => {
+          managerAccessCountdown.update(n => {
+            if (n <= 1) {
+              clearInterval(countdownInterval);
+              countdownInterval = null;
+              return 0;
+            }
+            return n - 1;
+          });
+        }, 1000);
+      }
+    } else {
+      if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+      }
+    }
+  });
+
   onDestroy(() => {
     if (typeof window !== 'undefined') {
       window.removeEventListener('error', handleChunkError, true);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
     }
   });
 
@@ -246,14 +273,21 @@
     Updating to latest version...
   </div>
 {:else}
-  {#if showTabs() && $isViewOnly}
-    <div class="view-only-banner" role="status">
-      View-only — another phone has exclusive control
-    </div>
-  {/if}
+  <div class="top-banners">
+    {#if showTabs() && $isViewOnly}
+      <div class="view-only-banner" role="status">
+        View-only — another phone has exclusive control
+      </div>
+    {/if}
+    {#if showTabs() && $managerAccessCountdown > 0}
+      <div class="manager-access-banner" role="status">
+        🟢 Phone Manager Access: {Math.floor($managerAccessCountdown / 60)}:{($managerAccessCountdown % 60).toString().padStart(2, '0')}
+      </div>
+    {/if}
+  </div>
 {/if}
 
-<main class:has-tabs={showTabs()} class:has-banner={(showTabs() && $isViewOnly) || showUpdateBanner}>
+<main class:has-tabs={showTabs()} class:has-banner={showTabs() && ($isViewOnly || $managerAccessCountdown > 0)} class:has-double-banner={showTabs() && $isViewOnly && $managerAccessCountdown > 0}>
   {#if ready}
     {@render children()}
   {:else}
@@ -330,21 +364,41 @@
     padding-bottom: calc(72px + env(safe-area-inset-bottom, 0));
   }
   main.has-banner {
-    /* banner height = 10px + safe-area-inset-top + 10px + font ~16px ≈ 44px + inset */
     padding-top: calc(44px + env(safe-area-inset-top, 0));
   }
+  main.has-double-banner {
+    padding-top: calc(78px + env(safe-area-inset-top, 0));
+  }
 
-  .view-only-banner {
+  .top-banners {
     position: fixed;
     top: 0; left: 0; right: 0;
     z-index: 40;
-    background: var(--accent);
-    color: #fff;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  .view-only-banner, .manager-access-banner {
+    position: relative;
+    width: 100%;
     text-align: center;
-    padding: calc(10px + env(safe-area-inset-top, 0)) 12px 10px;
     font-size: 12px;
     font-weight: 700;
     letter-spacing: 0.4px;
+    box-sizing: border-box;
+  }
+
+  .view-only-banner {
+    background: var(--accent);
+    color: #fff;
+    padding: calc(10px + env(safe-area-inset-top, 0)) 12px 10px;
+  }
+
+  .manager-access-banner {
+    background: #059669;
+    color: #fff;
+    padding: 10px 12px;
   }
 
   .update-banner {

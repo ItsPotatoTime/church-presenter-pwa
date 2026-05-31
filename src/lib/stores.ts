@@ -84,3 +84,7 @@ export const listsShowPicker: Writable<boolean> = writable(false);
 export const listsPickerRawQuery: Writable<string> = writable('');
 export const listsScrollY: Writable<number> = writable(0);
 
+// Global countdown for temporary phone manager access (shared state across tabs)
+export const managerAccessCountdown: Writable<number> = writable(0);
+
+

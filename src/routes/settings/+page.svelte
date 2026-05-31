@@ -28,28 +28,17 @@
     syncStatus,
     songsStore,
     debugMode,
+    managerAccessCountdown,
   } from '$lib/stores';
 
   let creds = $state<Credentials | null>(null);
   let servers = $state<ServerEntry[]>([]);
   let lastSyncTs = $state(0);
 
-  let countdownSeconds = $state(0);
-  let timerInterval: any = null;
-
   async function grantManagerAccess() {
     try {
       await remote.sendRequest('device.grant_manager_access', {});
-      countdownSeconds = 300;
-      if (timerInterval) clearInterval(timerInterval);
-      timerInterval = setInterval(() => {
-        if (countdownSeconds > 0) {
-          countdownSeconds--;
-        } else {
-          clearInterval(timerInterval);
-          timerInterval = null;
-        }
-      }, 1000);
+      managerAccessCountdown.set(300);
       alert('Temporary Phone Manager access enabled for 5 minutes!');
     } catch (e: any) {
       alert('Failed to grant access: ' + (e?.message ?? e));
@@ -57,14 +46,11 @@
   }
 
   const formatCountdown = $derived.by(() => {
-    if (countdownSeconds <= 0) return '';
-    const m = Math.floor(countdownSeconds / 60);
-    const s = countdownSeconds % 60;
+    const val = $managerAccessCountdown;
+    if (val <= 0) return '';
+    const m = Math.floor(val / 60);
+    const s = val % 60;
     return `Access active: ${m}:${s.toString().padStart(2, '0')}`;
-  });
-
-  onDestroy(() => {
-    if (timerInterval) clearInterval(timerInterval);
   });
 
   onMount(async () => {
@@ -328,7 +314,7 @@
   <p class="muted small" style="margin:0 0 10px;">
     Grant temporary access (5 minutes) to the desktop Phone Manager menu.
   </p>
-  {#if countdownSeconds > 0}
+  {#if $managerAccessCountdown > 0}
     <div class="access-active-banner">
       🟢 {formatCountdown}
     </div>
