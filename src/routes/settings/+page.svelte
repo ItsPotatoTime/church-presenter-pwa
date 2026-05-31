@@ -34,14 +34,64 @@
   let creds = $state<Credentials | null>(null);
   let servers = $state<ServerEntry[]>([]);
   let lastSyncTs = $state(0);
+  let checkingUpdate = $state(false);
+
+  type NoticeTone = 'info' | 'success' | 'warning' | 'danger';
+  type AppNotice = {
+    kind?: 'notice' | 'update';
+    tone?: NoticeTone;
+    title: string;
+    message: string;
+    detail?: string;
+    progress?: number;
+    progressLabel?: string;
+    locked?: boolean;
+    closeLabel?: string;
+  };
+  type InstallProgressMessage =
+    | { type: 'SW_INSTALL_PROGRESS'; done: number; total: number; asset?: string }
+    | { type: 'SW_INSTALL_COMPLETE'; total: number }
+    | { type: 'SW_INSTALL_ERROR'; message?: string };
+
+  let appNotice = $state<AppNotice | null>(null);
+
+  function showNotice(notice: AppNotice) {
+    appNotice = {
+      tone: 'info',
+      kind: 'notice',
+      closeLabel: 'OK',
+      ...notice,
+    };
+  }
+
+  function updateNotice(updates: Partial<AppNotice>) {
+    if (!appNotice) return;
+    appNotice = { ...appNotice, ...updates };
+  }
+
+  function closeNotice() {
+    if (appNotice?.locked) return;
+    appNotice = null;
+  }
 
   async function grantManagerAccess() {
     try {
       await remote.sendRequest('device.grant_manager_access', {});
       managerAccessCountdown.set(300);
-      alert('Temporary Phone Manager access enabled for 5 minutes!');
+      showNotice({
+        tone: 'success',
+        title: 'Temporary Access Enabled',
+        message: 'Phone Manager access is open for the next 5 minutes.',
+        detail: 'The desktop settings menu will accept changes from this phone until the timer expires.',
+        closeLabel: 'Done',
+      });
     } catch (e: any) {
-      alert('Failed to grant access: ' + (e?.message ?? e));
+      showNotice({
+        tone: 'danger',
+        title: 'Access Failed',
+        message: 'Phone Manager access could not be enabled.',
+        detail: e?.message ?? String(e),
+      });
     }
   }
 
@@ -53,7 +103,60 @@
     return `Access active: ${m}:${s.toString().padStart(2, '0')}`;
   });
 
+  function handleServiceWorkerMessage(event: MessageEvent<InstallProgressMessage>) {
+    const data = event.data;
+    if (!data || typeof data !== 'object' || !('type' in data)) return;
+
+    if (data.type === 'SW_INSTALL_PROGRESS') {
+      const progress = data.total > 0 ? Math.round((data.done / data.total) * 100) : 35;
+      const assetName = data.asset?.split('/').pop();
+      showNotice({
+        kind: 'update',
+        tone: 'success',
+        title: 'Installing Update',
+        message: data.total > 0
+          ? `Installing app files ${data.done} of ${data.total}.`
+          : 'Preparing the new app version.',
+        detail: assetName ? `Current file: ${assetName}` : 'Keeping the remote available while the update installs.',
+        progress,
+        progressLabel: `${progress}%`,
+        locked: true,
+      });
+      return;
+    }
+
+    if (data.type === 'SW_INSTALL_COMPLETE') {
+      showNotice({
+        kind: 'update',
+        tone: 'success',
+        title: 'Update Installed',
+        message: 'The new version is ready. Switching over now.',
+        detail: `${data.total} app files updated.`,
+        progress: 100,
+        progressLabel: '100%',
+        locked: true,
+      });
+      return;
+    }
+
+    if (data.type === 'SW_INSTALL_ERROR') {
+      checkingUpdate = false;
+      showNotice({
+        kind: 'update',
+        tone: 'danger',
+        title: 'Update Failed',
+        message: 'The update could not finish installing.',
+        detail: data.message ?? 'Try again when the connection is stable.',
+        locked: false,
+      });
+    }
+  }
+
   onMount(async () => {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    }
+
     const c = await loadCredentialsResilient();
     if (!c?.device_token) {
       goto(`${base}/`);
@@ -63,6 +166,12 @@
     servers = await loadAllServers();
     lastSyncTs = await getLastSyncTs();
     await remote.connect();
+  });
+
+  onDestroy(() => {
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+    }
   });
 
   async function unpair() {
@@ -171,42 +280,191 @@
     input.click();
   }
 
-  let checkingUpdate = $state(false);
-
   async function checkForUpdates() {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
-      alert('Service workers are not supported by this browser/device.');
+      showNotice({
+        tone: 'warning',
+        title: 'Updates Unavailable',
+        message: 'This browser does not support service worker updates.',
+      });
       return;
     }
 
     checkingUpdate = true;
+    showNotice({
+      kind: 'update',
+      tone: 'info',
+      title: 'Checking For Updates',
+      message: 'Contacting GitHub Pages for the latest app version.',
+      detail: 'This usually takes a moment.',
+      progress: 8,
+      progressLabel: 'Checking',
+      locked: true,
+    });
+
+    function activateWorker(worker: ServiceWorker) {
+      checkingUpdate = false;
+      showNotice({
+        kind: 'update',
+        tone: 'success',
+        title: 'Applying Update',
+        message: 'The update is installed. Restarting the app into the new version.',
+        detail: 'Your pairing and cached library stay on this phone.',
+        progress: 100,
+        progressLabel: 'Ready',
+        locked: true,
+      });
+      worker.postMessage({ type: 'SKIP_WAITING' });
+    }
+
+    let trackedWorker: ServiceWorker | null = null;
+
+    function handleWorkerState(worker: ServiceWorker) {
+      if (worker.state === 'installing') {
+        updateNotice({
+          title: 'Installing Update',
+          message: 'Downloading and caching the new app files.',
+          progress: Math.max(appNotice?.progress ?? 0, 20),
+          progressLabel: 'Installing',
+        });
+        return;
+      }
+
+      if (worker.state === 'installed') {
+        if (navigator.serviceWorker.controller) {
+          activateWorker(worker);
+        } else {
+          checkingUpdate = false;
+          showNotice({
+            kind: 'update',
+            tone: 'success',
+            title: 'App Ready Offline',
+            message: 'The app shell has been installed for offline use.',
+            progress: 100,
+            progressLabel: 'Complete',
+            locked: false,
+            closeLabel: 'Done',
+          });
+        }
+        return;
+      }
+
+      if (worker.state === 'activating') {
+        updateNotice({
+          title: 'Applying Update',
+          message: 'Switching the app to the new version.',
+          progress: 100,
+          progressLabel: 'Ready',
+        });
+        return;
+      }
+
+      if (worker.state === 'activated') {
+        checkingUpdate = false;
+        updateNotice({
+          title: 'Opening New Version',
+          message: 'Reloading now.',
+          progress: 100,
+          progressLabel: 'Done',
+        });
+        return;
+      }
+
+      if (worker.state === 'redundant') {
+        checkingUpdate = false;
+        showNotice({
+          kind: 'update',
+          tone: 'danger',
+          title: 'Update Stopped',
+          message: 'The browser discarded the update before it finished.',
+          detail: 'Try checking again.',
+          locked: false,
+        });
+      }
+    }
+
+    function trackWorker(worker: ServiceWorker) {
+      if (trackedWorker === worker) return;
+      trackedWorker = worker;
+      handleWorkerState(worker);
+      worker.addEventListener('statechange', () => handleWorkerState(worker));
+    }
+
     try {
       const reg = await navigator.serviceWorker.getRegistration();
       if (!reg) {
-        alert('App is running in non-PWA mode (no service worker).');
         checkingUpdate = false;
+        showNotice({
+          kind: 'update',
+          tone: 'warning',
+          title: 'No App Installer',
+          message: 'The app is running without a service worker.',
+          detail: 'Open the installed PWA or the published GitHub Pages app to receive updates.',
+          locked: false,
+        });
         return;
       }
 
       let updateFound = false;
-      reg.onupdatefound = () => {
-        updateFound = true;
-      };
+      const updateResult = new Promise<boolean>((resolve) => {
+        const timeout = window.setTimeout(() => resolve(false), 1600);
+
+        reg.onupdatefound = () => {
+          window.clearTimeout(timeout);
+          updateFound = true;
+          const worker = reg.installing;
+          if (worker) {
+            trackWorker(worker);
+          }
+          resolve(true);
+        };
+      });
+
+      if (reg.waiting) {
+        activateWorker(reg.waiting);
+        return;
+      }
 
       await reg.update();
 
-      setTimeout(() => {
+      if (reg.installing) {
+        trackWorker(reg.installing);
+        return;
+      }
+
+      if (reg.waiting) {
+        activateWorker(reg.waiting);
+        return;
+      }
+
+      const foundUpdate = updateFound || await updateResult;
+      if (foundUpdate) {
         checkingUpdate = false;
-        if (reg.installing || reg.waiting || updateFound) {
-          alert('Update found! Installing and updating app...');
-        } else {
-          alert('You are on the latest version.');
-        }
-      }, 1200);
+        return;
+      }
+
+      checkingUpdate = false;
+      showNotice({
+        kind: 'update',
+        tone: 'success',
+        title: 'Already Up To Date',
+        message: 'This phone is running the latest published version.',
+        progress: 100,
+        progressLabel: 'Current',
+        locked: false,
+        closeLabel: 'Done',
+      });
 
     } catch (err: any) {
       checkingUpdate = false;
-      alert('Update check failed: ' + (err?.message ?? err));
+      showNotice({
+        kind: 'update',
+        tone: 'danger',
+        title: 'Update Check Failed',
+        message: 'The app could not check for a new version.',
+        detail: err?.message ?? String(err),
+        locked: false,
+      });
     }
   }
 </script>
@@ -424,6 +682,72 @@
   </div>
 {/if}
 
+{#if appNotice}
+  <div
+    class="modal-back notice-back"
+    role="button"
+    tabindex="-1"
+    aria-label="Close message"
+    onclick={closeNotice}
+    onkeydown={(e) => { if (e.key === 'Escape') closeNotice(); }}
+  >
+    <div
+      class="modal notice-modal"
+      class:notice-success={appNotice.tone === 'success'}
+      class:notice-warning={appNotice.tone === 'warning'}
+      class:notice-danger={appNotice.tone === 'danger'}
+      role="alertdialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <div class="notice-head">
+        <div class="notice-mark" aria-hidden="true">
+          {#if appNotice.tone === 'success'}
+            ✓
+          {:else if appNotice.tone === 'warning'}
+            !
+          {:else if appNotice.tone === 'danger'}
+            ×
+          {:else}
+            i
+          {/if}
+        </div>
+        <div class="notice-copy">
+          <h3>{appNotice.title}</h3>
+          <p>{appNotice.message}</p>
+        </div>
+      </div>
+
+      {#if appNotice.detail}
+        <div class="notice-detail">{appNotice.detail}</div>
+      {/if}
+
+      {#if typeof appNotice.progress === 'number'}
+        <div class="progress-wrap">
+          <div
+            class="progress-bar"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow={Math.round(appNotice.progress)}
+          >
+            <div class="progress-fill" style={`width: ${Math.min(100, Math.max(0, appNotice.progress))}%`}></div>
+          </div>
+          <div class="progress-label">{appNotice.progressLabel ?? `${Math.round(appNotice.progress)}%`}</div>
+        </div>
+      {/if}
+
+      {#if !appNotice.locked}
+        <div class="modal-btns notice-actions">
+          <button class="accent" onclick={closeNotice}>{appNotice.closeLabel ?? 'OK'}</button>
+        </div>
+      {/if}
+    </div>
+  </div>
+{/if}
+
 <style>
   header { padding: 4px 0 12px; }
   h1 { margin: 0; font-size: 22px; font-weight: 700; }
@@ -548,5 +872,117 @@
     text-align: center;
     font-size: 14px;
     margin-top: 8px;
+  }
+
+  .notice-back {
+    z-index: 120;
+  }
+
+  .notice-modal {
+    border-color: var(--border-light);
+    box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.45);
+  }
+
+  .notice-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .notice-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+    color: var(--accent);
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .notice-success .notice-mark {
+    background: rgba(34, 197, 94, 0.12);
+    border-color: rgba(34, 197, 94, 0.45);
+    color: var(--success);
+  }
+
+  .notice-warning .notice-mark {
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.45);
+    color: var(--warning);
+  }
+
+  .notice-danger .notice-mark {
+    background: rgba(239, 68, 68, 0.12);
+    border-color: rgba(239, 68, 68, 0.45);
+    color: var(--danger);
+  }
+
+  .notice-copy {
+    min-width: 0;
+  }
+
+  .notice-copy h3 {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.2;
+  }
+
+  .notice-copy p {
+    margin: 5px 0 0;
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .notice-detail {
+    margin-top: 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--elevated);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+
+  .progress-wrap {
+    margin-top: 16px;
+  }
+
+  .progress-bar {
+    height: 9px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--elevated);
+    border: 1px solid var(--border-light);
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--accent), var(--accent-hover));
+    transition: width 180ms ease;
+  }
+
+  .notice-success .progress-fill {
+    background: linear-gradient(90deg, #16a34a, var(--success));
+  }
+
+  .progress-label {
+    margin-top: 7px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 700;
+    text-align: right;
+  }
+
+  .notice-actions {
+    margin-top: 16px;
   }
 </style>

@@ -34,17 +34,70 @@ const ASSETS = [
 // Deduplicate assets
 const UNIQUE_ASSETS = Array.from(new Set(ASSETS));
 
+type InstallProgressMessage =
+  | { type: 'SW_INSTALL_PROGRESS'; done: number; total: number; asset: string }
+  | { type: 'SW_INSTALL_COMPLETE'; total: number }
+  | { type: 'SW_INSTALL_ERROR'; message: string };
+
+async function broadcastInstallProgress(message: InstallProgressMessage) {
+  const clients = await self.clients.matchAll({
+    includeUncontrolled: true,
+    type: 'window'
+  });
+
+  for (const client of clients) {
+    client.postMessage(message);
+  }
+}
+
+async function precacheAssets() {
+  const cache = await caches.open(CACHE_NAME);
+  const total = UNIQUE_ASSETS.length;
+
+  await broadcastInstallProgress({
+    type: 'SW_INSTALL_PROGRESS',
+    done: 0,
+    total,
+    asset: ''
+  });
+
+  for (let i = 0; i < UNIQUE_ASSETS.length; i += 1) {
+    const asset = UNIQUE_ASSETS[i];
+    await cache.add(asset);
+    await broadcastInstallProgress({
+      type: 'SW_INSTALL_PROGRESS',
+      done: i + 1,
+      total,
+      asset
+    });
+  }
+
+  await broadcastInstallProgress({
+    type: 'SW_INSTALL_COMPLETE',
+    total
+  });
+}
+
 // 1. Install event: Precache all assets and force immediate takeover
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches
-      .open(CACHE_NAME)
-      .then((cache) => cache.addAll(UNIQUE_ASSETS))
+    precacheAssets()
       .then(() => self.skipWaiting())
-      .catch((err) => {
+      .catch(async (err) => {
         console.error('[ServiceWorker] Pre-caching failed during install:', err);
+        await broadcastInstallProgress({
+          type: 'SW_INSTALL_ERROR',
+          message: err instanceof Error ? err.message : String(err)
+        });
+        throw err;
       })
   );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') {
+    void self.skipWaiting();
+  }
 });
 
 // 2. Activate event: Clean up old application caches and claim all clients
