@@ -37,16 +37,19 @@
   async function updateSongKey(songPath: string, key: string | null) {
     if (!$canEditKeys || ($connStatus === 'open' && $isViewOnly)) return;
     
+    const key_ts = Math.floor(Date.now() / 1000); // Current timestamp in seconds
+    
     // 1. Optimistically update local store and component state
     songsStore.update(songs => {
       return songs.map(s => {
         if (s.path === songPath) {
-          return { ...s, key };
+          return { ...s, key, key_ts };
         }
         return s;
       });
     });
     song.key = key; // Keep local prop up to date
+    song.key_ts = key_ts;
     
     // 2. Persist in local IndexedDB songs store so the key change survives offline app reloads
     try {
@@ -61,9 +64,25 @@
     // 3. Send to server or queue as pending mutation
     if ($connStatus === 'open') {
       try {
-        const res = await remote.sendRequest('song.set_key', { song_path: songPath, key });
+        const res = await remote.sendRequest('song.set_key', { song_path: songPath, key, key_ts });
         if (!res.ok) {
           console.error('Failed to set key on server:', res.error);
+        } else if (res.conflict === 'server_newer') {
+          // Update local store and component state with the server's newer key
+          songsStore.update(songs => {
+            return songs.map(s => {
+              if (s.path === songPath) {
+                return { ...s, key: res.key, key_ts: res.key_ts };
+              }
+              return s;
+            });
+          });
+          song.key = res.key;
+          song.key_ts = res.key_ts;
+          const songToSave = $songsStore.find(s => s.path === songPath);
+          if (songToSave) {
+            await putSongs([songToSave]);
+          }
         }
       } catch (err) {
         console.error('Error setting key on server:', err);
@@ -71,7 +90,7 @@
     } else {
       // Offline: queue a pending mutation to sync later
       try {
-        await addPendingMutation({ type: 'song.set_key', payload: { song_path: songPath, key } });
+        await addPendingMutation({ type: 'song.set_key', payload: { song_path: songPath, key, key_ts } });
       } catch (err) {
         console.error('Failed to queue offline key update:', err);
       }

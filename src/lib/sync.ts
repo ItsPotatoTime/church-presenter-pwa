@@ -123,9 +123,12 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
 
     if (resp.type === 'sync.full') {
       const p = resp.payload as SyncFull;
-      // Full replace
+      // Optimize full sync removal: only delete songs that vanished from the server
+      const incomingPaths = new Set(p.songs.map((s) => s.path));
       const currentPaths = await getAllSongPaths();
-      if (currentPaths.length) await deleteSongsByPath(currentPaths);
+      const toDelete = currentPaths.filter((x) => !incomingPaths.has(x));
+      if (toDelete.length) await deleteSongsByPath(toDelete);
+      
       await putSongs(p.songs);
       await putLists(p.lists);
       await clearBibleBooks();
@@ -146,12 +149,6 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         bibleVerses = [];
       }
       await setLastSyncTs(p.server_ts);
-      songs = [...p.songs].sort((a, b) => {
-        const aDigit = (a.name && a.name.charAt(0) >= '0' && a.name.charAt(0) <= '9') ? 1 : 0;
-        const bDigit = (b.name && b.name.charAt(0) >= '0' && b.name.charAt(0) <= '9') ? 1 : 0;
-        if (aDigit !== bDigit) return aDigit - bDigit;
-        return a.name.localeCompare(b.name);
-      });
       lists = p.lists;
     } else if (resp.type === 'sync.delta') {
       const p = resp.payload as SyncDelta;
@@ -175,22 +172,12 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         bibleVersion = p.bible.version;
       }
       await setLastSyncTs(p.server_ts);
-
-      if (p.songs_changed.length || toDelete.length) {
-        const byPath = new Map(songs.map((song) => [song.path, song]));
-        for (const song of p.songs_changed) byPath.set(song.path, song);
-        for (const path of toDelete) byPath.delete(path);
-        songs = [...byPath.values()].sort((a, b) => {
-          const aDigit = (a.name && a.name.charAt(0) >= '0' && a.name.charAt(0) <= '9') ? 1 : 0;
-          const bDigit = (b.name && b.name.charAt(0) >= '0' && b.name.charAt(0) <= '9') ? 1 : 0;
-          if (aDigit !== bDigit) return aDigit - bDigit;
-          return a.name.localeCompare(b.name);
-        });
-      }
     } else {
       throw new Error('unexpected sync response: ' + resp.type);
     }
 
+    // Reload songs from IndexedDB after putting them. This ensures Svelte store gets the merged keys and timestamps.
+    songs = await loadAllSongs();
     songsStore.set(songs);
     listsStore.set(lists);
     bibleBooksStore.set(bibleBooks);

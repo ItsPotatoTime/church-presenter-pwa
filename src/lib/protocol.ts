@@ -109,6 +109,7 @@ export interface LibrarySong {
   normalized_folder?: string;
   normalized_blob?: string;
   key?: string | null;
+  key_ts?: number | null;
 }
 
 export interface LibraryList {
@@ -177,4 +178,4 @@ export type ClientCommand =
   | { type: 'song.fetch_rc'; id?: string; payload: { url: string } }
   | { type: 'song.create'; id?: string; payload: { name: string; slide_texts: string[]; chorus_index?: number | number[] | null; folder?: string; overwrite?: boolean } }
   | { type: 'song.update'; id?: string; payload: { song_path: string; name: string; slide_texts: string[]; chorus_index?: number | null; chorus_ranges?: number[][] | null; end_slide_index?: number | null; auto_chorus_enabled?: boolean } }
-  | { type: 'song.set_key'; payload: { song_path: string; key: string | null } };
+  | { type: 'song.set_key'; payload: { song_path: string; key: string | null; key_ts?: number | null } };

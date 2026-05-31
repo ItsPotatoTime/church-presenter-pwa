@@ -526,9 +526,66 @@ export async function putSongs(songs: LibrarySong[]): Promise<void> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_SONGS, 'readwrite');
     const store = tx.objectStore(STORE_SONGS);
-    for (const s of songs) store.put(s);
-    tx.oncomplete = () => resolve();
+    
+    let index = 0;
+    const syncQueue: { path: string; key: string | null | undefined; key_ts: number }[] = [];
+
+    function next() {
+      if (index >= songs.length) {
+        return;
+      }
+      const s = songs[index++];
+      const getReq = store.get(s.path);
+      getReq.onsuccess = () => {
+        const existing = getReq.result as LibrarySong | undefined;
+        if (existing) {
+          const localTs = existing.key_ts || 0;
+          const incomingTs = s.key_ts || 0;
+          if (localTs > incomingTs) {
+            // Keep the local key and timestamp
+            s.key = existing.key;
+            s.key_ts = existing.key_ts;
+            syncQueue.push({ path: s.path, key: s.key, key_ts: s.key_ts });
+          }
+        }
+        store.put(s);
+        next();
+      };
+      getReq.onerror = () => {
+        reject(getReq.error);
+      };
+    }
+
+    tx.oncomplete = () => {
+      if (syncQueue.length > 0) {
+        void (async () => {
+          try {
+            for (const item of syncQueue) {
+              await addPendingMutation({
+                type: 'song.set_key',
+                payload: { song_path: item.path, key: item.key, key_ts: item.key_ts }
+              });
+            }
+            const { remote } = await import('./ws');
+            if (remote.isOpen()) {
+              const mutations = await getPendingMutations();
+              for (const m of mutations) {
+                if (remote.isOpen()) {
+                  remote.sendRaw({ type: m.type, payload: m.payload });
+                }
+              }
+              await clearPendingMutations();
+            }
+          } catch (err) {
+            console.error('Failed to sync newer keys back to server:', err);
+          }
+        })();
+      }
+      resolve();
+    };
     tx.onerror = () => reject(tx.error);
+    
+    next();
   });
 }
 
