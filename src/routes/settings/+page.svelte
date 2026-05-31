@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import {
@@ -33,6 +33,39 @@
   let creds = $state<Credentials | null>(null);
   let servers = $state<ServerEntry[]>([]);
   let lastSyncTs = $state(0);
+
+  let countdownSeconds = $state(0);
+  let timerInterval: any = null;
+
+  async function grantManagerAccess() {
+    try {
+      await remote.sendRequest('device.grant_manager_access', {});
+      countdownSeconds = 300;
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (countdownSeconds > 0) {
+          countdownSeconds--;
+        } else {
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+      }, 1000);
+      alert('Temporary Phone Manager access enabled for 5 minutes!');
+    } catch (e: any) {
+      alert('Failed to grant access: ' + (e?.message ?? e));
+    }
+  }
+
+  const formatCountdown = $derived.by(() => {
+    if (countdownSeconds <= 0) return '';
+    const m = Math.floor(countdownSeconds / 60);
+    const s = countdownSeconds % 60;
+    return `Access active: ${m}:${s.toString().padStart(2, '0')}`;
+  });
+
+  onDestroy(() => {
+    if (timerInterval) clearInterval(timerInterval);
+  });
 
   onMount(async () => {
     const c = await loadCredentialsResilient();
@@ -291,6 +324,27 @@
 </section>
 
 <section class="panel" style="margin-top:12px;">
+  <h2>Phone Manager Access</h2>
+  <p class="muted small" style="margin:0 0 10px;">
+    Grant temporary access (5 minutes) to the desktop Phone Manager menu.
+  </p>
+  {#if countdownSeconds > 0}
+    <div class="access-active-banner">
+      🟢 {formatCountdown}
+    </div>
+  {:else}
+    <button
+      class="accent fw"
+      style="background: #fbbf24; border-color: #fbbf24; color: #000; font-weight: 600;"
+      onclick={grantManagerAccess}
+      disabled={$connStatus !== 'open'}
+    >
+      Enable temporary Phone Manager access
+    </button>
+  {/if}
+</section>
+
+<section class="panel" style="margin-top:12px;">
   <h2>Device</h2>
   <div class="row">
     <span class="muted">Name</span>
@@ -496,6 +550,17 @@
     color: var(--danger, #ff6b6b);
     font-size: 13px;
     font-weight: 600;
+    margin-top: 8px;
+  }
+  .access-active-banner {
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid #22c55e;
+    color: #22c55e;
+    border-radius: 8px;
+    padding: 10px;
+    font-weight: 600;
+    text-align: center;
+    font-size: 14px;
     margin-top: 8px;
   }
 </style>
