@@ -21,11 +21,9 @@ import {
   clearPendingMutations,
   getPendingMutations,
   getOrCreateDeviceId,
-  loadAllServers,
   loadCredentials,
   removeServer,
   saveCredentials,
-  switchServer,
   type Credentials,
 } from './db';
 import {
@@ -62,9 +60,6 @@ class RemoteClient {
   private currentEndpoint: 'cloud' | 'lan' | null = null;
   private alternateNext = false;
   private authTimer: number | null = null;
-  // Tracks server_key values tried in the current connection cycle.
-  // Prevents infinite loops when all paired servers reject us.
-  private _triedServerKeys = new Set<string>();
   private pendingRequests = new Map<string, (payload: any) => void>();
   private heartbeatTimer: number | null = null;
   private lastMessageTime = 0;
@@ -208,7 +203,6 @@ class RemoteClient {
     this.currentEndpoint = null;
     this.alternateNext = false;
     this.backoffIdx = 0;
-    this._triedServerKeys.clear();
   }
 
   private buildUrl(host: string, endpoint: 'cloud' | 'lan'): string {
@@ -314,7 +308,6 @@ class RemoteClient {
           can_edit_keys: !!p.can_edit_keys,
           can_edit_songs: !!p.can_edit_songs,
         };
-        this._triedServerKeys.clear(); // successful auth — reset cycling state
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
         exclusiveDeviceName.set(null);
         serverName.set(p.server_name || 'ChurchPresenter');
@@ -356,37 +349,12 @@ class RemoteClient {
           void clearCredentials();
           connError.set('Device revoked by server');
         } else if (p.reason === 'bad_token') {
-          // Token mismatch — could be a different laptop at the same tunnel URL.
-          // Try other stored server credentials before giving up.
+          // Token mismatch for the selected server. Do not try other stored
+          // servers implicitly; the user chooses the active server now.
           this.forceClose = true;
           try { ws.close(); } catch { /* ignore */ }
-          void (async () => {
-            if (!isCurrent()) return;
-            const currentKey = creds.server_key ?? '';
-            if (currentKey) this._triedServerKeys.add(currentKey);
-            const all = await loadAllServers();
-            const cloudHost = creds.cloud_host;
-            // Find a server we haven't tried yet (same cloud host preferred)
-            const next = all.find(
-              (s) => !this._triedServerKeys.has(s.server_key) &&
-                     (cloudHost === null || s.cloud_host === cloudHost),
-            ) ?? all.find((s) => !this._triedServerKeys.has(s.server_key));
-            if (next) {
-              connStatus.set('connecting');
-              connError.set(null);
-              const switched = await switchServer(next.server_key);
-              if (switched && isCurrent()) {
-                this.forceClose = false;
-                canEditKeys.set(!!switched.can_edit_keys);
-                this.openSocket(switched, null);
-              }
-            } else {
-              // Tried every stored server — ask user to re-pair
-              this._triedServerKeys.clear();
-              connStatus.set('error');
-              connError.set('Different server — scan a new QR code to re-pair');
-            }
-          })();
+          connStatus.set('error');
+          connError.set('This server rejected the saved pairing. Choose another server or scan a new QR code.');
         } else {
           connStatus.set('error');
           this.forceClose = true;

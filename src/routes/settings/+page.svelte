@@ -184,8 +184,13 @@
   }
 
   async function repair() {
-    await remote.unpair();
-    goto(`${base}/`);
+    remote.disconnect();
+    goto(servers.length > 1 ? `${base}/?choose=server` : `${base}/pair/`);
+  }
+
+  function openServerMenu() {
+    remote.disconnect();
+    goto(`${base}/?choose=server`);
   }
 
   async function resync() {
@@ -195,6 +200,8 @@
 
   async function doRemoveServer(key: string) {
     if (!confirm('Remove this server pairing?')) return;
+    const removedActive = key === creds?.server_key;
+    if (removedActive) remote.disconnect();
     await removeServer(key);
     servers = await loadAllServers();
     creds = await loadCredentialsResilient();
@@ -202,9 +209,9 @@
       goto(`${base}/`);
       return;
     }
-    // Reconnect if we switched to a different server
-    remote.disconnect();
-    await remote.connect();
+    if (removedActive) {
+      await remote.connect();
+    }
   }
 
   async function doSwitchServer(key: string) {
@@ -494,6 +501,9 @@
     <span class="muted">LAN</span>
     <span class="mono">{creds?.lan_host ?? '—'}</span>
   </div>
+  {#if servers.length > 1}
+    <button class="accent fw" onclick={openServerMenu}>Change server</button>
+  {/if}
 </section>
 
 {#if servers.length > 0}
@@ -516,6 +526,11 @@
         </div>
       </div>
     {/each}
+    {#if servers.length > 1}
+      <button class="ghost fw" onclick={openServerMenu}>
+        Open server selection menu
+      </button>
+    {/if}
     <a href="{base}/pair/" class="ghost fw btn-link" style="margin-top:10px;">
       ＋ Pair another server
     </a>
@@ -603,7 +618,7 @@
     <input type="checkbox" bind:checked={$debugMode} style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);" />
   </div>
   <button class="ghost fw" onclick={repair}>
-    Re-pair (scan new QR)
+    Scan QR / server menu
   </button>
   <button class="ghost fw" onclick={unpair}>Forget this server</button>
 </section>

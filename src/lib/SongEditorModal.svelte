@@ -20,7 +20,7 @@
   // Initialize chorus groups
   let chorusGroups = $state<number[][]>(
     song.chorus_ranges && song.chorus_ranges.length > 0 
-      ? song.chorus_ranges.map(g => [...g]) 
+      ? song.chorus_ranges.map((g: number[]) => [...g])
       : (song.chorus_index !== undefined && song.chorus_index !== null 
           ? [[song.chorus_index]] 
           : [])

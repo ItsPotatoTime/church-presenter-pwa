@@ -230,12 +230,13 @@ export async function loadCredentials(): Promise<Credentials | null> {
       }
     }
 
-    // No active key or stale/incomplete key — pick the most recently used complete server
+    // No active key or stale/incomplete key. A single stored server keeps the
+    // old behavior; multiple servers require an explicit user choice.
     const all = (await _loadAllServers()).filter((entry) => !!entry.device_token);
-    if (all.length > 0) {
-      const best = all.sort((a, b) => (b.last_used ?? 0) - (a.last_used ?? 0))[0];
-      await setMeta('active_server_key', best.server_key);
-      _credCache = _entryToCredentials(best);
+    if (all.length === 1) {
+      const only = all[0];
+      await setMeta('active_server_key', only.server_key);
+      _credCache = _entryToCredentials(only);
       return _credCache;
     }
 
@@ -345,16 +346,18 @@ export async function clearCredentials(): Promise<void> {
   // Remove legacy entry too
   await deleteMeta('creds');
 
-  // If other servers remain, keep the most recent as active and restore its
-  // cached data so IndexedDB doesn't still hold the removed server's songs.
+  // If one server remains, keep old single-server behavior. If multiple
+  // remain, clear active selection so the user picks the next server.
   const remaining = await _loadAllServers();
-  if (remaining.length > 0) {
-    const next = remaining.sort((a, b) => (b.last_used ?? 0) - (a.last_used ?? 0))[0];
+  if (remaining.length === 1) {
+    const next = remaining[0];
     await setMeta('active_server_key', next.server_key);
+    _credCache = _entryToCredentials(next);
     await restoreServerData(next.server_key);
   } else {
     await deleteMeta('active_server_key');
-    // No servers left — wipe stale song/list data from IndexedDB.
+    _credCache = null;
+    // No active selection — wipe stale active song/list data from IndexedDB.
     await clearSongs();
     await clearLists();
     await clearBibleBooks();
@@ -384,10 +387,10 @@ export async function removeServer(serverKey: string): Promise<void> {
   const activeKey = await getRow<string>('active_server_key');
   await _removeServer(serverKey);
   if (activeKey === serverKey) {
-    // Pick another server or clear active, and restore its cached data.
+    // Keep single-server installs automatic; otherwise require a fresh choice.
     const remaining = await _loadAllServers();
-    if (remaining.length > 0) {
-      const next = remaining.sort((a, b) => (b.last_used ?? 0) - (a.last_used ?? 0))[0];
+    if (remaining.length === 1) {
+      const next = remaining[0];
       await setMeta('active_server_key', next.server_key);
       _credCache = _entryToCredentials(next);
       await restoreServerData(next.server_key);
@@ -545,7 +548,7 @@ export async function putSongs(songs: LibrarySong[]): Promise<void> {
             // Keep the local key and timestamp
             s.key = existing.key;
             s.key_ts = existing.key_ts;
-            syncQueue.push({ path: s.path, key: s.key, key_ts: s.key_ts });
+            syncQueue.push({ path: s.path, key: s.key, key_ts: s.key_ts ?? 0 });
           }
         }
         store.put(s);

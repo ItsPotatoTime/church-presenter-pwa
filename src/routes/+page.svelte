@@ -2,12 +2,22 @@
   import { onMount, onDestroy } from 'svelte';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
-  import { loadCredentialsResilient } from '$lib/db';
+  import {
+    getActiveServerKey,
+    loadAllServers,
+    loadCredentialsResilient,
+    switchServer,
+    type ServerEntry,
+  } from '$lib/db';
   import { serverName } from '$lib/stores';
   import jsQR from 'jsqr';
 
   let checked = $state(false);
   let paired = $state(false);
+  let servers = $state<ServerEntry[]>([]);
+  let activeServerKey = $state<string | null>(null);
+  let choosingServer = $state(false);
+  let selectingServerKey = $state<string | null>(null);
   let standalone = $state(false);
   let installPromptAvailable = $state(false);
   let deferredPrompt: any = null;
@@ -45,10 +55,36 @@
     window.addEventListener('beforeinstallprompt', handler);
 
     void (async () => {
+      const forceChoose = new URLSearchParams(window.location.search).has('choose');
+      servers = (await loadAllServers()).sort((a, b) => (b.last_used ?? 0) - (a.last_used ?? 0));
+      activeServerKey = await getActiveServerKey();
+
+      if (forceChoose && servers.length > 1) {
+        choosingServer = true;
+        checked = true;
+        return;
+      }
+
       const creds = await loadCredentialsResilient();
       paired = !!creds && !!creds.device_token;
       checked = true;
-      if (paired) goto(`${base}/live/`);
+      if (paired) {
+        goto(`${base}/live/`);
+        return;
+      }
+
+      if (servers.length > 1) {
+        activeServerKey = await getActiveServerKey();
+        choosingServer = true;
+        return;
+      }
+
+      if (servers.length === 1) {
+        const selected = await switchServer(servers[0].server_key);
+        if (selected?.device_token) {
+          goto(`${base}/live/`);
+        }
+      }
     })();
 
     return () => window.removeEventListener('beforeinstallprompt', handler);
@@ -96,6 +132,15 @@
   function onPasteSubmit(e: Event) {
     e.preventDefault();
     handlePairUrl(pasteUrl);
+  }
+
+  async function chooseServer(serverKey: string) {
+    selectingServerKey = serverKey;
+    const selected = await switchServer(serverKey);
+    selectingServerKey = null;
+    if (selected?.device_token) {
+      goto(`${base}/live/`);
+    }
   }
 
   // ── Inline QR scanner ─────────────────────────────────────────────
@@ -174,6 +219,38 @@
 {:else if paired}
   <section class="panel">
     <p class="muted">Redirecting…</p>
+  </section>
+{:else if choosingServer}
+  <section class="panel">
+    <h2>Choose server</h2>
+    <p class="muted">Select the desktop you want this phone to control.</p>
+
+    <div class="server-list">
+      {#each servers as s (s.server_key)}
+        <button
+          class="server-choice"
+          class:active={s.server_key === activeServerKey}
+          onclick={() => chooseServer(s.server_key)}
+          disabled={!!selectingServerKey}
+        >
+          <span class="server-main">
+            <span class="server-title">{s.server_name ?? 'ChurchPresenter'}</span>
+            <span class="server-host">{s.cloud_host ?? s.lan_host ?? 'No endpoint saved'}</span>
+          </span>
+          <span class="server-meta">
+            {#if selectingServerKey === s.server_key}
+              Opening…
+            {:else if s.server_key === activeServerKey}
+              Current
+            {:else}
+              Select
+            {/if}
+          </span>
+        </button>
+      {/each}
+    </div>
+
+    <a class="pair-link" href={`${base}/pair/`}>Pair another server</a>
   </section>
 {:else}
   {#if isIOS && !standalone}
@@ -295,6 +372,59 @@
   .tip { margin-top: 14px; }
   .tip summary { cursor: pointer; }
   .tip p { margin: 6px 0 0; line-height: 1.5; }
+
+  .server-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .server-choice {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 13px 12px;
+    text-align: left;
+    border-color: var(--border-light);
+    background: var(--elevated);
+  }
+  .server-choice.active {
+    border-color: var(--accent);
+  }
+  .server-main {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .server-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-primary);
+  }
+  .server-host {
+    font-size: 12px;
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+  }
+  .server-meta {
+    flex-shrink: 0;
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .pair-link {
+    display: block;
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    text-align: center;
+    text-decoration: none;
+  }
 
   /* Premium Scanner Overlay Styles */
   .scanner-modal {
