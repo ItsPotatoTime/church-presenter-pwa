@@ -225,13 +225,16 @@
     }
 
     // Filter out groups with length < 2 (as a group needs at least 2 linked slides)
-    const ranges = chorusGroups.filter(g => g.length >= 2);
+    const ranges = chorusGroups
+      .filter(g => g.length >= 2)
+      .map(g => [...g]);
     const primaryChorusIndex = ranges.length > 0 ? ranges[0][0] : (chorusGroups.flat()[0] ?? null);
+    const slideTexts = [...slides];
 
     const payload = {
       song_path: song.path,
       name: songName.trim(),
-      slide_texts: slides,
+      slide_texts: slideTexts,
       chorus_index: primaryChorusIndex,
       chorus_ranges: ranges.length > 0 ? ranges : null,
       end_slide_index: endSlideIndex,
@@ -245,7 +248,7 @@
           return {
             ...s,
             name: payload.name,
-            slide_texts: slides,
+            slide_texts: slideTexts,
             chorus_index: primaryChorusIndex ?? undefined,
             chorus_ranges: ranges.length > 0 ? ranges : undefined,
           };
@@ -255,7 +258,7 @@
     });
 
     song.name = payload.name;
-    song.slide_texts = slides;
+    song.slide_texts = slideTexts;
     song.chorus_index = primaryChorusIndex ?? undefined;
     song.chorus_ranges = ranges.length > 0 ? ranges : undefined;
 

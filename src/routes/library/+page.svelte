@@ -443,7 +443,7 @@
       saveError = 'Song title is required';
       return;
     }
-    const slides = parsedSlides;
+    const slides = [...parsedSlides];
     if (slides.length === 0) {
       saveError = 'Please enter song lyrics';
       return;
@@ -454,7 +454,7 @@
       const res = await remote.sendRequest('song.create', {
         name: songTitle.trim(),
         slide_texts: slides,
-        chorus_index: songChorusIndices,
+        chorus_index: [...songChorusIndices],
         folder: songFolder.trim(),
         overwrite
       });

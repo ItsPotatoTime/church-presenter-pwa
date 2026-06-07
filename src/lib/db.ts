@@ -174,6 +174,10 @@ function openDb(retries = 3, delayMs = 150): Promise<IDBDatabase> {
 
 // ── Low-level helpers ──────────────────────────────────────────────
 
+function toIndexedDbValue<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
 async function getRow<T>(key: string, store = STORE_META): Promise<T | null> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
@@ -537,7 +541,7 @@ export async function putSongs(songs: LibrarySong[]): Promise<void> {
       if (index >= songs.length) {
         return;
       }
-      const s = songs[index++];
+      const s = toIndexedDbValue(songs[index++]);
       const getReq = store.get(s.path);
       getReq.onsuccess = () => {
         const existing = getReq.result as LibrarySong | undefined;
@@ -733,7 +737,7 @@ export async function putLists(lists: LibraryList[]): Promise<void> {
     const tx = db.transaction(STORE_LISTS, 'readwrite');
     const store = tx.objectStore(STORE_LISTS);
     store.clear();
-    for (const l of lists) store.put(l);
+    for (const l of lists) store.put(toIndexedDbValue(l));
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -757,7 +761,7 @@ export async function putPrivateLists(lists: LibraryList[]): Promise<void> {
     const tx = db.transaction(STORE_PRIVATE_LISTS, 'readwrite');
     const store = tx.objectStore(STORE_PRIVATE_LISTS);
     store.clear();
-    for (const l of lists) store.put(l);
+    for (const l of lists) store.put(toIndexedDbValue(l));
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -850,7 +854,7 @@ export async function addPendingMutation(cmd: { type: string; payload?: unknown 
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PENDING, 'readwrite');
-    tx.objectStore(STORE_PENDING).add({ type: cmd.type, payload: cmd.payload, created_at: Date.now() });
+    tx.objectStore(STORE_PENDING).add(toIndexedDbValue({ type: cmd.type, payload: cmd.payload, created_at: Date.now() }));
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
