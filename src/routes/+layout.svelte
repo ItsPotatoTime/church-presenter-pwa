@@ -158,7 +158,8 @@
     if ('serviceWorker' in navigator && !dev) {
       try {
         const registration = await navigator.serviceWorker.register(`${base}/service-worker.js`, {
-          scope: `${base}/`
+          scope: `${base}/`,
+          updateViaCache: 'none',
         });
         console.log('[layout] ServiceWorker registered with scope:', registration.scope);
         trackServiceWorker(registration.installing);
