@@ -24,8 +24,6 @@ import {
   putSongs,
   setBibleVersion,
   setLastSyncTs,
-  snapshotServerData,
-  getActiveServerKey,
 } from './db';
 import type { SyncDelta, SyncFull } from './protocol';
 import {
@@ -185,10 +183,6 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
     bibleVersionStore.set(bibleVersion);
     syncStatus.set('idle');
 
-    // Persist fresh data into the server entry cache so switching away
-    // and back doesn't restore stale/corrupted songs.
-    const sk = await getActiveServerKey();
-    if (sk) void snapshotServerData(sk);
   } catch (e: any) {
     syncStatus.set('error');
     console.warn('[sync]', e?.message ?? e);

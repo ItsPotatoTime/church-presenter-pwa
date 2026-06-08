@@ -19,14 +19,12 @@ import {
   cacheQueueState,
   clearCredentials,
   clearPendingMutations,
-  getActiveServerKey,
   getPendingMutations,
   getOrCreateDeviceId,
   loadCredentials,
   putLists,
   removeServer,
   saveCredentials,
-  snapshotServerData,
   type Credentials,
 } from './db';
 import {
@@ -390,10 +388,7 @@ class RemoteClient {
           if (!isCurrent()) return;
           await putLists(lists);
           if (!isCurrent()) return;
-          const serverKey = creds.server_key ?? await getActiveServerKey();
-          if (serverKey && isCurrent()) {
-            await snapshotServerData(serverKey);
-          }
+          if (!isCurrent()) return;
         })().catch((err) => {
           console.warn('[ws] Failed to cache list state:', err);
         });

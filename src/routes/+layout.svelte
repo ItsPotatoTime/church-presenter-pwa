@@ -150,15 +150,10 @@
     }
   }
 
-  function handleServerDataRestored() {
-    void hydrateFromCache();
-  }
-
   onMount(async () => {
     // Register global error interceptors for chunk load failures
     window.addEventListener('error', handleChunkError, true);
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    window.addEventListener('church-remote:server-data-restored', handleServerDataRestored);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Register PWA service worker (only in production)
@@ -235,7 +230,6 @@
     if (typeof window !== 'undefined') {
       window.removeEventListener('error', handleChunkError, true);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-      window.removeEventListener('church-remote:server-data-restored', handleServerDataRestored);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
@@ -260,8 +254,8 @@
           void hydrateFromCache();
         }
       }
-      // Prefer a delta sync on reconnect; the first-ever sync still falls back
-      // to a full snapshot because last_sync_ts starts at 0.
+      // Prefer a delta sync on reconnect; first sync falls back to a full sync
+      // because this server's last_sync_ts starts at 0.
       if (!hasTriggeredSync && !isReducedDataConnection()) {
         hasTriggeredSync = true;
         void syncNow();

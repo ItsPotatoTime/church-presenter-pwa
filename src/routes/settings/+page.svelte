@@ -6,7 +6,6 @@
     loadCredentialsResilient,
     loadAllServers,
     removeServer,
-    refreshServerDataAfterSwitch,
     switchServer,
     getLastSyncTs,
     exportBackup,
@@ -26,7 +25,6 @@
     isViewOnly,
     liveState,
     myDeviceId,
-    queueState,
     syncStatus,
     songsStore,
     serverName,
@@ -184,6 +182,7 @@
     // Reload server list — clearCredentials may have switched to another
     servers = await loadAllServers();
     creds = await loadCredentialsResilient();
+    await hydrateFromCache();
     if (!creds?.device_token) goto(`${base}/`);
   }
 
@@ -214,31 +213,27 @@
       return;
     }
     if (removedActive) {
+      await hydrateFromCache();
+      lastSyncTs = await getLastSyncTs();
+    }
+    if (removedActive) {
       await remote.connect();
     }
   }
 
   async function doSwitchServer(key: string) {
-    const previousServerKey = creds?.server_key ?? null;
     const newCreds = await switchServer(key);
     if (!newCreds) return;
     creds = newCreds;
     serverName.set(newCreds.server_name ?? 'ChurchPresenter');
     liveState.set(null);
-    queueState.set(null);
     exclusiveDeviceId.set(null);
     exclusiveDeviceName.set(null);
     servers = await loadAllServers();
+    await hydrateFromCache();
+    lastSyncTs = await getLastSyncTs();
     remote.disconnect();
     void remote.connect();
-    void refreshServerDataAfterSwitch(previousServerKey, key)
-      .then(async () => {
-        await hydrateFromCache();
-        lastSyncTs = await getLastSyncTs();
-      })
-      .catch((err) => {
-        console.warn('[settings] Server cache refresh failed:', err);
-      });
   }
 
   const lastSyncHuman = $derived.by(() => {
@@ -276,7 +271,7 @@
       try {
         const text = await file.text();
         const data = JSON.parse(text) as BackupData;
-        if (!data.version || !data.songs || !data.servers) {
+        if (!data.version || !data.servers || (!data.server_data && !data.songs)) {
           alert('Invalid backup file.');
           return;
         }

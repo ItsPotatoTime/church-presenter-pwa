@@ -1,25 +1,14 @@
 // IndexedDB wrapper.
-// Object stores:
-//   meta              — {key, value} rows: device_id, last_sync_ts, active_server_key
-//   songs             — keyed by song path
-//   lists             — keyed by list name
-//   pending_mutations — offline-queued list commands, replayed on reconnect
-//   servers           — one entry per paired server (added in v4)
-//
-// Version 2 adds `songs` + `lists` stores (Phase 2).
-// Version 3 adds `pending_mutations` (Phase 5 offline list editing).
-// Version 4 adds `servers` for multi-device pairing support.
-// Version 5 adds Bible cache stores.
-// Version 6 forces one full resync for existing installs so Bible data is cached.
-// Version 8 moves large per-server library caches out of server pairing rows.
+// Version 9 stores all offline data by server_key so each paired desktop is a
+// separate offline workspace. The older global stores remain only as migration
+// sources for installed clients upgrading from versions 2-8.
 
 import { sortBibleVerses } from './bible';
 import type { BibleBook, BibleVerse, LibrarySong, LibraryList, QueueState } from './protocol';
-import { get } from 'svelte/store';
-import { queueState } from './stores';
 
 const DB_NAME = 'church-remote';
-const DB_VERSION = 8;
+const DB_VERSION = 9;
+
 const STORE_META = 'meta';
 const STORE_SONGS = 'songs';
 const STORE_LISTS = 'lists';
@@ -29,6 +18,14 @@ const STORE_BIBLE_VERSES = 'bible_verses';
 const STORE_PENDING = 'pending_mutations';
 const STORE_SERVERS = 'servers';
 const STORE_SERVER_CACHES = 'server_caches';
+
+const STORE_SERVER_SONGS = 'server_songs';
+const STORE_SERVER_LISTS = 'server_lists';
+const STORE_SERVER_PRIVATE_LISTS = 'server_private_lists';
+const STORE_SERVER_BIBLE_BOOKS = 'server_bible_books';
+const STORE_SERVER_BIBLE_VERSES = 'server_bible_verses';
+const STORE_SERVER_QUEUE = 'server_queue';
+const STORE_SERVER_SYNC_META = 'server_sync_meta';
 
 // ── Public types ───────────────────────────────────────────────────
 
@@ -40,14 +37,13 @@ export interface Credentials {
   lan_host: string | null;
   server_name?: string;
   paired_at?: number;
-  // Present when loaded from the servers store (multi-device support)
   server_key?: string;
   can_edit_keys?: boolean;
   can_edit_songs?: boolean;
 }
 
 export interface ServerEntry {
-  server_key: string; // UUID — IndexedDB key for STORE_SERVERS
+  server_key: string;
   device_id: string;
   device_token: string;
   device_name: string;
@@ -56,6 +52,7 @@ export interface ServerEntry {
   server_name?: string;
   paired_at?: number;
   last_used?: number;
+  // Legacy v4-v8 cache fields. New writes strip these from the server registry.
   cached_songs?: LibrarySong[];
   cached_lists?: LibraryList[];
   cached_bible_books?: BibleBook[];
@@ -76,6 +73,34 @@ interface ServerCacheEntry {
   cached_bible_version?: string | null;
   cached_queue?: QueueState | null;
   last_sync_ts?: number;
+}
+
+interface ServerSyncMeta {
+  server_key: string;
+  last_sync_ts: number;
+  bible_version: string | null;
+}
+
+interface ServerQueueRow {
+  server_key: string;
+  queue: QueueState | null;
+}
+
+type ScopedSong = LibrarySong & { server_key: string };
+type ScopedList = LibraryList & { server_key: string };
+type ScopedBibleBook = BibleBook & { server_key: string };
+type ScopedBibleVerse = BibleVerse & { server_key: string };
+
+export interface ServerDataBackup {
+  server_key: string;
+  songs: LibrarySong[];
+  lists: LibraryList[];
+  private_lists: LibraryList[];
+  bible_books: BibleBook[];
+  bible_verses: BibleVerse[];
+  bible_version: string | null;
+  queue: QueueState | null;
+  last_sync_ts: number;
 }
 
 // ── DB open / upgrade ──────────────────────────────────────────────
@@ -120,67 +145,42 @@ function openDb(retries = 3, delayMs = 150): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_PRIVATE_LISTS)) {
         db.createObjectStore(STORE_PRIVATE_LISTS, { keyPath: 'name' });
       }
+      if (!db.objectStoreNames.contains(STORE_SERVER_SONGS)) {
+        db.createObjectStore(STORE_SERVER_SONGS, { keyPath: ['server_key', 'path'] });
+      }
+      if (!db.objectStoreNames.contains(STORE_SERVER_LISTS)) {
+        db.createObjectStore(STORE_SERVER_LISTS, { keyPath: ['server_key', 'name'] });
+      }
+      if (!db.objectStoreNames.contains(STORE_SERVER_PRIVATE_LISTS)) {
+        db.createObjectStore(STORE_SERVER_PRIVATE_LISTS, { keyPath: ['server_key', 'name'] });
+      }
+      if (!db.objectStoreNames.contains(STORE_SERVER_BIBLE_BOOKS)) {
+        db.createObjectStore(STORE_SERVER_BIBLE_BOOKS, { keyPath: ['server_key', 'book_num'] });
+      }
+      if (!db.objectStoreNames.contains(STORE_SERVER_BIBLE_VERSES)) {
+        db.createObjectStore(STORE_SERVER_BIBLE_VERSES, { keyPath: ['server_key', 'id'] });
+      }
+      if (!db.objectStoreNames.contains(STORE_SERVER_QUEUE)) {
+        db.createObjectStore(STORE_SERVER_QUEUE, { keyPath: 'server_key' });
+      }
+      if (!db.objectStoreNames.contains(STORE_SERVER_SYNC_META)) {
+        db.createObjectStore(STORE_SERVER_SYNC_META, { keyPath: 'server_key' });
+      }
 
-      // Migration v3 → v4: move meta['creds'] into STORE_SERVERS
       if (ev.oldVersion < 4 && db.objectStoreNames.contains(STORE_META)) {
-        const metaStore = tx.objectStore(STORE_META);
-        const serversStore = tx.objectStore(STORE_SERVERS);
-        const getReq = metaStore.get('creds');
-        getReq.onsuccess = () => {
-          const row = getReq.result as { key: string; value: Credentials } | undefined;
-          if (!row?.value) return;
-          const creds = row.value;
-          const serverKey = crypto.randomUUID();
-          const entry: ServerEntry = {
-            server_key: serverKey,
-            device_id: creds.device_id,
-            device_token: creds.device_token,
-            device_name: creds.device_name,
-            cloud_host: creds.cloud_host,
-            lan_host: creds.lan_host,
-            server_name: creds.server_name,
-            paired_at: creds.paired_at,
-            last_used: Date.now(),
-          };
-          serversStore.put(entry);
-          metaStore.put({ key: 'active_server_key', value: serverKey });
-        };
+        migrateLegacyCredentials(tx);
       }
 
       if (ev.oldVersion < 6 && db.objectStoreNames.contains(STORE_META)) {
         tx.objectStore(STORE_META).put({ key: 'last_sync_ts', value: 0 });
-        if (db.objectStoreNames.contains(STORE_SERVERS)) {
-          const serversStore = tx.objectStore(STORE_SERVERS);
-          const serversReq = serversStore.getAll();
-          serversReq.onsuccess = () => {
-            const servers = (serversReq.result ?? []) as ServerEntry[];
-            for (const server of servers) {
-              serversStore.put({ ...server, last_sync_ts: 0 });
-            }
-          };
-        }
       }
 
       if (ev.oldVersion < 8 && db.objectStoreNames.contains(STORE_SERVERS)) {
-        const serversStore = tx.objectStore(STORE_SERVERS);
-        const cacheStore = tx.objectStore(STORE_SERVER_CACHES);
-        const serversReq = serversStore.getAll();
-        serversReq.onsuccess = () => {
-          const servers = (serversReq.result ?? []) as ServerEntry[];
-          for (const server of servers) {
-            cacheStore.put({
-              server_key: server.server_key,
-              cached_songs: server.cached_songs,
-              cached_lists: server.cached_lists,
-              cached_bible_books: server.cached_bible_books,
-              cached_bible_verses: server.cached_bible_verses,
-              cached_bible_version: server.cached_bible_version,
-              cached_queue: server.cached_queue,
-              last_sync_ts: server.last_sync_ts,
-            } satisfies ServerCacheEntry);
-            serversStore.put(stripServerCache(server));
-          }
-        };
+        migrateServerEntryCaches(tx);
+      }
+
+      if (ev.oldVersion < 9) {
+        migrateServerScopedData(tx);
       }
     };
     req.onsuccess = () => {
@@ -212,10 +212,183 @@ function openDb(retries = 3, delayMs = 150): Promise<IDBDatabase> {
   return dbPromise;
 }
 
+function migrateLegacyCredentials(tx: IDBTransaction): void {
+  const metaStore = tx.objectStore(STORE_META);
+  const serversStore = tx.objectStore(STORE_SERVERS);
+  const getReq = metaStore.get('creds');
+  getReq.onsuccess = () => {
+    const row = getReq.result as { key: string; value: Credentials } | undefined;
+    if (!row?.value) return;
+    const creds = row.value;
+    const serverKey = crypto.randomUUID();
+    const entry: ServerEntry = {
+      server_key: serverKey,
+      device_id: creds.device_id,
+      device_token: creds.device_token,
+      device_name: creds.device_name,
+      cloud_host: creds.cloud_host,
+      lan_host: creds.lan_host,
+      server_name: creds.server_name,
+      paired_at: creds.paired_at,
+      last_used: Date.now(),
+    };
+    serversStore.put(entry);
+    metaStore.put({ key: 'active_server_key', value: serverKey });
+    copyGlobalStoresToServer(tx, serverKey);
+    tagLegacyPendingMutations(tx, serverKey);
+  };
+}
+
+function migrateServerEntryCaches(tx: IDBTransaction): void {
+  const serversStore = tx.objectStore(STORE_SERVERS);
+  const cacheStore = tx.objectStore(STORE_SERVER_CACHES);
+  const serversReq = serversStore.getAll();
+  serversReq.onsuccess = () => {
+    const servers = (serversReq.result ?? []) as ServerEntry[];
+    for (const server of servers) {
+      cacheStore.put({
+        server_key: server.server_key,
+        cached_songs: server.cached_songs,
+        cached_lists: server.cached_lists,
+        cached_bible_books: server.cached_bible_books,
+        cached_bible_verses: server.cached_bible_verses,
+        cached_bible_version: server.cached_bible_version,
+        cached_queue: server.cached_queue,
+        last_sync_ts: server.last_sync_ts,
+      } satisfies ServerCacheEntry);
+      serversStore.put(stripServerCache(server));
+    }
+  };
+}
+
+function migrateServerScopedData(tx: IDBTransaction): void {
+  const metaStore = tx.objectStore(STORE_META);
+  const serversStore = tx.objectStore(STORE_SERVERS);
+  const cacheStore = tx.objectStore(STORE_SERVER_CACHES);
+  const syncMetaStore = tx.objectStore(STORE_SERVER_SYNC_META);
+
+  const serversReq = serversStore.getAll();
+  serversReq.onsuccess = () => {
+    const servers = (serversReq.result ?? []) as ServerEntry[];
+    for (const server of servers) {
+      writeLegacyCacheToScopedStores(tx, {
+        server_key: server.server_key,
+        cached_songs: server.cached_songs,
+        cached_lists: server.cached_lists,
+        cached_bible_books: server.cached_bible_books,
+        cached_bible_verses: server.cached_bible_verses,
+        cached_bible_version: server.cached_bible_version,
+        cached_queue: server.cached_queue,
+        last_sync_ts: server.last_sync_ts,
+      });
+      syncMetaStore.put({
+        server_key: server.server_key,
+        last_sync_ts: server.last_sync_ts ?? 0,
+        bible_version: server.cached_bible_version ?? null,
+      } satisfies ServerSyncMeta);
+      serversStore.put(stripServerCache(server));
+    }
+  };
+
+  const cachesReq = cacheStore.getAll();
+  cachesReq.onsuccess = () => {
+    const caches = (cachesReq.result ?? []) as ServerCacheEntry[];
+    for (const cache of caches) writeLegacyCacheToScopedStores(tx, cache);
+  };
+
+  const activeReq = metaStore.get('active_server_key');
+  activeReq.onsuccess = () => {
+    const activeKey = metaValue<string>(activeReq.result);
+    if (!activeKey) return;
+    copyGlobalStoresToServer(tx, activeKey);
+    tagLegacyPendingMutations(tx, activeKey);
+  };
+}
+
+function writeLegacyCacheToScopedStores(tx: IDBTransaction, cache: ServerCacheEntry): void {
+  const serverKey = cache.server_key;
+  if (!serverKey) return;
+  putScopedRows(tx.objectStore(STORE_SERVER_SONGS), serverKey, cache.cached_songs ?? []);
+  putScopedRows(tx.objectStore(STORE_SERVER_LISTS), serverKey, cache.cached_lists ?? []);
+  putScopedRows(tx.objectStore(STORE_SERVER_BIBLE_BOOKS), serverKey, cache.cached_bible_books ?? []);
+  putScopedRows(tx.objectStore(STORE_SERVER_BIBLE_VERSES), serverKey, cache.cached_bible_verses ?? []);
+  tx.objectStore(STORE_SERVER_QUEUE).put({
+    server_key: serverKey,
+    queue: cache.cached_queue ?? null,
+  } satisfies ServerQueueRow);
+  tx.objectStore(STORE_SERVER_SYNC_META).put({
+    server_key: serverKey,
+    last_sync_ts: cache.last_sync_ts ?? 0,
+    bible_version: cache.cached_bible_version ?? null,
+  } satisfies ServerSyncMeta);
+}
+
+function copyGlobalStoresToServer(tx: IDBTransaction, serverKey: string): void {
+  copyGlobalStoreToScopedStore(tx, STORE_SONGS, STORE_SERVER_SONGS, serverKey);
+  copyGlobalStoreToScopedStore(tx, STORE_LISTS, STORE_SERVER_LISTS, serverKey);
+  copyGlobalStoreToScopedStore(tx, STORE_PRIVATE_LISTS, STORE_SERVER_PRIVATE_LISTS, serverKey);
+  copyGlobalStoreToScopedStore(tx, STORE_BIBLE_BOOKS, STORE_SERVER_BIBLE_BOOKS, serverKey);
+  copyGlobalStoreToScopedStore(tx, STORE_BIBLE_VERSES, STORE_SERVER_BIBLE_VERSES, serverKey);
+
+  const lastSyncReq = tx.objectStore(STORE_META).get('last_sync_ts');
+  const bibleVersionReq = tx.objectStore(STORE_META).get('bible_version');
+  lastSyncReq.onsuccess = () => {
+    const lastSyncTs = Number(metaValue<number>(lastSyncReq.result) ?? 0);
+    const putMeta = () => {
+      tx.objectStore(STORE_SERVER_SYNC_META).put({
+        server_key: serverKey,
+        last_sync_ts: lastSyncTs,
+        bible_version: metaValue<string | null>(bibleVersionReq.result) ?? null,
+      } satisfies ServerSyncMeta);
+    };
+    if (bibleVersionReq.readyState === 'done') putMeta();
+    else bibleVersionReq.onsuccess = putMeta;
+  };
+}
+
+function copyGlobalStoreToScopedStore(
+  tx: IDBTransaction,
+  sourceName: string,
+  targetName: string,
+  serverKey: string,
+): void {
+  const req = tx.objectStore(sourceName).getAll();
+  req.onsuccess = () => {
+    putScopedRows(tx.objectStore(targetName), serverKey, req.result ?? []);
+  };
+}
+
+function tagLegacyPendingMutations(tx: IDBTransaction, serverKey: string): void {
+  const store = tx.objectStore(STORE_PENDING);
+  const req = store.getAll();
+  req.onsuccess = () => {
+    const mutations = (req.result ?? []) as PendingMutation[];
+    for (const mutation of mutations) {
+      if (mutation.id !== undefined && !mutation.server_key) {
+        store.put({ ...mutation, server_key: serverKey });
+      }
+    }
+  };
+}
+
+function putScopedRows<T extends object>(store: IDBObjectStore, serverKey: string, rows: T[]): void {
+  for (const row of rows) {
+    store.put({ ...toIndexedDbValue(row), server_key: serverKey });
+  }
+}
+
 // ── Low-level helpers ──────────────────────────────────────────────
 
 function toIndexedDbValue<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function metaValue<T>(row: { value?: T } | T | null | undefined): T | null {
+  if (!row) return null;
+  if (typeof row === 'object' && row !== null && 'value' in row) {
+    return (row as { value: T }).value;
+  }
+  return row as T;
 }
 
 function stripServerCache(entry: ServerEntry): ServerEntry {
@@ -229,7 +402,20 @@ function stripServerCache(entry: ServerEntry): ServerEntry {
     last_sync_ts,
     ...leanEntry
   } = entry;
+  void cached_songs;
+  void cached_lists;
+  void cached_bible_books;
+  void cached_bible_verses;
+  void cached_bible_version;
+  void cached_queue;
+  void last_sync_ts;
   return leanEntry;
+}
+
+function stripServerKey<T extends { server_key?: string }>(row: T): Omit<T, 'server_key'> {
+  const { server_key, ...rest } = row;
+  void server_key;
+  return rest;
 }
 
 async function getRow<T>(key: string, store = STORE_META): Promise<T | null> {
@@ -237,15 +423,7 @@ async function getRow<T>(key: string, store = STORE_META): Promise<T | null> {
   return new Promise((resolve, reject) => {
     const tx = db.transaction(store, 'readonly');
     const req = tx.objectStore(store).get(key);
-    req.onsuccess = () => {
-      const row = req.result as { key: string; value: T } | T | undefined;
-      if (!row) return resolve(null);
-      if (store === STORE_META && (row as any).value !== undefined) {
-        resolve((row as any).value as T);
-      } else {
-        resolve(row as T);
-      }
-    };
+    req.onsuccess = () => resolve(metaValue<T>(req.result));
     req.onerror = () => reject(req.error);
   });
 }
@@ -270,16 +448,81 @@ async function deleteMeta(key: string): Promise<void> {
   });
 }
 
-// ── Credentials (single-server shim — delegates to servers store) ──
-// In-memory cache so tab-switch onMount reads are instant.
+async function getActiveServerKey(): Promise<string | null> {
+  return (await getRow<string>('active_server_key')) ?? null;
+}
+
+async function requireActiveServerKey(): Promise<string | null> {
+  const serverKey = await getActiveServerKey();
+  if (!serverKey) return null;
+  const entry = await _getServerByKey(serverKey);
+  return entry ? serverKey : null;
+}
+
+function scopedKeyMatchesServer(key: IDBValidKey, serverKey: string): boolean {
+  return Array.isArray(key) && key[0] === serverKey;
+}
+
+async function clearScopedStore(storeName: string, serverKey: string): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const req = store.getAllKeys();
+    req.onsuccess = () => {
+      for (const key of req.result ?? []) {
+        if (scopedKeyMatchesServer(key, serverKey)) store.delete(key);
+      }
+    };
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function clearAllServerData(serverKey: string): Promise<void> {
+  await Promise.all([
+    clearScopedStore(STORE_SERVER_SONGS, serverKey),
+    clearScopedStore(STORE_SERVER_LISTS, serverKey),
+    clearScopedStore(STORE_SERVER_PRIVATE_LISTS, serverKey),
+    clearScopedStore(STORE_SERVER_BIBLE_BOOKS, serverKey),
+    clearScopedStore(STORE_SERVER_BIBLE_VERSES, serverKey),
+    removeServerQueue(serverKey),
+    removeServerSyncMeta(serverKey),
+    clearPendingMutationsForServer(serverKey),
+    _removeServerCache(serverKey),
+  ]);
+}
+
+async function clearAllServerScopedStores(): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction([
+      STORE_SERVER_SONGS,
+      STORE_SERVER_LISTS,
+      STORE_SERVER_PRIVATE_LISTS,
+      STORE_SERVER_BIBLE_BOOKS,
+      STORE_SERVER_BIBLE_VERSES,
+      STORE_SERVER_QUEUE,
+      STORE_SERVER_SYNC_META,
+      STORE_PENDING,
+      STORE_SERVER_CACHES,
+    ], 'readwrite');
+    for (const name of tx.objectStoreNames) tx.objectStore(name).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ── Credentials (single-server shim delegates to servers store) ──
+
 let _credCache: Credentials | null | undefined = undefined;
 
 export async function loadCredentials(): Promise<Credentials | null> {
   if (_credCache !== undefined) return _credCache;
 
   try {
-    // Try the active server first
-    const activeKey = await getRow<string>('active_server_key');
+    const activeKey = await getActiveServerKey();
     if (activeKey) {
       const entry = await _getServerByKey(activeKey);
       if (entry?.device_token) {
@@ -288,21 +531,17 @@ export async function loadCredentials(): Promise<Credentials | null> {
       }
     }
 
-    // No active key or stale/incomplete key. A single stored server keeps the
-    // old behavior; multiple servers require an explicit user choice.
     const all = (await _loadAllServers()).filter((entry) => !!entry.device_token);
     if (all.length === 1) {
       const only = all[0];
       await setMeta('active_server_key', only.server_key);
+      await initializeServerData(only.server_key);
       _credCache = _entryToCredentials(only);
       return _credCache;
     }
 
-    if (activeKey) {
-      await deleteMeta('active_server_key');
-    }
+    if (activeKey) await deleteMeta('active_server_key');
 
-    // Legacy fallback: meta['creds'] (pre-v4 data that didn't migrate in onupgradeneeded)
     const legacy = await getRow<Credentials>('creds');
     if (legacy) {
       const serverKey = crypto.randomUUID();
@@ -318,13 +557,14 @@ export async function loadCredentials(): Promise<Credentials | null> {
         last_used: Date.now(),
       };
       await _saveServer(entry);
+      await initializeServerData(serverKey);
       await setMeta('active_server_key', serverKey);
       _credCache = _entryToCredentials(entry);
       return _credCache;
     }
   } catch (err) {
     console.error('[db] Error reading credentials from IndexedDB:', err);
-    return null; // Return null but do NOT set _credCache so we can retry on next wake/call
+    return null;
   }
 
   _credCache = null;
@@ -337,9 +577,7 @@ export async function loadCredentialsResilient(maxAttempts = 3, delays = [150, 3
   while (attempts < maxAttempts) {
     try {
       creds = await loadCredentials();
-      if (creds && creds.device_token) {
-        return creds;
-      }
+      if (creds && creds.device_token) return creds;
     } catch (err) {
       console.warn(`[db] loadCredentials failed (attempt ${attempts + 1}):`, err);
     }
@@ -352,8 +590,7 @@ export async function loadCredentialsResilient(maxAttempts = 3, delays = [150, 3
 }
 
 export async function saveCredentials(c: Credentials): Promise<void> {
-  // If there's an active server, update it in-place (preserves server_key).
-  const activeKey = (c.server_key) || (await getRow<string>('active_server_key'));
+  const activeKey = c.server_key || (await getActiveServerKey());
   if (activeKey) {
     const existing = await _getServerByKey(activeKey);
     if (existing) {
@@ -371,11 +608,12 @@ export async function saveCredentials(c: Credentials): Promise<void> {
         can_edit_songs: c.can_edit_songs ?? existing.can_edit_songs,
       };
       await _saveServer(updated);
+      await initializeServerData(activeKey);
       _credCache = _entryToCredentials(updated);
       return;
     }
   }
-  // No active server — create a new one.
+
   const serverKey = c.server_key ?? crypto.randomUUID();
   const entry: ServerEntry = {
     server_key: serverKey,
@@ -391,94 +629,84 @@ export async function saveCredentials(c: Credentials): Promise<void> {
     can_edit_songs: c.can_edit_songs,
   };
   await _saveServer(entry);
+  await initializeServerData(serverKey);
   await setMeta('active_server_key', serverKey);
   _credCache = _entryToCredentials(entry);
 }
 
 export async function clearCredentials(): Promise<void> {
-  const activeKey = await getRow<string>('active_server_key');
+  const activeKey = await getActiveServerKey();
   if (activeKey) {
     await _removeServer(activeKey);
-    await _removeServerCache(activeKey);
+    await clearAllServerData(activeKey);
   }
   _credCache = null;
-  // Remove legacy entry too
   await deleteMeta('creds');
 
-  // If one server remains, keep old single-server behavior. If multiple
-  // remain, clear active selection so the user picks the next server.
   const remaining = await _loadAllServers();
   if (remaining.length === 1) {
     const next = remaining[0];
     await setMeta('active_server_key', next.server_key);
+    await initializeServerData(next.server_key);
     _credCache = _entryToCredentials(next);
-    await restoreServerData(next.server_key);
   } else {
     await deleteMeta('active_server_key');
     _credCache = null;
-    // No active selection — wipe stale active song/list data from IndexedDB.
-    await clearSongs();
-    await clearLists();
-    await clearBibleBooks();
-    await clearBibleVerses();
-    await deleteMeta('bible_version');
   }
 }
 
 // ── Multi-server API ───────────────────────────────────────────────
 
-/** Load all stored server credentials. */
 export async function loadAllServers(): Promise<ServerEntry[]> {
   const all = await _loadAllServers();
   return all.filter((entry) => !!entry.device_token);
 }
 
-/**
- * Add or replace a server entry.
- * If an entry with the same server_key already exists it is overwritten.
- */
 export async function saveServer(entry: ServerEntry): Promise<void> {
   await _saveServer(entry);
+  await initializeServerData(entry.server_key);
 }
 
-/** Remove a specific server pairing by its key. */
 export async function removeServer(serverKey: string): Promise<void> {
-  const activeKey = await getRow<string>('active_server_key');
+  const activeKey = await getActiveServerKey();
   await _removeServer(serverKey);
-  await _removeServerCache(serverKey);
+  await clearAllServerData(serverKey);
+
   if (activeKey === serverKey) {
-    // Keep single-server installs automatic; otherwise require a fresh choice.
     const remaining = await _loadAllServers();
     if (remaining.length === 1) {
       const next = remaining[0];
       await setMeta('active_server_key', next.server_key);
+      await initializeServerData(next.server_key);
       _credCache = _entryToCredentials(next);
-      await restoreServerData(next.server_key);
     } else {
       await deleteMeta('active_server_key');
       _credCache = null;
-      await clearSongs();
-      await clearLists();
-      await clearBibleBooks();
-      await clearBibleVerses();
-      await deleteMeta('bible_version');
     }
   }
 }
 
-/** Switch to a different stored server as the active one.
- *  Data snapshot/restore is intentionally deferred so endpoint switching is instant. */
 export async function switchServer(serverKey: string): Promise<Credentials | null> {
   const entry = await _getServerByKey(serverKey);
   if (!entry) return null;
   const updated: ServerEntry = { ...entry, last_used: Date.now() };
   await _saveServer(updated);
+  await initializeServerData(serverKey);
   await setMeta('active_server_key', serverKey);
   _credCache = _entryToCredentials(updated);
   return _credCache;
 }
 
-// ── Internal helpers ───────────────────────────────────────────────
+export async function initializeServerData(serverKey: string): Promise<void> {
+  const meta = await getServerSyncMeta(serverKey);
+  if (!meta) {
+    await putServerSyncMeta({ server_key: serverKey, last_sync_ts: 0, bible_version: null });
+  }
+}
+
+export { getActiveServerKey };
+
+// ── Internal server helpers ─────────────────────────────────────────
 
 function _entryToCredentials(e: ServerEntry): Credentials {
   return {
@@ -515,36 +743,6 @@ async function _loadAllServers(): Promise<ServerEntry[]> {
   });
 }
 
-async function _getServerCache(key: string): Promise<ServerCacheEntry | null> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_SERVER_CACHES, 'readonly');
-    const req = tx.objectStore(STORE_SERVER_CACHES).get(key);
-    req.onsuccess = () => resolve((req.result as ServerCacheEntry) ?? null);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-async function _saveServerCache(entry: ServerCacheEntry): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_SERVER_CACHES, 'readwrite');
-    tx.objectStore(STORE_SERVER_CACHES).put(entry);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-async function _removeServerCache(key: string): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_SERVER_CACHES, 'readwrite');
-    tx.objectStore(STORE_SERVER_CACHES).delete(key);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
 async function _saveServer(entry: ServerEntry): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
@@ -565,6 +763,16 @@ async function _removeServer(key: string): Promise<void> {
   });
 }
 
+async function _removeServerCache(key: string): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVER_CACHES, 'readwrite');
+    tx.objectStore(STORE_SERVER_CACHES).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 // ── Device ID ──────────────────────────────────────────────────────
 
 export async function getOrCreateDeviceId(): Promise<string> {
@@ -575,58 +783,99 @@ export async function getOrCreateDeviceId(): Promise<string> {
   return id;
 }
 
-// ── Active server key accessor ────────────────────────────────────
+// ── Sync bookkeeping ───────────────────────────────────────────────
 
-export async function getActiveServerKey(): Promise<string | null> {
-  return (await getRow<string>('active_server_key')) ?? null;
+async function getServerSyncMeta(serverKey: string): Promise<ServerSyncMeta | null> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVER_SYNC_META, 'readonly');
+    const req = tx.objectStore(STORE_SERVER_SYNC_META).get(serverKey);
+    req.onsuccess = () => resolve((req.result as ServerSyncMeta) ?? null);
+    req.onerror = () => reject(req.error);
+  });
 }
 
-// ── Sync bookkeeping (per-server) ─────────────────────────────────
+async function putServerSyncMeta(meta: ServerSyncMeta): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVER_SYNC_META, 'readwrite');
+    tx.objectStore(STORE_SERVER_SYNC_META).put(meta);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function removeServerSyncMeta(serverKey: string): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVER_SYNC_META, 'readwrite');
+    tx.objectStore(STORE_SERVER_SYNC_META).delete(serverKey);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
 
 export async function getLastSyncTs(): Promise<number> {
-  const sk = await getRow<string>('active_server_key');
-  if (sk) {
-    const cache = await _getServerCache(sk);
-    if (cache?.last_sync_ts) return cache.last_sync_ts;
-  }
-  return (await getRow<number>('last_sync_ts')) ?? 0;
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return 0;
+  const meta = await getServerSyncMeta(serverKey);
+  return meta?.last_sync_ts ?? 0;
 }
 
 export async function setLastSyncTs(ts: number): Promise<void> {
-  await setMeta('last_sync_ts', ts);
-  const sk = await getRow<string>('active_server_key');
-  if (sk) {
-    const cache = (await _getServerCache(sk)) ?? { server_key: sk };
-    cache.last_sync_ts = ts;
-    await _saveServerCache(cache);
-  }
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  const meta = await getServerSyncMeta(serverKey);
+  await putServerSyncMeta({
+    server_key: serverKey,
+    last_sync_ts: ts,
+    bible_version: meta?.bible_version ?? null,
+  });
+}
+
+export async function getBibleVersion(): Promise<string | null> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return null;
+  const meta = await getServerSyncMeta(serverKey);
+  return meta?.bible_version ?? null;
+}
+
+export async function setBibleVersion(version: string | null): Promise<void> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  const meta = await getServerSyncMeta(serverKey);
+  await putServerSyncMeta({
+    server_key: serverKey,
+    last_sync_ts: meta?.last_sync_ts ?? 0,
+    bible_version: version,
+  });
 }
 
 // ── Songs ──────────────────────────────────────────────────────────
 
 export async function putSongs(songs: LibrarySong[]): Promise<void> {
   if (!songs.length) return;
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  const activeServerKey = serverKey;
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_SONGS, 'readwrite');
-    const store = tx.objectStore(STORE_SONGS);
-    
+    const tx = db.transaction(STORE_SERVER_SONGS, 'readwrite');
+    const store = tx.objectStore(STORE_SERVER_SONGS);
     let index = 0;
     const syncQueue: { path: string; key: string | null | undefined; key_ts: number }[] = [];
 
     function next() {
-      if (index >= songs.length) {
-        return;
-      }
-      const s = toIndexedDbValue(songs[index++]);
-      const getReq = store.get(s.path);
+      if (index >= songs.length) return;
+      const s = toIndexedDbValue(songs[index++]) as ScopedSong;
+      s.server_key = activeServerKey;
+      const getReq = store.get([activeServerKey, s.path]);
       getReq.onsuccess = () => {
-        const existing = getReq.result as LibrarySong | undefined;
+        const existing = getReq.result as ScopedSong | undefined;
         if (existing) {
           const localTs = existing.key_ts || 0;
           const incomingTs = s.key_ts || 0;
           if (localTs > incomingTs) {
-            // Keep the local key and timestamp
             s.key = existing.key;
             s.key_ts = existing.key_ts;
             syncQueue.push({ path: s.path, key: s.key, key_ts: s.key_ts ?? 0 });
@@ -635,9 +884,7 @@ export async function putSongs(songs: LibrarySong[]): Promise<void> {
         store.put(s);
         next();
       };
-      getReq.onerror = () => {
-        reject(getReq.error);
-      };
+      getReq.onerror = () => reject(getReq.error);
     }
 
     tx.oncomplete = () => {
@@ -647,16 +894,14 @@ export async function putSongs(songs: LibrarySong[]): Promise<void> {
             for (const item of syncQueue) {
               await addPendingMutation({
                 type: 'song.set_key',
-                payload: { song_path: item.path, key: item.key, key_ts: item.key_ts }
+                payload: { song_path: item.path, key: item.key, key_ts: item.key_ts },
               });
             }
             const { remote } = await import('./ws');
             if (remote.isOpen()) {
               const mutations = await getPendingMutations();
               for (const m of mutations) {
-                if (remote.isOpen()) {
-                  remote.sendRaw({ type: m.type, payload: m.payload });
-                }
+                if (remote.isOpen()) remote.sendRaw({ type: m.type, payload: m.payload });
               }
               await clearPendingMutations();
             }
@@ -668,264 +913,229 @@ export async function putSongs(songs: LibrarySong[]): Promise<void> {
       resolve();
     };
     tx.onerror = () => reject(tx.error);
-    
     next();
   });
 }
 
 export async function deleteSongsByPath(paths: string[]): Promise<void> {
   if (!paths.length) return;
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_SONGS, 'readwrite');
-    const store = tx.objectStore(STORE_SONGS);
-    for (const p of paths) store.delete(p);
+    const tx = db.transaction(STORE_SERVER_SONGS, 'readwrite');
+    const store = tx.objectStore(STORE_SERVER_SONGS);
+    for (const p of paths) store.delete([serverKey, p]);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
 export async function clearSongs(): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_SONGS, 'readwrite');
-    tx.objectStore(STORE_SONGS).clear();
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  await clearScopedStore(STORE_SERVER_SONGS, serverKey);
 }
 
 export async function loadAllSongs(): Promise<LibrarySong[]> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return [];
+  const rows = await loadScopedRows<ScopedSong>(STORE_SERVER_SONGS, serverKey);
+  const songs = rows.map((row) => stripServerKey(row) as LibrarySong);
+  songs.sort((a, b) => {
+    const aDigit = (a.name && a.name.charAt(0) >= '0' && a.name.charAt(0) <= '9') ? 1 : 0;
+    const bDigit = (b.name && b.name.charAt(0) >= '0' && b.name.charAt(0) <= '9') ? 1 : 0;
+    if (aDigit !== bDigit) return aDigit - bDigit;
+    return a.name.localeCompare(b.name);
+  });
+  return songs;
+}
+
+export async function getAllSongPaths(): Promise<string[]> {
+  const songs = await loadAllSongs();
+  return songs.map((song) => song.path);
+}
+
+async function loadScopedRows<T extends { server_key: string }>(
+  storeName: string,
+  serverKey: string,
+): Promise<T[]> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_SONGS, 'readonly');
-    const req = tx.objectStore(STORE_SONGS).getAll();
+    const tx = db.transaction(storeName, 'readonly');
+    const req = tx.objectStore(storeName).getAll();
     req.onsuccess = () => {
-      const songs = (req.result ?? []) as LibrarySong[];
-      songs.sort((a, b) => {
-        const aDigit = (a.name && a.name.charAt(0) >= '0' && a.name.charAt(0) <= '9') ? 1 : 0;
-        const bDigit = (b.name && b.name.charAt(0) >= '0' && b.name.charAt(0) <= '9') ? 1 : 0;
-        if (aDigit !== bDigit) return aDigit - bDigit;
-        return a.name.localeCompare(b.name);
-      });
-      resolve(songs);
+      const rows = (req.result ?? []) as T[];
+      resolve(rows.filter((row) => row.server_key === serverKey));
     };
     req.onerror = () => reject(req.error);
   });
 }
 
-export async function getAllSongPaths(): Promise<string[]> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_SONGS, 'readonly');
-    const req = tx.objectStore(STORE_SONGS).getAllKeys();
-    req.onsuccess = () => resolve((req.result ?? []) as string[]);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-// â”€â”€ Bible cache â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Bible cache ────────────────────────────────────────────────────
 
 export async function putBibleBooks(books: BibleBook[]): Promise<void> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_BIBLE_BOOKS, 'readwrite');
-    const store = tx.objectStore(STORE_BIBLE_BOOKS);
-    store.clear();
-    for (const book of books) store.put(book);
+    const tx = db.transaction(STORE_SERVER_BIBLE_BOOKS, 'readwrite');
+    const store = tx.objectStore(STORE_SERVER_BIBLE_BOOKS);
+    const req = store.getAllKeys();
+    req.onsuccess = () => {
+      for (const key of req.result ?? []) {
+        if (scopedKeyMatchesServer(key, serverKey)) store.delete(key);
+      }
+      for (const book of books) store.put({ ...toIndexedDbValue(book), server_key: serverKey });
+    };
+    req.onerror = () => reject(req.error);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
 export async function loadAllBibleBooks(): Promise<BibleBook[]> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_BIBLE_BOOKS, 'readonly');
-    const req = tx.objectStore(STORE_BIBLE_BOOKS).getAll();
-    req.onsuccess = () => resolve((req.result ?? []) as BibleBook[]);
-    req.onerror = () => reject(req.error);
-  });
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return [];
+  const rows = await loadScopedRows<ScopedBibleBook>(STORE_SERVER_BIBLE_BOOKS, serverKey);
+  return rows.map((row) => stripServerKey(row) as BibleBook);
 }
 
 export async function clearBibleBooks(): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_BIBLE_BOOKS, 'readwrite');
-    tx.objectStore(STORE_BIBLE_BOOKS).clear();
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  await clearScopedStore(STORE_SERVER_BIBLE_BOOKS, serverKey);
 }
 
 export async function putBibleVerses(verses: BibleVerse[]): Promise<void> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_BIBLE_VERSES, 'readwrite');
-    const store = tx.objectStore(STORE_BIBLE_VERSES);
-    store.clear();
-    for (const verse of verses) store.put(verse);
+    const tx = db.transaction(STORE_SERVER_BIBLE_VERSES, 'readwrite');
+    const store = tx.objectStore(STORE_SERVER_BIBLE_VERSES);
+    const req = store.getAllKeys();
+    req.onsuccess = () => {
+      for (const key of req.result ?? []) {
+        if (scopedKeyMatchesServer(key, serverKey)) store.delete(key);
+      }
+      for (const verse of verses) store.put({ ...toIndexedDbValue(verse), server_key: serverKey });
+    };
+    req.onerror = () => reject(req.error);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
 export async function loadAllBibleVerses(): Promise<BibleVerse[]> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_BIBLE_VERSES, 'readonly');
-    const req = tx.objectStore(STORE_BIBLE_VERSES).getAll();
-    req.onsuccess = () => resolve(sortBibleVerses((req.result ?? []) as BibleVerse[]));
-    req.onerror = () => reject(req.error);
-  });
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return [];
+  const rows = await loadScopedRows<ScopedBibleVerse>(STORE_SERVER_BIBLE_VERSES, serverKey);
+  return sortBibleVerses(rows.map((row) => stripServerKey(row) as BibleVerse));
 }
 
 export async function clearBibleVerses(): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_BIBLE_VERSES, 'readwrite');
-    tx.objectStore(STORE_BIBLE_VERSES).clear();
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-export async function getBibleVersion(): Promise<string | null> {
-  return (await getRow<string>('bible_version')) ?? null;
-}
-
-export async function setBibleVersion(version: string | null): Promise<void> {
-  await setMeta('bible_version', version);
-  const sk = await getRow<string>('active_server_key');
-  if (sk) {
-    const cache = (await _getServerCache(sk)) ?? { server_key: sk };
-    cache.cached_bible_version = version;
-    await _saveServerCache(cache);
-  }
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  await clearScopedStore(STORE_SERVER_BIBLE_VERSES, serverKey);
 }
 
 // ── Lists ──────────────────────────────────────────────────────────
 
 export async function putLists(lists: LibraryList[]): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_LISTS, 'readwrite');
-    const store = tx.objectStore(STORE_LISTS);
-    store.clear();
-    for (const l of lists) store.put(toIndexedDbValue(l));
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  await putScopedListRows(STORE_SERVER_LISTS, serverKey, lists);
 }
 
 export async function loadAllLists(): Promise<LibraryList[]> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_LISTS, 'readonly');
-    const req = tx.objectStore(STORE_LISTS).getAll();
-    req.onsuccess = () => resolve((req.result ?? []) as LibraryList[]);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-// ── Private Lists ──────────────────────────────────────────────────
-
-export async function putPrivateLists(lists: LibraryList[]): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_PRIVATE_LISTS, 'readwrite');
-    const store = tx.objectStore(STORE_PRIVATE_LISTS);
-    store.clear();
-    for (const l of lists) store.put(toIndexedDbValue(l));
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-export async function loadAllPrivateLists(): Promise<LibraryList[]> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_PRIVATE_LISTS, 'readonly');
-    const req = tx.objectStore(STORE_PRIVATE_LISTS).getAll();
-    req.onsuccess = () => resolve((req.result ?? []) as LibraryList[]);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-export async function clearPrivateLists(): Promise<void> {
-  const db = await openDb();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_PRIVATE_LISTS, 'readwrite');
-    tx.objectStore(STORE_PRIVATE_LISTS).clear();
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-}
-
-// ── Per-server data cache (snapshot/restore on server switch) ──────
-
-export async function snapshotServerData(serverKey: string): Promise<void> {
-  const entry = await _getServerByKey(serverKey);
-  if (!entry) return;
-  const liveQueue = get(queueState);
-  await _saveServerCache({
-    server_key: serverKey,
-    cached_songs: await loadAllSongs(),
-    cached_lists: await loadAllLists(),
-    cached_bible_books: await loadAllBibleBooks(),
-    cached_bible_verses: await loadAllBibleVerses(),
-    cached_bible_version: await getBibleVersion(),
-    cached_queue: liveQueue ?? (await _getServerCache(serverKey))?.cached_queue ?? null,
-    last_sync_ts: (await getRow<number>('last_sync_ts')) ?? 0,
-  });
-}
-
-export async function restoreServerData(serverKey: string): Promise<void> {
-  const cache = await _getServerCache(serverKey);
-  await clearSongs();
-  await clearLists();
-  await clearBibleBooks();
-  await clearBibleVerses();
-  if (cache?.cached_songs?.length) await putSongs(cache.cached_songs);
-  if (cache?.cached_lists?.length) await putLists(cache.cached_lists);
-  if (cache?.cached_bible_books?.length) await putBibleBooks(cache.cached_bible_books);
-  if (cache?.cached_bible_verses?.length) await putBibleVerses(cache.cached_bible_verses);
-  await setMeta('last_sync_ts', cache?.last_sync_ts ?? 0);
-  await setMeta('bible_version', cache?.cached_bible_version ?? null);
-}
-
-export async function refreshServerDataAfterSwitch(previousServerKey: string | null, nextServerKey: string): Promise<void> {
-  if (previousServerKey && previousServerKey !== nextServerKey) {
-    await snapshotServerData(previousServerKey);
-  }
-  await restoreServerData(nextServerKey);
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('church-remote:server-data-restored', {
-      detail: { serverKey: nextServerKey },
-    }));
-  }
-}
-
-export async function cacheQueueState(queue: QueueState | null): Promise<void> {
-  const sk = await getRow<string>('active_server_key');
-  if (!sk) return;
-  const cache = (await _getServerCache(sk)) ?? { server_key: sk };
-  cache.cached_queue = queue;
-  await _saveServerCache(cache);
-}
-
-export async function getCachedQueueState(): Promise<QueueState | null> {
-  const sk = await getRow<string>('active_server_key');
-  if (!sk) return null;
-  const cache = await _getServerCache(sk);
-  return cache?.cached_queue ?? null;
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return [];
+  const rows = await loadScopedRows<ScopedList>(STORE_SERVER_LISTS, serverKey);
+  return rows.map((row) => stripServerKey(row) as LibraryList);
 }
 
 export async function clearLists(): Promise<void> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  await clearScopedStore(STORE_SERVER_LISTS, serverKey);
+}
+
+export async function putPrivateLists(lists: LibraryList[]): Promise<void> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  await putScopedListRows(STORE_SERVER_PRIVATE_LISTS, serverKey, lists);
+}
+
+export async function loadAllPrivateLists(): Promise<LibraryList[]> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return [];
+  const rows = await loadScopedRows<ScopedList>(STORE_SERVER_PRIVATE_LISTS, serverKey);
+  return rows.map((row) => stripServerKey(row) as LibraryList);
+}
+
+export async function clearPrivateLists(): Promise<void> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  await clearScopedStore(STORE_SERVER_PRIVATE_LISTS, serverKey);
+}
+
+async function putScopedListRows(
+  storeName: string,
+  serverKey: string,
+  lists: LibraryList[],
+): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_LISTS, 'readwrite');
-    tx.objectStore(STORE_LISTS).clear();
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const req = store.getAllKeys();
+    req.onsuccess = () => {
+      for (const key of req.result ?? []) {
+        if (scopedKeyMatchesServer(key, serverKey)) store.delete(key);
+      }
+      for (const list of lists) store.put({ ...toIndexedDbValue(list), server_key: serverKey });
+    };
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+// ── Queue cache ────────────────────────────────────────────────────
+
+export async function cacheQueueState(queue: QueueState | null): Promise<void> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVER_QUEUE, 'readwrite');
+    tx.objectStore(STORE_SERVER_QUEUE).put({
+      server_key: serverKey,
+      queue: toIndexedDbValue(queue),
+    } satisfies ServerQueueRow);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function getCachedQueueState(): Promise<QueueState | null> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return null;
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVER_QUEUE, 'readonly');
+    const req = tx.objectStore(STORE_SERVER_QUEUE).get(serverKey);
+    req.onsuccess = () => resolve(((req.result as ServerQueueRow | undefined)?.queue) ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function removeServerQueue(serverKey: string): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVER_QUEUE, 'readwrite');
+    tx.objectStore(STORE_SERVER_QUEUE).delete(serverKey);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
@@ -942,7 +1152,8 @@ export interface PendingMutation {
 }
 
 export async function addPendingMutation(cmd: { type: string; payload?: unknown }): Promise<void> {
-  const serverKey = await getRow<string>('active_server_key');
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PENDING, 'readwrite');
@@ -958,7 +1169,7 @@ export async function addPendingMutation(cmd: { type: string; payload?: unknown 
 }
 
 export async function getPendingMutations(): Promise<PendingMutation[]> {
-  const serverKey = await getRow<string>('active_server_key');
+  const serverKey = await requireActiveServerKey();
   if (!serverKey) return [];
   const db = await openDb();
   return new Promise((resolve, reject) => {
@@ -966,15 +1177,19 @@ export async function getPendingMutations(): Promise<PendingMutation[]> {
     const req = tx.objectStore(STORE_PENDING).getAll();
     req.onsuccess = () => {
       const all = (req.result ?? []) as PendingMutation[];
-      resolve(all.filter((m) => !m.server_key || m.server_key === serverKey));
+      resolve(all.filter((m) => m.server_key === serverKey));
     };
     req.onerror = () => reject(req.error);
   });
 }
 
 export async function clearPendingMutations(): Promise<void> {
-  const serverKey = await getRow<string>('active_server_key');
+  const serverKey = await requireActiveServerKey();
   if (!serverKey) return;
+  await clearPendingMutationsForServer(serverKey);
+}
+
+async function clearPendingMutationsForServer(serverKey: string): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PENDING, 'readwrite');
@@ -983,7 +1198,7 @@ export async function clearPendingMutations(): Promise<void> {
     req.onsuccess = () => {
       const all = (req.result ?? []) as PendingMutation[];
       for (const mutation of all) {
-        if (mutation.id !== undefined && (!mutation.server_key || mutation.server_key === serverKey)) {
+        if (mutation.id !== undefined && mutation.server_key === serverKey) {
           store.delete(mutation.id);
         }
       }
@@ -999,39 +1214,38 @@ export async function clearPendingMutations(): Promise<void> {
 export interface BackupData {
   version: number;
   exported_at: number;
-  songs: LibrarySong[];
-  lists: LibraryList[];
-  private_lists?: LibraryList[];
-  bible_books: BibleBook[];
-  bible_verses: BibleVerse[];
-  bible_version: string | null;
   servers: ServerEntry[];
+  server_data?: ServerDataBackup[];
   active_server_key: string | null;
   device_id: string | null;
+  // Legacy v8 backup shape. Kept optional so older backups can still import.
+  songs?: LibrarySong[];
+  lists?: LibraryList[];
+  private_lists?: LibraryList[];
+  bible_books?: BibleBook[];
+  bible_verses?: BibleVerse[];
+  bible_version?: string | null;
 }
 
 export async function exportBackup(): Promise<BackupData> {
-  const songs = await loadAllSongs();
-  const lists = await loadAllLists();
-  const privateLists = await loadAllPrivateLists();
-  const bibleBooks = await loadAllBibleBooks();
-  const bibleVerses = await loadAllBibleVerses();
-  const bibleVersion = await getBibleVersion();
   const servers = await _loadAllServers();
-  const activeKey = await getRow<string>('active_server_key');
+  const activeKey = await getActiveServerKey();
   const deviceId = await getRow<string>('device_id');
+  const serverData = await Promise.all(servers.map((server) => loadServerData(server.server_key)));
+  const activeData = activeKey ? serverData.find((data) => data.server_key === activeKey) : null;
   return {
     version: DB_VERSION,
     exported_at: Date.now(),
-    songs,
-    lists,
-    private_lists: privateLists,
-    bible_books: bibleBooks,
-    bible_verses: bibleVerses,
-    bible_version: bibleVersion,
     servers,
+    server_data: serverData,
     active_server_key: activeKey,
     device_id: deviceId,
+    songs: activeData?.songs ?? [],
+    lists: activeData?.lists ?? [],
+    private_lists: activeData?.private_lists ?? [],
+    bible_books: activeData?.bible_books ?? [],
+    bible_verses: activeData?.bible_verses ?? [],
+    bible_version: activeData?.bible_version ?? null,
   };
 }
 
@@ -1043,57 +1257,117 @@ export interface BackupComparison {
 }
 
 export async function compareBackup(data: BackupData): Promise<BackupComparison> {
-  const currentSongs = await loadAllSongs();
-  const currentLists = await loadAllLists();
+  const currentData = await Promise.all((await _loadAllServers()).map((server) => loadServerData(server.server_key)));
+  const backupServerData = normalizeBackupServerData(data);
+  const currentSongs = currentData.reduce((total, item) => total + item.songs.length, 0);
+  const currentLists = currentData.reduce((total, item) => total + item.lists.length + item.private_lists.length, 0);
+  const backupSongs = backupServerData.reduce((total, item) => total + item.songs.length, 0);
+  const backupLists = backupServerData.reduce((total, item) => total + item.lists.length + item.private_lists.length, 0);
   const currentServers = await _loadAllServers();
   return {
-    current: { songs: currentSongs.length, lists: currentLists.length, servers: currentServers.length },
-    backup: { songs: data.songs.length, lists: data.lists.length, servers: data.servers.length, exported_at: data.exported_at },
+    current: { songs: currentSongs, lists: currentLists, servers: currentServers.length },
+    backup: {
+      songs: backupSongs,
+      lists: backupLists,
+      servers: data.servers.length,
+      exported_at: data.exported_at,
+    },
     backupIsOlder: data.exported_at < Date.now() - 60_000,
-    backupHasLess: data.songs.length < currentSongs.length,
+    backupHasLess: backupSongs < currentSongs,
   };
 }
 
 export async function importBackup(data: BackupData): Promise<void> {
-  await clearSongs();
-  await clearLists();
-  await clearPrivateLists();
-  await clearBibleBooks();
-  await clearBibleVerses();
-  if (data.songs.length) await putSongs(data.songs);
-  if (data.lists.length) await putLists(data.lists);
-  if (data.private_lists?.length) await putPrivateLists(data.private_lists);
-  if (data.bible_books.length) await putBibleBooks(data.bible_books);
-  if (data.bible_verses.length) await putBibleVerses(data.bible_verses);
-  await setMeta('bible_version', data.bible_version ?? null);
-  // Restore servers
+  const serverData = normalizeBackupServerData(data);
+  await clearAllServerScopedStores();
+
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction([STORE_SERVERS, STORE_SERVER_CACHES], 'readwrite');
+    const tx = db.transaction([
+      STORE_SERVERS,
+      STORE_SERVER_SONGS,
+      STORE_SERVER_LISTS,
+      STORE_SERVER_PRIVATE_LISTS,
+      STORE_SERVER_BIBLE_BOOKS,
+      STORE_SERVER_BIBLE_VERSES,
+      STORE_SERVER_QUEUE,
+      STORE_SERVER_SYNC_META,
+    ], 'readwrite');
     const serversStore = tx.objectStore(STORE_SERVERS);
-    const cacheStore = tx.objectStore(STORE_SERVER_CACHES);
     serversStore.clear();
-    cacheStore.clear();
-    for (const s of data.servers) {
-      serversStore.put(stripServerCache(s));
-      cacheStore.put({
-        server_key: s.server_key,
-        cached_songs: s.cached_songs,
-        cached_lists: s.cached_lists,
-        cached_bible_books: s.cached_bible_books,
-        cached_bible_verses: s.cached_bible_verses,
-        cached_bible_version: s.cached_bible_version,
-        cached_queue: s.cached_queue,
-        last_sync_ts: s.last_sync_ts,
-      } satisfies ServerCacheEntry);
+    for (const server of data.servers) serversStore.put(stripServerCache(server));
+    for (const item of serverData) {
+      putScopedRows(tx.objectStore(STORE_SERVER_SONGS), item.server_key, item.songs);
+      putScopedRows(tx.objectStore(STORE_SERVER_LISTS), item.server_key, item.lists);
+      putScopedRows(tx.objectStore(STORE_SERVER_PRIVATE_LISTS), item.server_key, item.private_lists);
+      putScopedRows(tx.objectStore(STORE_SERVER_BIBLE_BOOKS), item.server_key, item.bible_books);
+      putScopedRows(tx.objectStore(STORE_SERVER_BIBLE_VERSES), item.server_key, item.bible_verses);
+      tx.objectStore(STORE_SERVER_QUEUE).put({
+        server_key: item.server_key,
+        queue: item.queue ?? null,
+      } satisfies ServerQueueRow);
+      tx.objectStore(STORE_SERVER_SYNC_META).put({
+        server_key: item.server_key,
+        last_sync_ts: item.last_sync_ts ?? 0,
+        bible_version: item.bible_version ?? null,
+      } satisfies ServerSyncMeta);
     }
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+
   if (data.active_server_key) await setMeta('active_server_key', data.active_server_key);
+  else await deleteMeta('active_server_key');
   if (data.device_id) await setMeta('device_id', data.device_id);
   _credCache = undefined;
-  if (data.active_server_key) {
-    await snapshotServerData(data.active_server_key);
-  }
+}
+
+async function loadServerData(serverKey: string): Promise<ServerDataBackup> {
+  const [songs, lists, privateLists, bibleBooks, bibleVerses, queue, meta] = await Promise.all([
+    loadScopedRows<ScopedSong>(STORE_SERVER_SONGS, serverKey),
+    loadScopedRows<ScopedList>(STORE_SERVER_LISTS, serverKey),
+    loadScopedRows<ScopedList>(STORE_SERVER_PRIVATE_LISTS, serverKey),
+    loadScopedRows<ScopedBibleBook>(STORE_SERVER_BIBLE_BOOKS, serverKey),
+    loadScopedRows<ScopedBibleVerse>(STORE_SERVER_BIBLE_VERSES, serverKey),
+    getServerQueue(serverKey),
+    getServerSyncMeta(serverKey),
+  ]);
+  return {
+    server_key: serverKey,
+    songs: songs.map((row) => stripServerKey(row) as LibrarySong),
+    lists: lists.map((row) => stripServerKey(row) as LibraryList),
+    private_lists: privateLists.map((row) => stripServerKey(row) as LibraryList),
+    bible_books: bibleBooks.map((row) => stripServerKey(row) as BibleBook),
+    bible_verses: sortBibleVerses(bibleVerses.map((row) => stripServerKey(row) as BibleVerse)),
+    bible_version: meta?.bible_version ?? null,
+    queue,
+    last_sync_ts: meta?.last_sync_ts ?? 0,
+  };
+}
+
+async function getServerQueue(serverKey: string): Promise<QueueState | null> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVER_QUEUE, 'readonly');
+    const req = tx.objectStore(STORE_SERVER_QUEUE).get(serverKey);
+    req.onsuccess = () => resolve(((req.result as ServerQueueRow | undefined)?.queue) ?? null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function normalizeBackupServerData(data: BackupData): ServerDataBackup[] {
+  if (Array.isArray(data.server_data)) return data.server_data;
+  const activeKey = data.active_server_key ?? data.servers[0]?.server_key;
+  if (!activeKey) return [];
+  return [{
+    server_key: activeKey,
+    songs: data.songs ?? [],
+    lists: data.lists ?? [],
+    private_lists: data.private_lists ?? [],
+    bible_books: data.bible_books ?? [],
+    bible_verses: data.bible_verses ?? [],
+    bible_version: data.bible_version ?? null,
+    queue: null,
+    last_sync_ts: 0,
+  }];
 }

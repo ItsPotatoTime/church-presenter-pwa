@@ -4,7 +4,8 @@
   import { base } from '$app/paths';
   import { page } from '$app/stores';
   import { get } from 'svelte/store';
-  import { loadCredentials, saveServer, switchServer, getOrCreateDeviceId, type ServerEntry } from '$lib/db';
+  import { initializeServerData, loadCredentials, saveServer, switchServer, getOrCreateDeviceId, type ServerEntry } from '$lib/db';
+  import { hydrateFromCache } from '$lib/sync';
   import { remote } from '$lib/ws';
   import { connStatus, connError } from '$lib/stores';
   import jsQR from 'jsqr';
@@ -180,7 +181,9 @@
       last_used: Date.now(),
     };
     await saveServer(provisional);
+    await initializeServerData(serverKey);
     await switchServer(serverKey);
+    await hydrateFromCache();
 
     const unsub = connStatus.subscribe((s) => {
       if (s === 'open') {
