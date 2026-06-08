@@ -6,7 +6,7 @@
   import { remote } from '$lib/ws';
   import { renderMarkdown } from '$lib/search';
   import {
-    connStatus, connEndpoint, connError, liveState,
+    connStatus, connEndpoint, liveState,
     isViewOnly,
   } from '$lib/stores';
 
@@ -95,9 +95,6 @@
       {#if $connEndpoint}<span class="pill">{$connEndpoint}</span>{/if}
     </div>
   </div>
-  {#if $connError && $connStatus !== 'open'}
-    <div class="muted err">{$connError}</div>
-  {/if}
 </header>
 
 <section class="slide-box" class:blanked={$liveState?.blanked}>

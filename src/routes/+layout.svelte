@@ -7,7 +7,7 @@
   import { beforeNavigate, goto } from '$app/navigation';
   import { getOrCreateDeviceId, loadCredentialsResilient } from '$lib/db';
   import { hydrateFromCache, isReducedDataConnection, syncNow } from '$lib/sync';
-  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY, canEditKeys, debugMode, managerAccessCountdown } from '$lib/stores';
+  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY, canEditKeys, debugMode, managerAccessCountdown, refreshManagerAccessCountdown } from '$lib/stores';
 
   let { children } = $props();
   let paired = $state(false);
@@ -203,18 +203,16 @@
 
   let countdownInterval: any = null;
   $effect(() => {
+    refreshManagerAccessCountdown();
     const val = $managerAccessCountdown;
     if (val > 0) {
       if (!countdownInterval) {
         countdownInterval = setInterval(() => {
-          managerAccessCountdown.update(n => {
-            if (n <= 1) {
-              clearInterval(countdownInterval);
-              countdownInterval = null;
-              return 0;
-            }
-            return n - 1;
-          });
+          const remaining = refreshManagerAccessCountdown();
+          if (remaining <= 0) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+          }
         }, 1000);
       }
     } else {

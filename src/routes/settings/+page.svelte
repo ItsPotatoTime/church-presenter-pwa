@@ -21,7 +21,6 @@
   import {
     connStatus,
     connEndpoint,
-    connError,
     exclusiveDeviceId,
     exclusiveDeviceName,
     isViewOnly,
@@ -33,6 +32,7 @@
     serverName,
     debugMode,
     managerAccessCountdown,
+    setManagerAccessDuration,
   } from '$lib/stores';
 
   let creds = $state<Credentials | null>(null);
@@ -81,7 +81,7 @@
   async function grantManagerAccess() {
     try {
       await remote.sendRequest('device.grant_manager_access', {});
-      managerAccessCountdown.set(300);
+      setManagerAccessDuration(300);
       showNotice({
         tone: 'success',
         title: 'Temporary Access Enabled',
@@ -506,9 +506,6 @@
     <span class="muted">Status</span>
     <span>{$connStatus}{$connEndpoint ? ` (${$connEndpoint})` : ''}</span>
   </div>
-  {#if $connError && $connStatus !== 'open'}
-    <div class="row err"><span class="muted">Error</span><span>{$connError}</span></div>
-  {/if}
   <div class="row">
     <span class="muted">Cloud</span>
     <span class="mono">{creds?.cloud_host ?? '—'}</span>
@@ -791,7 +788,6 @@
     font-size: 14px;
   }
   .row:last-of-type { border-bottom: none; }
-  .row.err { color: var(--danger); }
   .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
   .small { font-size: 12px; }
   p.muted { margin: 6px 0 0; }
