@@ -212,5 +212,5 @@ export async function hydrateFromCache(): Promise<void> {
   bibleBooksStore.set(bibleBooks);
   bibleVersesStore.set(bibleVerses);
   bibleVersionStore.set(bibleVersion);
-  if (cachedQueue) queueState.set(cachedQueue);
+  queueState.set(cachedQueue);
 }

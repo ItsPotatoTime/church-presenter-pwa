@@ -3,6 +3,7 @@
   import { goto, afterNavigate } from '$app/navigation';
   import { base } from '$app/paths';
   import { loadCredentialsResilient, addPendingMutation, putLists, putPrivateLists } from '$lib/db';
+  import { replaceQueueFromSongs, queueCommandForOfflineReplay } from '$lib/offlineQueue';
   import { remote } from '$lib/ws';
   import { get } from 'svelte/store';
   import {
@@ -125,10 +126,10 @@
       : (currentLists.find((l) => l.name === selectedName) ?? null)
   );
 
-  function send(cmd: { type: string; payload?: any }) {
+  async function send(cmd: { type: string; payload?: any }) {
     if ($isViewOnly) return;
     if ($connStatus !== 'open') {
-      if (!applyLocally(cmd)) {
+      if (!await applyLocally(cmd)) {
         alert('Connect to the desktop to perform this action.');
         return;
       }
@@ -138,7 +139,7 @@
     remote.send(cmd as any);
   }
 
-  function applyLocally(cmd: { type: string; payload?: any }): boolean {
+  async function applyLocally(cmd: { type: string; payload?: any }): Promise<boolean> {
     const { type, payload } = cmd;
     if (type === 'list.create') {
       listsStore.update((ls) => [...ls, { name: payload.name, songs: [] }]);
@@ -169,6 +170,10 @@
             : l
         )
       );
+    } else if (type === 'list.load_to_queue') {
+      const list = get(listsStore).find((l) => l.name === payload.list_name);
+      if (!list) return false;
+      await replaceQueueFromSongs(list.songs);
     } else {
       return false;
     }
@@ -249,8 +254,13 @@
     if (!await showConfirm(`Replace queue with ${selectedList.songs.length} song(s) from "${selectedList.name}"?`)) return;
 
     if (activeTab === 'private') {
-      if ($isViewOnly || $connStatus !== 'open') {
-        alert('Connect to the desktop to perform this action.');
+      if ($isViewOnly) return;
+      if ($connStatus !== 'open') {
+        await replaceQueueFromSongs(selectedList.songs);
+        await queueCommandForOfflineReplay({ type: 'queue.clear' });
+        for (const song of selectedList.songs) {
+          await queueCommandForOfflineReplay({ type: 'queue.add', payload: { song_path: song.path } });
+        }
         return;
       }
       remote.send({ type: 'queue.clear' });
@@ -460,7 +470,7 @@
     <button class="ghost" onclick={openPicker} disabled={(activeTab === 'public' && $isViewOnly) || $songsStore.length === 0}>
       ＋ Add song
     </button>
-    <button class="accent" onclick={loadToQueue} disabled={$isViewOnly || $connStatus !== 'open' || selectedList.songs.length === 0}>
+    <button class="accent" onclick={loadToQueue} disabled={$isViewOnly || selectedList.songs.length === 0}>
       ▶ Load to queue
     </button>
   </section>

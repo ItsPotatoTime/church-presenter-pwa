@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { LibrarySong } from '$lib/protocol';
+  import { applyQueueCommandLocally, queueCommandForOfflineReplay } from '$lib/offlineQueue';
   import { renderMarkdown } from '$lib/search';
   import { remote } from '$lib/ws';
   import { connStatus, isViewOnly, songsStore, canEditKeys, canEditSongs, activeModals } from '$lib/stores';
@@ -30,8 +31,16 @@
 
   const ALL_KEYS = ['A', 'Am', 'A#', 'A#m', 'B', 'Bm', 'C', 'Cm', 'C#', 'C#m', 'D', 'Dm', 'D#', 'D#m', 'E', 'Em', 'F', 'Fm', 'F#', 'F#m', 'G', 'Gm', 'G#', 'G#m'];
 
-  function addToQueue(path: string) {
-    remote.send({ type: 'queue.add', payload: { song_path: path } });
+  async function addToQueue(path: string) {
+    if ($isViewOnly) return;
+    const cmd = { type: 'queue.add', payload: { song_path: path } } as const;
+    if ($connStatus === 'open') {
+      remote.send(cmd);
+      return;
+    }
+    if (await applyQueueCommandLocally(cmd)) {
+      await queueCommandForOfflineReplay(cmd);
+    }
   }
 
   async function updateSongKey(songPath: string, key: string | null) {

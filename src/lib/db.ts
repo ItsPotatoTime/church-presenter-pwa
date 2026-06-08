@@ -15,6 +15,8 @@
 
 import { sortBibleVerses } from './bible';
 import type { BibleBook, BibleVerse, LibrarySong, LibraryList, QueueState } from './protocol';
+import { get } from 'svelte/store';
+import { queueState } from './stores';
 
 const DB_NAME = 'church-remote';
 const DB_VERSION = 8;
@@ -865,6 +867,7 @@ export async function clearPrivateLists(): Promise<void> {
 export async function snapshotServerData(serverKey: string): Promise<void> {
   const entry = await _getServerByKey(serverKey);
   if (!entry) return;
+  const liveQueue = get(queueState);
   await _saveServerCache({
     server_key: serverKey,
     cached_songs: await loadAllSongs(),
@@ -872,7 +875,7 @@ export async function snapshotServerData(serverKey: string): Promise<void> {
     cached_bible_books: await loadAllBibleBooks(),
     cached_bible_verses: await loadAllBibleVerses(),
     cached_bible_version: await getBibleVersion(),
-    cached_queue: (await _getServerCache(serverKey))?.cached_queue ?? null,
+    cached_queue: liveQueue ?? (await _getServerCache(serverKey))?.cached_queue ?? null,
     last_sync_ts: (await getRow<number>('last_sync_ts')) ?? 0,
   });
 }
@@ -932,36 +935,60 @@ export async function clearLists(): Promise<void> {
 
 export interface PendingMutation {
   id?: number;
+  server_key?: string | null;
   type: string;
   payload?: unknown;
   created_at: number;
 }
 
 export async function addPendingMutation(cmd: { type: string; payload?: unknown }): Promise<void> {
+  const serverKey = await getRow<string>('active_server_key');
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PENDING, 'readwrite');
-    tx.objectStore(STORE_PENDING).add(toIndexedDbValue({ type: cmd.type, payload: cmd.payload, created_at: Date.now() }));
+    tx.objectStore(STORE_PENDING).add(toIndexedDbValue({
+      server_key: serverKey,
+      type: cmd.type,
+      payload: cmd.payload,
+      created_at: Date.now(),
+    }));
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
 export async function getPendingMutations(): Promise<PendingMutation[]> {
+  const serverKey = await getRow<string>('active_server_key');
+  if (!serverKey) return [];
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PENDING, 'readonly');
     const req = tx.objectStore(STORE_PENDING).getAll();
-    req.onsuccess = () => resolve((req.result ?? []) as PendingMutation[]);
+    req.onsuccess = () => {
+      const all = (req.result ?? []) as PendingMutation[];
+      resolve(all.filter((m) => !m.server_key || m.server_key === serverKey));
+    };
     req.onerror = () => reject(req.error);
   });
 }
 
 export async function clearPendingMutations(): Promise<void> {
+  const serverKey = await getRow<string>('active_server_key');
+  if (!serverKey) return;
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_PENDING, 'readwrite');
-    tx.objectStore(STORE_PENDING).clear();
+    const store = tx.objectStore(STORE_PENDING);
+    const req = store.getAll();
+    req.onsuccess = () => {
+      const all = (req.result ?? []) as PendingMutation[];
+      for (const mutation of all) {
+        if (mutation.id !== undefined && (!mutation.server_key || mutation.server_key === serverKey)) {
+          store.delete(mutation.id);
+        }
+      }
+    };
+    req.onerror = () => reject(req.error);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });

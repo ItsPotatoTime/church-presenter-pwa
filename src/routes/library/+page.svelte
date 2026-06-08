@@ -6,6 +6,7 @@
   import { get } from 'svelte/store';
   import { sortBibleVerses } from '$lib/bible';
   import { loadCredentialsResilient } from '$lib/db';
+  import { applyQueueCommandLocally, queueCommandForOfflineReplay } from '$lib/offlineQueue';
   import type { BibleBook, BibleVerse, LibrarySong } from '$lib/protocol';
   import { filterSongs, normalize, renderMarkdown } from '$lib/search';
   import { isReducedDataConnection, syncFull, syncNow } from '$lib/sync';
@@ -295,17 +296,33 @@
     return `${bibleBookMap.get(verse.book_num)?.name ?? 'Bible'} ${verse.chapter}:${verse.verse}`;
   }
 
-  function addToQueue(path: string) {
-    remote.send({ type: 'queue.add', payload: { song_path: path } });
+  async function addToQueue(path: string) {
+    if ($isViewOnly) return;
+    const cmd = { type: 'queue.add', payload: { song_path: path } } as const;
+    if ($connStatus === 'open') {
+      remote.send(cmd);
+      return;
+    }
+    if (await applyQueueCommandLocally(cmd)) {
+      await queueCommandForOfflineReplay(cmd);
+    }
   }
 
-  function addBibleVerseToQueue(verse: BibleVerse) {
+  async function addBibleVerseToQueue(verse: BibleVerse) {
+    if ($isViewOnly) return;
     const book = bibleBookMap.get(verse.book_num)?.name;
     if (!book) return;
-    remote.send({
+    const cmd = {
       type: 'queue.add_bible_verse',
       payload: { book, chapter: verse.chapter, verse: verse.verse },
-    });
+    } as const;
+    if ($connStatus === 'open') {
+      remote.send(cmd);
+      return;
+    }
+    if (await applyQueueCommandLocally(cmd)) {
+      await queueCommandForOfflineReplay(cmd);
+    }
   }
 
   function openPreview(song: LibrarySong) {

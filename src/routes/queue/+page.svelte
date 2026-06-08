@@ -3,6 +3,8 @@
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { loadCredentialsResilient } from '$lib/db';
+  import { applyQueueCommandLocally, queueCommandForOfflineReplay } from '$lib/offlineQueue';
+  import type { ClientCommand } from '$lib/protocol';
   import { remote } from '$lib/ws';
   import { connStatus, isViewOnly, queueState, songsStore, activeModals } from '$lib/stores';
 
@@ -35,9 +37,15 @@
     await remote.connect();
   });
 
-  function send(cmd: any) {
-    if ($connStatus !== 'open' || $isViewOnly) return;
-    remote.send(cmd);
+  async function send(cmd: ClientCommand) {
+    if ($isViewOnly) return;
+    if ($connStatus === 'open') {
+      remote.send(cmd);
+      return;
+    }
+    if (await applyQueueCommandLocally(cmd)) {
+      await queueCommandForOfflineReplay(cmd);
+    }
   }
 
   async function tapJump(i: number) {

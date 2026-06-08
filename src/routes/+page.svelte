@@ -10,6 +10,7 @@
     switchServer,
     type ServerEntry,
   } from '$lib/db';
+  import { hydrateFromCache } from '$lib/sync';
   import { exclusiveDeviceId, exclusiveDeviceName, liveState, queueState, serverName } from '$lib/stores';
   import { remote } from '$lib/ws';
   import jsQR from 'jsqr';
@@ -150,9 +151,11 @@
       exclusiveDeviceName.set(null);
       remote.disconnect();
       void remote.connect();
-      void refreshServerDataAfterSwitch(previousServerKey, serverKey).catch((err) => {
-        console.warn('[home] Server cache refresh failed:', err);
-      });
+      void refreshServerDataAfterSwitch(previousServerKey, serverKey)
+        .then(() => hydrateFromCache())
+        .catch((err) => {
+          console.warn('[home] Server cache refresh failed:', err);
+        });
       goto(`${base}/live/`);
     }
   }
