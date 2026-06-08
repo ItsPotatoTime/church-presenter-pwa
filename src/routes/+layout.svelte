@@ -15,6 +15,8 @@
   let hasHydrated = $state(false);
   let hasTriggeredSync = $state(false);
   let showUpdateBanner = $state(false);
+  let updateReloadTimer: number | null = null;
+  let reloadingForUpdate = false;
 
   // Global debugger console logging overlay
   let consoleLogs = $state<{ type: 'log' | 'warn' | 'error', text: string, time: string }[]>([]);
@@ -102,10 +104,54 @@
     }
   }
 
+  function reloadForUpdate(delayMs = 120) {
+    if (reloadingForUpdate) return;
+    reloadingForUpdate = true;
+    showUpdateBanner = true;
+    updateReloadTimer = window.setTimeout(() => {
+      window.location.reload();
+    }, delayMs);
+  }
+
+  function requestSkipWaiting(worker: ServiceWorker | null | undefined) {
+    worker?.postMessage({ type: 'SKIP_WAITING' });
+  }
+
+  function trackServiceWorker(worker: ServiceWorker | null | undefined) {
+    if (!worker) return;
+    const handleState = () => {
+      if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+        showUpdateBanner = true;
+        requestSkipWaiting(worker);
+      }
+      if (worker.state === 'activated' && navigator.serviceWorker.controller) {
+        reloadForUpdate();
+      }
+    };
+    handleState();
+    worker.addEventListener('statechange', handleState);
+  }
+
+  function handleServiceWorkerMessage(event: MessageEvent) {
+    const type = event.data?.type;
+    if (type === 'SW_INSTALL_PROGRESS' && navigator.serviceWorker.controller) {
+      showUpdateBanner = true;
+      return;
+    }
+    if (type === 'SW_INSTALL_COMPLETE' && navigator.serviceWorker.controller) {
+      reloadForUpdate(250);
+    }
+  }
+
+  function handleServerDataRestored() {
+    void hydrateFromCache();
+  }
+
   onMount(async () => {
     // Register global error interceptors for chunk load failures
     window.addEventListener('error', handleChunkError, true);
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
+    window.addEventListener('church-remote:server-data-restored', handleServerDataRestored);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Register PWA service worker (only in production)
@@ -115,20 +161,20 @@
           scope: `${base}/`
         });
         console.log('[layout] ServiceWorker registered with scope:', registration.scope);
+        trackServiceWorker(registration.installing);
+        requestSkipWaiting(registration.waiting);
+        registration.addEventListener('updatefound', () => {
+          trackServiceWorker(registration.installing);
+        });
       } catch (err) {
         console.error('[layout] ServiceWorker registration failed:', err);
       }
 
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+
       // Handle controller change (automatic reload when new SW activates)
-      let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (!refreshing) {
-          refreshing = true;
-          showUpdateBanner = true;
-          setTimeout(() => {
-            window.location.reload();
-          }, 800);
-        }
+        reloadForUpdate(80);
       });
     }
 
@@ -183,7 +229,14 @@
     if (typeof window !== 'undefined') {
       window.removeEventListener('error', handleChunkError, true);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+      window.removeEventListener('church-remote:server-data-restored', handleServerDataRestored);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      }
+    }
+    if (updateReloadTimer !== null) {
+      clearTimeout(updateReloadTimer);
     }
     if (countdownInterval) {
       clearInterval(countdownInterval);

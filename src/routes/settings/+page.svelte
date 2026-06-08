@@ -6,6 +6,7 @@
     loadCredentialsResilient,
     loadAllServers,
     removeServer,
+    refreshServerDataAfterSwitch,
     switchServer,
     getLastSyncTs,
     exportBackup,
@@ -24,9 +25,12 @@
     exclusiveDeviceId,
     exclusiveDeviceName,
     isViewOnly,
+    liveState,
     myDeviceId,
+    queueState,
     syncStatus,
     songsStore,
+    serverName,
     debugMode,
     managerAccessCountdown,
   } from '$lib/stores';
@@ -215,14 +219,26 @@
   }
 
   async function doSwitchServer(key: string) {
+    const previousServerKey = creds?.server_key ?? null;
     const newCreds = await switchServer(key);
     if (!newCreds) return;
     creds = newCreds;
+    serverName.set(newCreds.server_name ?? 'ChurchPresenter');
+    liveState.set(null);
+    queueState.set(null);
+    exclusiveDeviceId.set(null);
+    exclusiveDeviceName.set(null);
     servers = await loadAllServers();
-    await hydrateFromCache();
-    lastSyncTs = await getLastSyncTs();
     remote.disconnect();
-    await remote.connect();
+    void remote.connect();
+    void refreshServerDataAfterSwitch(previousServerKey, key)
+      .then(async () => {
+        await hydrateFromCache();
+        lastSyncTs = await getLastSyncTs();
+      })
+      .catch((err) => {
+        console.warn('[settings] Server cache refresh failed:', err);
+      });
   }
 
   const lastSyncHuman = $derived.by(() => {

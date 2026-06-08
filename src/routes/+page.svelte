@@ -6,10 +6,12 @@
     getActiveServerKey,
     loadAllServers,
     loadCredentialsResilient,
+    refreshServerDataAfterSwitch,
     switchServer,
     type ServerEntry,
   } from '$lib/db';
-  import { serverName } from '$lib/stores';
+  import { exclusiveDeviceId, exclusiveDeviceName, liveState, queueState, serverName } from '$lib/stores';
+  import { remote } from '$lib/ws';
   import jsQR from 'jsqr';
 
   let checked = $state(false);
@@ -135,10 +137,22 @@
   }
 
   async function chooseServer(serverKey: string) {
+    const previousServerKey = activeServerKey;
     selectingServerKey = serverKey;
     const selected = await switchServer(serverKey);
     selectingServerKey = null;
     if (selected?.device_token) {
+      activeServerKey = serverKey;
+      serverName.set(selected.server_name ?? 'ChurchPresenter');
+      liveState.set(null);
+      queueState.set(null);
+      exclusiveDeviceId.set(null);
+      exclusiveDeviceName.set(null);
+      remote.disconnect();
+      void remote.connect();
+      void refreshServerDataAfterSwitch(previousServerKey, serverKey).catch((err) => {
+        console.warn('[home] Server cache refresh failed:', err);
+      });
       goto(`${base}/live/`);
     }
   }
