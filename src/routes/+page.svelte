@@ -7,6 +7,7 @@
     loadAllServers,
     loadCredentialsResilient,
     refreshServerDataAfterSwitch,
+    snapshotServerData,
     switchServer,
     type ServerEntry,
   } from '$lib/db';
@@ -140,6 +141,13 @@
   async function chooseServer(serverKey: string) {
     const previousServerKey = activeServerKey;
     selectingServerKey = serverKey;
+    if (previousServerKey && previousServerKey !== serverKey) {
+      try {
+        await snapshotServerData(previousServerKey);
+      } catch (err) {
+        console.warn('[home] Previous server snapshot failed:', err);
+      }
+    }
     const selected = await switchServer(serverKey);
     selectingServerKey = null;
     if (selected?.device_token) {
@@ -151,7 +159,7 @@
       exclusiveDeviceName.set(null);
       remote.disconnect();
       void remote.connect();
-      void refreshServerDataAfterSwitch(previousServerKey, serverKey)
+      void refreshServerDataAfterSwitch(null, serverKey)
         .then(() => hydrateFromCache())
         .catch((err) => {
           console.warn('[home] Server cache refresh failed:', err);
