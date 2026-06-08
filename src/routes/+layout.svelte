@@ -17,6 +17,7 @@
   let showUpdateBanner = $state(false);
   let updateReloadTimer: number | null = null;
   let reloadingForUpdate = false;
+  const UPDATE_RELOAD_GUARD_KEY = 'church_remote_update_reload_at';
 
   // Global debugger console logging overlay
   let consoleLogs = $state<{ type: 'log' | 'warn' | 'error', text: string, time: string }[]>([]);
@@ -106,9 +107,15 @@
 
   function reloadForUpdate(delayMs = 120) {
     if (reloadingForUpdate) return;
+    const lastReload = Number(sessionStorage.getItem(UPDATE_RELOAD_GUARD_KEY) ?? '0');
+    if (Number.isFinite(lastReload) && Date.now() - lastReload < 30_000) {
+      showUpdateBanner = false;
+      return;
+    }
     reloadingForUpdate = true;
     showUpdateBanner = true;
     updateReloadTimer = window.setTimeout(() => {
+      sessionStorage.setItem(UPDATE_RELOAD_GUARD_KEY, String(Date.now()));
       window.location.reload();
     }, delayMs);
   }

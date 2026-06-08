@@ -50,19 +50,6 @@ async function broadcastInstallProgress(message: InstallProgressMessage) {
   }
 }
 
-async function reloadWindowClients() {
-  const clients = await self.clients.matchAll({
-    includeUncontrolled: true,
-    type: 'window'
-  });
-
-  for (const client of clients) {
-    if ('navigate' in client) {
-      void client.navigate(client.url);
-    }
-  }
-}
-
 async function precacheAssets() {
   const cache = await caches.open(CACHE_NAME);
   const total = UNIQUE_ASSETS.length;
@@ -113,8 +100,7 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// 2. Activate event: Clean up old application caches, claim all clients,
-// then reload them into the freshly activated app shell.
+// 2. Activate event: Clean up old application caches and claim all clients.
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
@@ -130,7 +116,6 @@ self.addEventListener('activate', (event) => {
         );
       })
       .then(() => self.clients.claim())
-      .then(() => reloadWindowClients())
   );
 });
 
