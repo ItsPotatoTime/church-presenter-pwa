@@ -470,13 +470,13 @@
       showNotice({
         kind: 'update',
         tone: 'success',
-        title: 'Already Up To Date',
-        message: 'This phone is running the latest published version.',
+        title: 'App Is Current',
+        message: 'Restarting the app shell to make sure the latest files are active.',
         progress: 100,
         progressLabel: 'Current',
-        locked: false,
-        closeLabel: 'Done',
+        locked: true,
       });
+      window.setTimeout(() => window.location.reload(), 700);
 
     } catch (err: any) {
       checkingUpdate = false;
