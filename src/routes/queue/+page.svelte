@@ -78,7 +78,7 @@
   }
 
   function cancelPreviewSwitch() {
-    previewSwitchIndex = null;
+    closePreview();
   }
 
   function confirmPreviewSwitch() {
