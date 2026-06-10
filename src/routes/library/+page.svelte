@@ -584,7 +584,7 @@
         No songs match "{query}".
       </section>
     {:else}
-      <VirtualList items={searchResults} itemHeight={88} rowGap={6}>
+      <VirtualList items={searchResults} itemHeight={76} rowGap={6}>
         {#snippet children(result)}
           <div class="song">
             <button class="song-main" onclick={() => openPreview(result.s)}>
@@ -610,7 +610,7 @@
       </VirtualList>
     {/if}
   {:else}
-    <VirtualList items={browseSongs} itemHeight={72} rowGap={6}>
+    <VirtualList items={browseSongs} itemHeight={76} rowGap={6}>
       {#snippet children(song)}
           <div class="song">
             <button class="song-main" onclick={() => openPreview(song)}>
@@ -1124,7 +1124,6 @@
  
   .add {
     width: 52px;
-    height: 100%;
     flex: 0 0 52px;
     font-size: 20px;
     font-weight: 700;
