@@ -10,10 +10,11 @@
     connStatus, isViewOnly, listsStore, privateListsStore, songsStore, canEditKeys, activeModals,
     listsActiveTab, listsSelectedName, listsShowPicker, listsPickerRawQuery, listsScrollY
   } from '$lib/stores';
-  import type { LibraryList, LibrarySong } from '$lib/protocol';
+  import type { LibraryList, LibrarySong, SongSearchPayload } from '$lib/protocol';
   import { normalize, filterSongs, renderMarkdown } from '$lib/search';
   import type { ScoredResult } from '$lib/search';
   import SongPreviewModal from '$lib/SongPreviewModal.svelte';
+  import VirtualList from '$lib/VirtualList.svelte';
 
   let previewSong = $state<LibrarySong | null>(null);
 
@@ -42,6 +43,14 @@
   let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
   let promptDialog = $state<{ title: string; initial: string; value: string; resolve: (v: string | null) => void } | null>(null);
   let pickerSearchSlides = $state(false);
+  let pickerServerSearch = $state<{
+    query: string;
+    searchSlides: boolean;
+    items: ScoredResult<LibrarySong>[];
+    pending: boolean;
+    failed: boolean;
+  }>({ query: '', searchSlides: false, items: [], pending: false, failed: false });
+  let pickerSearchSeq = 0;
 
   // Sync state back to stores reactively
   $effect(() => {
@@ -344,8 +353,53 @@
 
   const pickerFiltered = $derived.by<ScoredResult<LibrarySong>[]>(() => {
     const q = pickerQuery.trim();
-    if (!q) return $songsStore.slice(0, 100).map((s) => ({ item: s, score: 0, snippet: '' }));
-    return filterSongs(q, $songsStore, pickerSearchSlides, 100);
+    if (!q) return $songsStore.map((s) => ({ item: s, score: 0, snippet: '' }));
+    if ($connStatus === 'open' && !pickerServerSearch.failed) {
+      if (pickerServerSearch.query === pickerQuery && pickerServerSearch.searchSlides === pickerSearchSlides) {
+        return pickerServerSearch.items;
+      }
+      return [];
+    }
+    return filterSongs(q, $songsStore, pickerSearchSlides, Number.POSITIVE_INFINITY);
+  });
+  const pickerSearchPending = $derived(
+    pickerQuery.trim().length > 0
+      && $connStatus === 'open'
+      && !pickerServerSearch.failed
+      && (pickerServerSearch.pending || pickerServerSearch.query !== pickerQuery || pickerServerSearch.searchSlides !== pickerSearchSlides)
+  );
+
+  const songByPath = $derived.by(() => new Map($songsStore.map((song) => [song.path, song])));
+
+  $effect(() => {
+    const q = normalize(pickerQuery);
+    if (!q || $connStatus !== 'open') {
+      pickerServerSearch = { query: pickerQuery, searchSlides: pickerSearchSlides, items: [], pending: false, failed: false };
+      return;
+    }
+
+    const seq = ++pickerSearchSeq;
+    pickerServerSearch = { query: pickerQuery, searchSlides: pickerSearchSlides, items: [], pending: true, failed: false };
+    remote
+      .sendRequest('song.search', { query: pickerQuery, search_slides: pickerSearchSlides }, 10000)
+      .then((payload: SongSearchPayload) => {
+        if (seq !== pickerSearchSeq) return;
+        if (!payload?.ok) {
+          pickerServerSearch = { query: pickerQuery, searchSlides: pickerSearchSlides, items: [], pending: false, failed: true };
+          return;
+        }
+        const items = payload.results
+          .map((result) => {
+            const song = songByPath.get(result.path);
+            return song ? { item: song, score: result.score, snippet: result.snippet } : null;
+          })
+          .filter((item): item is ScoredResult<LibrarySong> => item !== null);
+        pickerServerSearch = { query: pickerQuery, searchSlides: pickerSearchSlides, items, pending: false, failed: false };
+      })
+      .catch(() => {
+        if (seq !== pickerSearchSeq) return;
+        pickerServerSearch = { query: pickerQuery, searchSlides: pickerSearchSlides, items: [], pending: false, failed: true };
+      });
   });
 
   let toast = $state<{ message: string; type: 'success' | 'warning' } | null>(null);
@@ -556,18 +610,24 @@
         </label>
       </div>
       <div class="picker-list">
-        {#each pickerFiltered as sr (sr.item.path)}
-          <button class="picker-item" onclick={() => addSong(sr.item)}>
-            <div class="name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
-              <div class="name" style="font-weight: 600;">{sr.item.name}</div>
-              {#if sr.item.key}
-                <span class="key-badge">{sr.item.key}</span>
-              {/if}
-            </div>
-            {#if sr.item.folder}<div class="muted small">{sr.item.folder}</div>{/if}
-            {#if sr.snippet}<div class="snippet">{@html renderMarkdown(sr.snippet)}</div>{/if}
-          </button>
-        {/each}
+        {#if pickerSearchPending}
+          <div class="muted small" style="padding: 12px;">Searching songs...</div>
+        {:else}
+          <VirtualList items={pickerFiltered} itemHeight={86} class="picker-virtual-list">
+            {#snippet children(sr)}
+              <button class="picker-item" onclick={() => addSong(sr.item)}>
+                <div class="name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+                  <div class="name" style="font-weight: 600;">{sr.item.name}</div>
+                  {#if sr.item.key}
+                    <span class="key-badge">{sr.item.key}</span>
+                  {/if}
+                </div>
+                {#if sr.item.folder}<div class="muted small">{sr.item.folder}</div>{/if}
+                {#if sr.snippet}<div class="snippet">{@html renderMarkdown(sr.snippet)}</div>{/if}
+              </button>
+            {/snippet}
+          </VirtualList>
+        {/if}
       </div>
     </div>
   </div>
@@ -844,6 +904,10 @@
   }
  
   .picker-list { display: flex; flex-direction: column; gap: 4px; }
+  :global(.picker-virtual-list) {
+    height: min(55vh, 520px);
+    min-height: 260px;
+  }
   .picker-item {
     text-align: left;
     background: var(--elevated);

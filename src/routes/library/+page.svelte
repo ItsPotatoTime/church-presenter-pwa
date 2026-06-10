@@ -7,7 +7,7 @@
   import { sortBibleVerses } from '$lib/bible';
   import { loadCredentialsResilient } from '$lib/db';
   import { applyQueueCommandLocally, queueCommandForOfflineReplay } from '$lib/offlineQueue';
-  import type { BibleBook, BibleVerse, LibrarySong } from '$lib/protocol';
+  import type { BibleBook, BibleVerse, LibrarySong, SongSearchPayload } from '$lib/protocol';
   import { filterSongs, normalize, renderMarkdown } from '$lib/search';
   import { isReducedDataConnection, syncFull, syncNow } from '$lib/sync';
   import {
@@ -20,7 +20,6 @@
     canEditKeys,
     activeModals,
     libraryScrollY,
-    libraryRenderCount,
     libraryRawQuery,
     librarySearchSlides,
     libraryBibleCurrentBookNum,
@@ -30,6 +29,7 @@
   } from '$lib/stores';
   import { remote } from '$lib/ws';
   import SongPreviewModal from '$lib/SongPreviewModal.svelte';
+  import VirtualList from '$lib/VirtualList.svelte';
 
   type LibraryMode = 'songs' | 'bible' | 'write_song';
   type BibleSearchMode = 'reference' | 'text';
@@ -45,8 +45,14 @@
   let searchSlides = $state(get(librarySearchSlides));
   let previewSong = $state<LibrarySong | null>(null);
   let debounceTimer: number | null = null;
-  let renderCount = $state(get(libraryRenderCount));
-  let sentinel = $state<Element | null>(null);
+  let serverSearch = $state<{
+    query: string;
+    searchSlides: boolean;
+    items: SongResult[];
+    pending: boolean;
+    failed: boolean;
+  }>({ query: '', searchSlides: false, items: [], pending: false, failed: false });
+  let searchRequestSeq = 0;
 
   const libraryMode = $derived(($page.url.searchParams.get('mode') as LibraryMode) || 'songs');
   let rawBibleQuery = $state(get(libraryBibleRawQuery));
@@ -124,30 +130,12 @@
     };
   });
 
-  $effect(() => {
-    const el = sentinel;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          renderCount = Math.min(renderCount + 200, $songsStore.length);
-        }
-      },
-      { rootMargin: '400px' },
-    );
-    obs.observe(el);
-    return () => obs.disconnect();
-  });
-
   // Sync state changes to persistent stores
   $effect(() => {
     libraryRawQuery.set(rawQuery);
   });
   $effect(() => {
     librarySearchSlides.set(searchSlides);
-  });
-  $effect(() => {
-    libraryRenderCount.set(renderCount);
   });
   $effect(() => {
     libraryBibleRawQuery.set(rawBibleQuery);
@@ -179,39 +167,65 @@
   });
 
   const hasQuery = $derived(normalize(query).length > 0);
-  const browseSongs = $derived<LibrarySong[]>(
-    hasQuery ? [] : $songsStore.slice(0, renderCount),
-  );
-
-  const grouped = $derived.by(() => {
-    const groups = new Map<string, LibrarySong[]>();
-    for (const song of browseSongs) {
-      const key = song.folder || '-';
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(song);
-    }
-    return [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  });
+  const browseSongs = $derived<LibrarySong[]>(hasQuery ? [] : $songsStore);
+  const songByPath = $derived.by(() => new Map($songsStore.map((song) => [song.path, song])));
 
   type SongResult = { s: LibrarySong; score: number; snippet: string };
-  const MAX_RESULTS = 200;
 
-  const searchData = $derived.by<{ items: SongResult[]; overflow: boolean }>(() => {
+  $effect(() => {
     const q = normalize(query);
-    if (!q) return { items: [], overflow: false };
+    const online = $connStatus === 'open';
+    if (!q || !online) {
+      serverSearch = { query, searchSlides, items: [], pending: false, failed: false };
+      return;
+    }
+
+    const seq = ++searchRequestSeq;
+    serverSearch = { query, searchSlides, items: [], pending: true, failed: false };
+    remote
+      .sendRequest('song.search', { query, search_slides: searchSlides }, 10000)
+      .then((payload: SongSearchPayload) => {
+        if (seq !== searchRequestSeq) return;
+        if (!payload?.ok) {
+          serverSearch = { query, searchSlides, items: [], pending: false, failed: true };
+          return;
+        }
+        const items = payload.results
+          .map((result) => {
+            const song = songByPath.get(result.path);
+            return song ? { s: song, score: result.score, snippet: result.snippet } : null;
+          })
+          .filter((item): item is SongResult => item !== null);
+        serverSearch = { query, searchSlides, items, pending: false, failed: false };
+      })
+      .catch(() => {
+        if (seq !== searchRequestSeq) return;
+        serverSearch = { query, searchSlides, items: [], pending: false, failed: true };
+      });
+  });
+
+  const searchData = $derived.by<{ items: SongResult[]; pending: boolean }>(() => {
+    const q = normalize(query);
+    if (!q) return { items: [], pending: false };
+    if ($connStatus === 'open' && !serverSearch.failed) {
+      if (serverSearch.query === query && serverSearch.searchSlides === searchSlides) {
+        return { items: serverSearch.items, pending: serverSearch.pending };
+      }
+      return { items: [], pending: true };
+    }
     const results = filterSongs(query, $songsStore, searchSlides, Number.POSITIVE_INFINITY);
     return {
-      items: results.slice(0, MAX_RESULTS).map((result) => ({
+      items: results.map((result) => ({
         s: result.item,
         score: result.score,
         snippet: result.snippet,
       })),
-      overflow: results.length > MAX_RESULTS,
+      pending: false,
     };
   });
 
   const searchResults = $derived(searchData.items);
-  const searchOverflow = $derived(searchData.overflow);
+  const searchPending = $derived(searchData.pending);
 
   const parsedBibleReference = $derived.by<BibleReferenceParse>(() =>
     parseBibleReference(bibleQuery, $bibleBooksStore),
@@ -502,7 +516,7 @@
     <div class="muted small">
       {#if $syncStatus === 'syncing'}Syncing...
       {:else if $syncStatus === 'error'}Sync failed - tap refresh
-      {:else if hasQuery}{searchResults.length}{searchOverflow ? '+' : ''} result{searchResults.length !== 1 ? 's' : ''}
+      {:else if hasQuery}{searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
       {:else}{$songsStore.length} songs{/if}
     </div>
   </header>
@@ -561,42 +575,43 @@
       No songs cached yet. Pull once the desktop is connected.
     </section>
   {:else if hasQuery}
-    {#if searchResults.length === 0}
+    {#if searchPending}
+      <section class="panel muted" style="margin-top:12px;">
+        Searching songs...
+      </section>
+    {:else if searchResults.length === 0}
       <section class="panel muted" style="margin-top:12px;">
         No songs match "{query}".
       </section>
     {:else}
-      {#each searchResults as result (result.s.path)}
-        <div class="song">
-          <button class="song-main" onclick={() => openPreview(result.s)}>
-            <div class="song-name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
-              <div class="song-name">{result.s.name}</div>
-              {#if result.s.key}
-                <span class="key-badge">{result.s.key}</span>
+      <VirtualList items={searchResults} itemHeight={96}>
+        {#snippet children(result)}
+          <div class="song">
+            <button class="song-main" onclick={() => openPreview(result.s)}>
+              <div class="song-name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+                <div class="song-name">{result.s.name}</div>
+                {#if result.s.key}
+                  <span class="key-badge">{result.s.key}</span>
+                {/if}
+              </div>
+              <div class="muted small">{result.s.folder || '-'}</div>
+              {#if result.snippet}
+                <div class="snippet muted">{@html renderMarkdown(result.snippet)}</div>
               {/if}
-            </div>
-            <div class="muted small">{result.s.folder || '-'}</div>
-            {#if result.snippet}
-              <div class="snippet muted">{@html renderMarkdown(result.snippet)}</div>
-            {/if}
-          </button>
-          <button
-            class="add"
-            aria-label="Add to queue"
-            onclick={() => addToQueue(result.s.path)}
-            disabled={$connStatus !== 'open' || $isViewOnly}
-          >+</button>
-        </div>
-      {/each}
-      {#if searchOverflow}
-        <p class="muted small load-hint">Showing first {MAX_RESULTS} - type more to narrow results</p>
-      {/if}
+            </button>
+            <button
+              class="add"
+              aria-label="Add to queue"
+              onclick={() => addToQueue(result.s.path)}
+              disabled={$connStatus !== 'open' || $isViewOnly}
+            >+</button>
+          </div>
+        {/snippet}
+      </VirtualList>
     {/if}
   {:else}
-    {#each grouped as [folder, songs] (folder)}
-      <section class="group">
-        <div class="group-head">{folder}</div>
-        {#each songs as song (song.path)}
+    <VirtualList items={browseSongs} itemHeight={82}>
+      {#snippet children(song)}
           <div class="song">
             <button class="song-main" onclick={() => openPreview(song)}>
               <div class="song-name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
@@ -616,16 +631,8 @@
               disabled={$connStatus !== 'open' || $isViewOnly}
             >+</button>
           </div>
-        {/each}
-      </section>
-    {/each}
-
-    {#if renderCount < $songsStore.length}
-      <div bind:this={sentinel} class="sentinel" aria-hidden="true"></div>
-      <p class="muted small load-hint">
-        Showing {Math.min(renderCount, $songsStore.length)} of {$songsStore.length} - scroll for more
-      </p>
-    {/if}
+      {/snippet}
+    </VirtualList>
   {/if}
 {:else if libraryMode === 'bible'}
   <header class="hdr bible-hdr">
@@ -1068,16 +1075,6 @@
     font-weight: 700;
   }
  
-  .group { margin-bottom: 14px; }
-  .group-head {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
-    color: var(--text-secondary);
-    padding: 8px 2px 4px;
-    font-weight: 700;
-  }
- 
   .song {
     display: flex;
     gap: 8px;
@@ -1252,9 +1249,6 @@
     white-space: pre-wrap;
   }
   .bible-empty { margin: 0; }
- 
-  .sentinel { height: 1px; }
-  .load-hint { text-align: center; padding: 6px 0 10px; margin: 0; }
  
   .modal-back {
     position: fixed;

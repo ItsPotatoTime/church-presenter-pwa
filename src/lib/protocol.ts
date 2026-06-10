@@ -140,6 +140,20 @@ export interface SyncDelta {
   server_ts: number;
 }
 
+export interface SongSearchResult {
+  path: string;
+  score: number;
+  snippet: string;
+}
+
+export interface SongSearchPayload {
+  ok: boolean;
+  query: string;
+  search_slides: boolean;
+  results: SongSearchResult[];
+  error?: string;
+}
+
 // ── Lists broadcast (server → client) ───────────────────────────────
 export interface ListsState {
   lists: LibraryList[];
@@ -172,6 +186,7 @@ export type ClientCommand =
   | { type: 'list.reorder'; payload: { list_name: string; from: number; to: number } }
   | { type: 'list.load_to_queue'; payload: { list_name: string } }
   | { type: 'sync.request'; id?: string; payload: { since_ts: number; bible_version?: string | null } }
+  | { type: 'song.search'; id?: string; payload: { query: string; search_slides: boolean } }
   | { type: 'device.rename'; payload: { new_name: string } }
   | { type: 'live.toggle_present' }
   | { type: 'live.font_size'; payload: { delta: number } }

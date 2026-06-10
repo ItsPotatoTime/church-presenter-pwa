@@ -57,6 +57,17 @@ function allTokensWordPrefix(tokens: string[], text: string): boolean {
   return tokens.length > 0 && tokens.every((token) => textWords.some((word) => word.startsWith(token)));
 }
 
+function contiguousTokensWordPrefix(tokens: string[], text: string): boolean {
+  const textWords = words(text);
+  if (tokens.length === 0 || textWords.length < tokens.length) return false;
+  for (let start = 0; start <= textWords.length - tokens.length; start++) {
+    if (tokens.every((token, offset) => textWords[start + offset].startsWith(token))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function textScore(
   text: string,
   q: string,
@@ -71,6 +82,13 @@ function textScore(
   if (text.includes(q)) return contains;
   if (tokens.length > 1 && allTokensWordPrefix(tokens, text)) return allPrefixes;
   if (tokens.length > 1 && allTokensPresent(tokens, text)) return allTokens;
+  return 0;
+}
+
+function slideTextScore(text: string, q: string, tokens: string[]): number {
+  if (tokens.length <= 1) return textScore(text, q, tokens, [300, 290, 280, 270, 260, 250]);
+  if (text.includes(q)) return 270;
+  if (contiguousTokensWordPrefix(tokens, text)) return 260;
   return 0;
 }
 
@@ -175,7 +193,7 @@ export function matchScore<
   if (searchSlides && item.slide_texts) {
     const normalizedBlob = item.normalized_blob ?? item._norm_blob;
     // Fast rejection check using pre-normalized blob
-    if (normalizedBlob && !normalizedBlob.includes(q) && !allTokensPresent(tokens, normalizedBlob)) {
+    if (tokens.length <= 1 && normalizedBlob && !normalizedBlob.includes(q)) {
       return { score: 0, snippet: '' };
     }
 
@@ -186,7 +204,7 @@ export function matchScore<
     }
     for (let si = 0; si < cached.nSlides.length; si++) {
       const ns = cached.nSlides[si];
-      score = textScore(ns, q, tokens, [300, 290, 280, 270, 260, 250]);
+      score = slideTextScore(ns, q, tokens);
       if (score) {
         const raw = item.slide_texts[si] ?? '';
         return { score, snippet: snippetForMatch(raw, q, tokens) };
