@@ -11,6 +11,9 @@ export default {
       strict: false
     }),
     paths: { base },
+    serviceWorker: {
+      register: false
+    },
     prerender: { handleHttpError: 'warn' }
   }
 };

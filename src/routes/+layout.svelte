@@ -17,6 +17,7 @@
   let showUpdateBanner = $state(false);
   let updateReloadTimer: number | null = null;
   let reloadingForUpdate = false;
+  let recoveringFromChunkError = false;
   const UPDATE_RELOAD_GUARD_KEY = 'church_remote_update_reload_at';
 
   // Global debugger console logging overlay
@@ -76,18 +77,41 @@
   }
 
   // Foolproof dynamic chunk error handlers
+  async function recoverFromChunkError() {
+    if (recoveringFromChunkError) return;
+    recoveringFromChunkError = true;
+    showUpdateBanner = true;
+
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(registrations.map((registration) => registration.unregister()));
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter((key) => key.startsWith('cache-')).map((key) => caches.delete(key)));
+      }
+    } catch (err) {
+      console.warn('[layout] Stale app-shell recovery failed:', err);
+    } finally {
+      const url = new URL(window.location.href);
+      url.searchParams.set('_recover', String(Date.now()));
+      window.location.replace(url.toString());
+    }
+  }
+
   function handleChunkError(e: ErrorEvent) {
     if (e.message && (e.message.includes('Failed to fetch dynamically imported module') || e.message.includes('Importing a module script failed'))) {
-      console.warn('[layout] Chunk loading failed. Reloading page...');
-      window.location.reload();
+      console.warn('[layout] Chunk loading failed. Recovering stale app shell...');
+      void recoverFromChunkError();
     }
   }
 
   function handleUnhandledRejection(e: PromiseRejectionEvent) {
     const message = e.reason?.message || '';
     if (message.includes('Failed to fetch dynamically imported module') || message.includes('Importing a module script failed')) {
-      console.warn('[layout] Chunk loading rejection. Reloading page...');
-      window.location.reload();
+      console.warn('[layout] Chunk loading rejection. Recovering stale app shell...');
+      void recoverFromChunkError();
     }
   }
 
@@ -146,7 +170,7 @@
       return;
     }
     if (type === 'SW_INSTALL_COMPLETE' && navigator.serviceWorker.controller) {
-      reloadForUpdate(250);
+      showUpdateBanner = true;
     }
   }
 

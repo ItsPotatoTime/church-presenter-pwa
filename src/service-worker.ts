@@ -158,6 +158,15 @@ self.addEventListener('fetch', (event) => {
       (async () => {
         const cache = await caches.open(CACHE_NAME);
 
+        try {
+          const networkResponse = await fetch(event.request);
+          if (networkResponse instanceof Response) {
+            return networkResponse;
+          }
+        } catch {
+          // Fall through to the cached shell when offline or GitHub Pages is unreachable.
+        }
+
         // A. Match the exact pathname (ignoring query parameters for pairing/tokens)
         const exactMatch = await cache.match(url.pathname);
         if (exactMatch) return exactMatch;
