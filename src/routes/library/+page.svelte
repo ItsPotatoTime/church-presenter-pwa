@@ -594,10 +594,15 @@
                   <span class="key-badge">{result.s.key}</span>
                 {/if}
               </div>
-              <div class="muted small">{result.s.folder || '-'}</div>
-              {#if result.snippet}
-                <div class="snippet muted">{@html renderMarkdown(result.snippet)}</div>
-              {/if}
+              <div class="muted small song-meta-line">
+                {#if result.snippet}
+                  {@html renderMarkdown(result.snippet)}
+                {:else if result.s.slide_texts?.length}
+                  {result.s.slide_texts.length} slides
+                {:else}
+                  {result.s.folder || '-'}
+                {/if}
+              </div>
             </button>
             <button
               class="add"
@@ -621,7 +626,7 @@
                 {/if}
               </div>
               {#if song.slide_texts?.length}
-                <div class="muted small">{song.slide_texts.length} slides</div>
+                <div class="muted small song-meta-line">{song.slide_texts.length} slides</div>
               {/if}
             </button>
             <button
@@ -1112,14 +1117,14 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }
-  .snippet {
-    font-size: 11px;
-    font-style: italic;
-    margin-top: 3px;
+  .song-meta-line {
+    font-size: 12px;
+    line-height: 1.25;
+    margin-top: 2px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 240px;
+    max-width: min(240px, 100%);
   }
  
   .add {

@@ -4,13 +4,16 @@
   import { base } from '$app/paths';
   import { loadCredentialsResilient } from '$lib/db';
   import { applyQueueCommandLocally, queueCommandForOfflineReplay } from '$lib/offlineQueue';
-  import type { ClientCommand } from '$lib/protocol';
+  import type { ClientCommand, LibrarySong } from '$lib/protocol';
   import { remote } from '$lib/ws';
   import { connStatus, isViewOnly, queueState, songsStore, activeModals } from '$lib/stores';
+  import SongPreviewModal from '$lib/SongPreviewModal.svelte';
 
+  const songByPath = $derived.by(() => new Map($songsStore.map((song) => [song.path, song])));
   const songKeyMap = $derived.by(() => new Map($songsStore.map((song) => [song.path, song.key])));
 
   let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
+  let previewSong = $state<LibrarySong | null>(null);
 
   function showConfirm(msg: string): Promise<boolean> {
     return new Promise(resolve => { confirmDialog = { message: msg, resolve }; });
@@ -50,9 +53,17 @@
 
   async function tapJump(i: number) {
     if (dragging !== null) return; // swallow taps that end a drag
+    const item = $queueState?.items[i];
+    const song = item && !item.is_bible && !item.is_merged ? (songByPath.get(item.path) ?? null) : null;
+    if (song) previewSong = song;
+    if ($isViewOnly) return;
     const name = $queueState?.items[i]?.name || 'this song';
     if (!await showConfirm(`Switch to "${name}"?`)) return;
     send({ type: 'live.goto', payload: { song_index: i, slide_index: 0 } });
+  }
+
+  function closePreview() {
+    previewSong = null;
   }
 
   async function remove(pos: number) {
@@ -193,7 +204,7 @@
           aria-hidden="true"
           onpointerdown={(e) => onGripDown(e, i)}
         >⋮⋮</span>
-        <button class="label" onclick={() => tapJump(i)} disabled={$isViewOnly}>
+        <button class="label" onclick={() => tapJump(i)}>
           <div class="name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
             <div class="name">{item.name || 'Untitled'}</div>
             {#if !item.is_bible && !item.is_merged && songKeyMap.get(item.path)}
@@ -233,6 +244,10 @@
       {/if}
     </div>
   </div>
+{/if}
+
+{#if previewSong}
+  <SongPreviewModal song={previewSong} onclose={closePreview} />
 {/if}
 
 {#if confirmDialog}
