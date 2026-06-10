@@ -5,12 +5,14 @@
     items,
     itemHeight = 78,
     overscan = 8,
+    rowGap = 6,
     class: className = '',
     children,
   } = $props<{
     items: T[];
     itemHeight?: number;
     overscan?: number;
+    rowGap?: number;
     class?: string;
     children: Snippet<[T, number]>;
   }>();
@@ -50,7 +52,7 @@
   <div class="virtual-spacer" style={`height: ${totalHeight}px;`}>
     <div class="virtual-window" style={`transform: translateY(${topOffset}px);`}>
       {#each visibleItems as item, offset (startIndex + offset)}
-        <div class="virtual-row" style={`height: ${itemHeight}px;`}>
+        <div class="virtual-row" style={`height: ${itemHeight}px; padding-bottom: ${rowGap}px;`}>
           {@render children(item, startIndex + offset)}
         </div>
       {/each}
@@ -80,5 +82,9 @@
   .virtual-row {
     box-sizing: border-box;
     overflow: hidden;
+  }
+
+  .virtual-row :global(> *) {
+    height: 100%;
   }
 </style>

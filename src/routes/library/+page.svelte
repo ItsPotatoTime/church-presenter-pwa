@@ -584,7 +584,7 @@
         No songs match "{query}".
       </section>
     {:else}
-      <VirtualList items={searchResults} itemHeight={96}>
+      <VirtualList items={searchResults} itemHeight={88} rowGap={6}>
         {#snippet children(result)}
           <div class="song">
             <button class="song-main" onclick={() => openPreview(result.s)}>
@@ -610,7 +610,7 @@
       </VirtualList>
     {/if}
   {:else}
-    <VirtualList items={browseSongs} itemHeight={82}>
+    <VirtualList items={browseSongs} itemHeight={72} rowGap={6}>
       {#snippet children(song)}
           <div class="song">
             <button class="song-main" onclick={() => openPreview(song)}>
@@ -1082,7 +1082,7 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     padding: 4px;
-    margin-bottom: 6px;
+    margin: 0;
     transition: border-color 150ms ease, background-color 150ms ease;
   }
   .song:hover {
@@ -1091,10 +1091,11 @@
   }
   .song-main {
     flex: 1;
+    min-width: 0;
     text-align: left;
     background: transparent;
     border: none;
-    padding: 10px 12px;
+    padding: 8px 12px;
     color: var(--text-primary);
     border-radius: 8px;
     transition: background-color 150ms ease;
@@ -1102,7 +1103,15 @@
   .song-main:active {
     background: rgba(255, 255, 255, 0.04);
   }
-  .song-name { font-weight: 600; }
+  .song-name {
+    font-weight: 600;
+    line-height: 1.25;
+    overflow: hidden;
+    display: -webkit-box;
+    line-clamp: 2;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
   .snippet {
     font-size: 11px;
     font-style: italic;
@@ -1115,6 +1124,8 @@
  
   .add {
     width: 52px;
+    height: 100%;
+    flex: 0 0 52px;
     font-size: 20px;
     font-weight: 700;
     color: var(--accent);
