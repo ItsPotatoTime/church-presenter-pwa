@@ -1083,9 +1083,12 @@
   .song {
     display: flex;
     gap: 8px;
+    height: 70px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 10px;
+    box-sizing: border-box;
+    overflow: hidden;
     padding: 4px;
     margin: 0;
     transition: border-color 150ms ease, background-color 150ms ease;
@@ -1101,6 +1104,10 @@
     background: transparent;
     border: none;
     padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
     color: var(--text-primary);
     border-radius: 8px;
     transition: background-color 150ms ease;
@@ -1118,6 +1125,8 @@
     -webkit-box-orient: vertical;
   }
   .song-meta-line {
+    display: block;
+    flex: 0 0 auto;
     font-size: 12px;
     line-height: 1.25;
     margin-top: 2px;

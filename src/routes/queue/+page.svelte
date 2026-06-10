@@ -14,6 +14,12 @@
 
   let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
   let previewSong = $state<LibrarySong | null>(null);
+  let previewSwitchIndex = $state<number | null>(null);
+  const queueSwitchPrompt = $derived(
+    previewSwitchIndex === null
+      ? null
+      : `Switch to "${$queueState?.items[previewSwitchIndex]?.name || 'this song'}"?`,
+  );
 
   function showConfirm(msg: string): Promise<boolean> {
     return new Promise(resolve => { confirmDialog = { message: msg, resolve }; });
@@ -55,7 +61,11 @@
     if (dragging !== null) return; // swallow taps that end a drag
     const item = $queueState?.items[i];
     const song = item && !item.is_bible && !item.is_merged ? (songByPath.get(item.path) ?? null) : null;
-    if (song) previewSong = song;
+    if (song) {
+      previewSong = song;
+      previewSwitchIndex = $isViewOnly ? null : i;
+      return;
+    }
     if ($isViewOnly) return;
     const name = $queueState?.items[i]?.name || 'this song';
     if (!await showConfirm(`Switch to "${name}"?`)) return;
@@ -64,6 +74,17 @@
 
   function closePreview() {
     previewSong = null;
+    previewSwitchIndex = null;
+  }
+
+  function cancelPreviewSwitch() {
+    previewSwitchIndex = null;
+  }
+
+  function confirmPreviewSwitch() {
+    if (previewSwitchIndex === null || $isViewOnly) return;
+    send({ type: 'live.goto', payload: { song_index: previewSwitchIndex, slide_index: 0 } });
+    previewSwitchIndex = null;
   }
 
   async function remove(pos: number) {
@@ -247,7 +268,13 @@
 {/if}
 
 {#if previewSong}
-  <SongPreviewModal song={previewSong} onclose={closePreview} />
+  <SongPreviewModal
+    song={previewSong}
+    onclose={closePreview}
+    queueSwitchPrompt={queueSwitchPrompt}
+    onQueueSwitchConfirm={confirmPreviewSwitch}
+    onQueueSwitchCancel={cancelPreviewSwitch}
+  />
 {/if}
 
 {#if confirmDialog}

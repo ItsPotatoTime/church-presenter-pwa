@@ -9,9 +9,18 @@
   import { putSongs, addPendingMutation } from '$lib/db';
 
   // Svelte 5 props
-  let { song, onclose } = $props<{
+  let {
+    song,
+    onclose,
+    queueSwitchPrompt = null,
+    onQueueSwitchConfirm,
+    onQueueSwitchCancel,
+  } = $props<{
     song: LibrarySong;
     onclose: () => void;
+    queueSwitchPrompt?: string | null;
+    onQueueSwitchConfirm?: () => void;
+    onQueueSwitchCancel?: () => void;
   }>();
 
   let showProjector = $state(false);
@@ -142,6 +151,16 @@
     onkeydown={(e) => e.stopPropagation()}
   >
     <div class="modal-head" style="flex-direction: column; align-items: stretch; gap: 8px;">
+      {#if queueSwitchPrompt && onQueueSwitchConfirm && onQueueSwitchCancel}
+        <div class="queue-switch-panel">
+          <div class="queue-switch-title">{queueSwitchPrompt}</div>
+          <div class="queue-switch-actions">
+            <button class="ghost" type="button" onclick={onQueueSwitchCancel}>Cancel</button>
+            <button class="accent" type="button" onclick={onQueueSwitchConfirm}>Confirm</button>
+          </div>
+        </div>
+      {/if}
+
       <div class="modal-title-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%;">
         <div class="modal-title" style="flex: 1; font-weight: 700; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{song.name}</div>
         <div class="key-section" style="flex-shrink: 0; display: flex; align-items: center;">
@@ -241,6 +260,30 @@
     margin-bottom: 10px;
   }
   .modal-title { font-weight: 700; font-size: 18px; }
+
+  .queue-switch-panel {
+    background: var(--elevated);
+    border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .queue-switch-title {
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .queue-switch-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .queue-switch-actions button {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
   
   .slide-prev {
     background: var(--elevated);
