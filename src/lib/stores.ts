@@ -64,17 +64,6 @@ export const isViewOnly: Readable<boolean> = derived(
 // Registry for active modal/dialog close callbacks
 export const activeModals: Writable<(() => boolean)[]> = writable([]);
 
-function persistentString(key: string, fallback: string): Writable<string> {
-  const initial = typeof window !== 'undefined' ? (localStorage.getItem(key) ?? fallback) : fallback;
-  const store = writable(initial);
-  if (typeof window !== 'undefined') {
-    store.subscribe((value) => {
-      localStorage.setItem(key, value);
-    });
-  }
-  return store;
-}
-
 function persistentBoolean(key: string, fallback: boolean): Writable<boolean> {
   const initial = typeof window !== 'undefined'
     ? localStorage.getItem(key) === null
@@ -91,9 +80,12 @@ function persistentBoolean(key: string, fallback: boolean): Writable<boolean> {
 }
 
 // Saved state for Library page to support scroll and view preservation
+if (typeof window !== 'undefined') {
+	localStorage.removeItem('library_raw_query');
+}
+
 export const libraryScrollY: Writable<number> = writable(0);
 export const libraryRenderCount: Writable<number> = writable(300);
-export const libraryRawQuery: Writable<string> = persistentString('library_raw_query', '');
 export const librarySearchSlides: Writable<boolean> = persistentBoolean('library_search_slides', false);
 export const libraryBibleCurrentBookNum: Writable<number | null> = writable(null);
 export const libraryBibleCurrentChapter: Writable<number | null> = writable(null);

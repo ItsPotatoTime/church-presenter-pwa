@@ -20,7 +20,6 @@
     canEditKeys,
     activeModals,
     libraryScrollY,
-    libraryRawQuery,
     librarySearchSlides,
     libraryBibleCurrentBookNum,
     libraryBibleCurrentChapter,
@@ -40,8 +39,8 @@
     verse: number | null;
   };
 
-  let rawQuery = $state(get(libraryRawQuery));
-  let query = $state(get(libraryRawQuery));
+let rawQuery = $state('');
+let query = $state('');
   let searchSlides = $state(get(librarySearchSlides));
   let previewSong = $state<LibrarySong | null>(null);
   let debounceTimer: number | null = null;
@@ -131,9 +130,6 @@
   });
 
   // Sync state changes to persistent stores
-  $effect(() => {
-    libraryRawQuery.set(rawQuery);
-  });
   $effect(() => {
     librarySearchSlides.set(searchSlides);
   });
