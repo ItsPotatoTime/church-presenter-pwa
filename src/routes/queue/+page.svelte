@@ -84,7 +84,7 @@
   function confirmPreviewSwitch() {
     if (previewSwitchIndex === null || $isViewOnly) return;
     send({ type: 'live.goto', payload: { song_index: previewSwitchIndex, slide_index: 0 } });
-    previewSwitchIndex = null;
+    closePreview();
   }
 
   async function remove(pos: number) {
