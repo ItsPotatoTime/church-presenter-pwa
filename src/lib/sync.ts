@@ -13,11 +13,14 @@ import {
   getBibleVersion,
   getCachedQueueState,
   getLastSyncTs,
+  loadPendingPublicLists,
   loadAllBibleBooks,
   loadAllBibleVerses,
   loadAllLists,
   loadAllPrivateLists,
   loadAllSongs,
+  clearPendingListMutations,
+  mergeServerLists,
   putBibleBooks,
   putBibleVerses,
   putLists,
@@ -109,6 +112,31 @@ export function isReducedDataConnection(): boolean {
   return connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g';
 }
 
+function stripListSyncStatus(list: { name: string; songs: { path: string; name: string; folder: string }[] }) {
+  return {
+    name: list.name,
+    songs: (list.songs ?? []).map((song) => ({
+      path: song.path,
+      name: song.name,
+      folder: song.folder,
+    })),
+  };
+}
+
+export async function flushPendingLists(): Promise<void> {
+  const pendingLists = await loadPendingPublicLists();
+  if (!pendingLists.length) return;
+
+  const payloadLists = pendingLists.map(stripListSyncStatus);
+  const resp = await remote.sendRequest('list.merge_pending', { lists: payloadLists }, 25000);
+  if (!resp?.ok || !Array.isArray(resp.lists)) {
+    throw new Error(resp?.error ?? 'pending list merge failed');
+  }
+  await putLists(resp.lists);
+  await clearPendingListMutations();
+  listsStore.set(resp.lists);
+}
+
 async function _doSync(since: number, cachedBibleVersion: string | null = null): Promise<void> {
   syncStatus.set('syncing');
   try {
@@ -128,7 +156,7 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
       if (toDelete.length) await deleteSongsByPath(toDelete);
       
       await putSongs(p.songs);
-      await putLists(p.lists);
+      lists = await mergeServerLists(p.lists);
       await clearBibleBooks();
       await clearBibleVerses();
       if (p.bible) {
@@ -147,7 +175,6 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         bibleVerses = [];
       }
       await setLastSyncTs(p.server_ts);
-      lists = p.lists;
     } else if (resp.type === 'sync.delta') {
       const p = resp.payload as SyncDelta;
       if (p.songs_changed.length) await putSongs(p.songs_changed);
@@ -157,8 +184,7 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
       const toDelete = local.filter((x) => !haveNow.has(x));
       if (toDelete.length) await deleteSongsByPath(toDelete);
       if (p.lists !== null) {
-        await putLists(p.lists);
-        lists = p.lists;
+        lists = await mergeServerLists(p.lists);
       }
       if (p.bible) {
         const sortedVerses = sortBibleVerses(p.bible.verses);

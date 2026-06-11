@@ -142,23 +142,33 @@
         alert('Connect to the desktop to perform this action.');
         return;
       }
-      void addPendingMutation(cmd);
+      if (!typeIsListMutation(cmd.type)) {
+        void addPendingMutation(cmd);
+      }
       return;
     }
     remote.send(cmd as any);
   }
 
+  function typeIsListMutation(type: string): boolean {
+    return type.startsWith('list.');
+  }
+
+  function markPending(list: LibraryList): LibraryList {
+    return { ...list, sync_status: 'pending' };
+  }
+
   async function applyLocally(cmd: { type: string; payload?: any }): Promise<boolean> {
     const { type, payload } = cmd;
     if (type === 'list.create') {
-      listsStore.update((ls) => [...ls, { name: payload.name, songs: [] }]);
+      listsStore.update((ls) => [...ls, markPending({ name: payload.name, songs: [] })]);
       selectedName = payload.name;
     } else if (type === 'list.delete') {
       listsStore.update((ls) => ls.filter((l) => l.name !== payload.name));
       if (selectedName === payload.name) selectedName = null;
     } else if (type === 'list.rename') {
       listsStore.update((ls) =>
-        ls.map((l) => (l.name === payload.old ? { ...l, name: payload.new } : l))
+        ls.map((l) => (l.name === payload.old ? markPending({ ...l, name: payload.new }) : l))
       );
       if (selectedName === payload.old) selectedName = payload.new;
     } else if (type === 'list.add_song') {
@@ -167,7 +177,7 @@
       listsStore.update((ls) =>
         ls.map((l) =>
           l.name === payload.list_name
-            ? { ...l, songs: [...l.songs, { path: song.path, name: song.name, folder: song.folder }] }
+            ? markPending({ ...l, songs: [...l.songs, { path: song.path, name: song.name, folder: song.folder }] })
             : l
         )
       );
@@ -175,14 +185,31 @@
       listsStore.update((ls) =>
         ls.map((l) =>
           l.name === payload.list_name
-            ? { ...l, songs: l.songs.filter((_, i) => i !== payload.position) }
+            ? markPending({ ...l, songs: l.songs.filter((_, i) => i !== payload.position) })
             : l
         )
+      );
+    } else if (type === 'list.reorder') {
+      listsStore.update((ls) =>
+        ls.map((l) => {
+          if (l.name !== payload.list_name) return l;
+          const songs = [...l.songs];
+          const from = payload.from;
+          const to = Math.max(0, Math.min(songs.length - 1, payload.to));
+          if (from < 0 || from >= songs.length || from === to) return markPending(l);
+          const [moved] = songs.splice(from, 1);
+          songs.splice(to, 0, moved);
+          return markPending({ ...l, songs });
+        })
       );
     } else if (type === 'list.load_to_queue') {
       const list = get(listsStore).find((l) => l.name === payload.list_name);
       if (!list) return false;
       await replaceQueueFromSongs(list.songs);
+      await queueCommandForOfflineReplay({ type: 'queue.clear' });
+      for (const song of list.songs) {
+        await queueCommandForOfflineReplay({ type: 'queue.add', payload: { song_path: song.path } });
+      }
     } else {
       return false;
     }
@@ -502,9 +529,11 @@
       <button
         class="chip"
         class:active={selectedName === l.name}
+        class:pending={l.sync_status === 'pending'}
         onclick={() => selectList(l.name)}
       >
         {l.name}
+        {#if l.sync_status === 'pending'}<span class="pending-badge">pending</span>{/if}
         <span class="count">{l.songs.length}</span>
       </button>
     {/each}
@@ -513,7 +542,10 @@
 
 {#if selectedList}
   <section class="list-head">
-    <div class="list-title">{selectedList.name}</div>
+    <div class="list-title">
+      {selectedList.name}
+      {#if selectedList.sync_status === 'pending'}<span class="pending-badge">pending sync</span>{/if}
+    </div>
     <div class="list-actions">
       <button class="ghost" onclick={renameList} disabled={activeTab === 'public' && $isViewOnly}>✎ Rename</button>
       <button class="ghost" onclick={deleteList} disabled={activeTab === 'public' && $isViewOnly}>✕ Delete</button>
@@ -767,6 +799,22 @@
     color: var(--accent);
     background: var(--elevated);
   }
+  .chip.pending {
+    border-color: var(--warning);
+  }
+  .pending-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--warning) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+    color: var(--warning);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
   .count {
     background: var(--border);
     color: var(--text-secondary);
@@ -784,7 +832,14 @@
     display: flex; justify-content: space-between; align-items: center;
     gap: 10px; margin-top: 8px;
   }
-  .list-title { font-size: 16px; font-weight: 700; }
+  .list-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    font-size: 16px;
+    font-weight: 700;
+  }
   .list-actions { display: flex; gap: 6px; }
  
   .row { display: flex; gap: 8px; margin: 10px 0; }

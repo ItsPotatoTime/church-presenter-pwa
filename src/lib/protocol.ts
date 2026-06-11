@@ -13,16 +13,19 @@ export interface AuthFirstPair {
   device_id: string;
   device_name: string;
   platform: string;
+  server_id?: string;
 }
 
 export interface AuthReconnect {
   device_id: string;
   device_token: string;
+  server_id?: string;
 }
 
 export interface AuthOk {
   device_token: string; // empty string on reconnect
   server_name: string;
+  server_id?: string;
   version: string;
   exclusive_device_id?: string | null;
   can_edit_keys?: boolean;
@@ -35,7 +38,9 @@ export interface AuthFail {
     | 'pair_token_expired'
     | 'missing_token'
     | 'revoked'
-    | 'bad_token';
+    | 'bad_token'
+    | 'banned'
+    | 'wrong_server';
 }
 
 // ── Live state broadcast ─────────────────────────────────────────────
@@ -115,6 +120,7 @@ export interface LibrarySong {
 export interface LibraryList {
   name: string;
   songs: { path: string; name: string; folder: string }[];
+  sync_status?: 'pending';
 }
 
 // ── Sync (client → server) ───────────────────────────────────────────
@@ -185,6 +191,7 @@ export type ClientCommand =
   | { type: 'list.remove_song'; payload: { list_name: string; position: number } }
   | { type: 'list.reorder'; payload: { list_name: string; from: number; to: number } }
   | { type: 'list.load_to_queue'; payload: { list_name: string } }
+  | { type: 'list.merge_pending'; id?: string; payload: { lists: LibraryList[] } }
   | { type: 'sync.request'; id?: string; payload: { since_ts: number; bible_version?: string | null } }
   | { type: 'song.search'; id?: string; payload: { query: string; search_slides: boolean } }
   | { type: 'device.rename'; payload: { new_name: string } }

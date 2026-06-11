@@ -119,6 +119,7 @@
     const pt = url.searchParams.get('pt');
     const c = url.searchParams.get('c');
     const l = url.searchParams.get('l');
+    const sid = url.searchParams.get('sid');
     if (!pt || (!c && !l)) {
       pasteErr = 'Link is missing pt and c/l parameters.';
       return false;
@@ -127,6 +128,7 @@
     qs.set('pt', pt);
     if (c) qs.set('c', c);
     if (l) qs.set('l', l);
+    if (sid) qs.set('sid', sid);
     goto(`${base}/pair/?${qs.toString()}`);
     return true;
   }

@@ -18,11 +18,13 @@ import type {
 import {
   cacheQueueState,
   clearCredentials,
-  clearPendingMutations,
+  clearPendingListMutations,
+  deletePendingMutation,
   getPendingMutations,
   getOrCreateDeviceId,
   loadCredentials,
-  putLists,
+  mergeServerLists,
+  migrateServerKey,
   removeServer,
   saveCredentials,
   type Credentials,
@@ -47,6 +49,7 @@ const AUTH_TIMEOUT_MS = 8000;
 
 export type PairParams = {
   server_key: string;
+  server_id?: string;
   pair_token: string;
   cloud_host: string | null;
   lan_host: string | null;
@@ -115,6 +118,7 @@ class RemoteClient {
       device_name: deviceName,
       cloud_host: params.cloud_host,
       lan_host: params.lan_host,
+      server_id: params.server_id,
     };
     this.openSocket(provisional, params.pair_token);
   }
@@ -269,10 +273,12 @@ class RemoteClient {
             device_id: creds.device_id,
             device_name: creds.device_name,
             platform: navigator.platform || 'web',
+            ...(creds.server_id ? { server_id: creds.server_id } : {}),
           }
         : {
             device_id: creds.device_id,
             device_token: creds.device_token,
+            ...(creds.server_id ? { server_id: creds.server_id } : {}),
           };
       try { ws.send(JSON.stringify({ type: 'auth', payload })); } catch { /* ignore */ }
       if (this.authTimer !== null) clearTimeout(this.authTimer);
@@ -301,8 +307,11 @@ class RemoteClient {
         authenticated = true;
         if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
         const p = (msg.payload ?? {}) as AuthOk;
+        const authoritativeServerId = (p.server_id ?? creds.server_id ?? '').trim() || undefined;
         const finalCreds: Credentials = {
           ...creds,
+          server_key: authoritativeServerId ?? creds.server_key,
+          server_id: authoritativeServerId,
           device_token: pairToken ? p.device_token : creds.device_token,
           server_name: p.server_name,
           paired_at: creds.paired_at ?? Date.now(),
@@ -321,15 +330,33 @@ class RemoteClient {
         // triggered by a service-worker update between auth.ok and navigation.
         void (async () => {
           try {
+            if (
+              authoritativeServerId
+              && creds.server_key
+              && creds.server_key !== authoritativeServerId
+            ) {
+              await migrateServerKey(creds.server_key, authoritativeServerId, {
+                ...finalCreds,
+                server_key: authoritativeServerId,
+                server_id: authoritativeServerId,
+                last_used: Date.now(),
+              });
+            }
             await saveCredentials(finalCreds);
           } catch { /* ignore — non-fatal; reconnect will retry */ }
           try {
+            const { flushPendingLists } = await import('./sync');
+            await flushPendingLists();
+            await clearPendingListMutations();
             const mutations = await getPendingMutations();
             for (const m of mutations) {
               if (!isCurrent() || ws.readyState !== WebSocket.OPEN) return;
-              ws.send(JSON.stringify({ type: m.type, payload: m.payload }));
+              if (m.type.startsWith('list.')) continue;
+              const ack = await this.sendRequest(m.type, m.payload, 15000);
+              if (ack?.ok !== false) {
+                await deletePendingMutation(m.id);
+              }
             }
-            await clearPendingMutations();
           } catch { /* ignore — stale mutations are harmless */ }
           if (!isCurrent()) return;
           connStatus.set('open');
@@ -356,6 +383,11 @@ class RemoteClient {
           try { ws.close(); } catch { /* ignore */ }
           connStatus.set('error');
           connError.set('This server rejected the saved pairing. Choose another server or scan a new QR code.');
+        } else if (p.reason === 'wrong_server') {
+          this.forceClose = true;
+          try { ws.close(); } catch { /* ignore */ }
+          connStatus.set('error');
+          connError.set('This pairing belongs to a different desktop. Choose the matching server or scan this desktop QR again.');
         } else {
           connStatus.set('error');
           this.forceClose = true;
@@ -383,12 +415,11 @@ class RemoteClient {
       if (msg.type === 'lists.state') {
         const p = msg.payload as ListsState;
         const lists = p?.lists ?? [];
-        listsStore.set(lists);
         void (async () => {
           if (!isCurrent()) return;
-          await putLists(lists);
+          const merged = await mergeServerLists(lists);
           if (!isCurrent()) return;
-          if (!isCurrent()) return;
+          listsStore.set(merged);
         })().catch((err) => {
           console.warn('[ws] Failed to cache list state:', err);
         });

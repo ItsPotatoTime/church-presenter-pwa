@@ -36,6 +36,7 @@ export interface Credentials {
   cloud_host: string | null;
   lan_host: string | null;
   server_name?: string;
+  server_id?: string;
   paired_at?: number;
   server_key?: string;
   can_edit_keys?: boolean;
@@ -50,6 +51,7 @@ export interface ServerEntry {
   cloud_host: string | null;
   lan_host: string | null;
   server_name?: string;
+  server_id?: string;
   paired_at?: number;
   last_used?: number;
   // Legacy v4-v8 cache fields. New writes strip these from the server registry.
@@ -602,6 +604,7 @@ export async function saveCredentials(c: Credentials): Promise<void> {
         cloud_host: c.cloud_host,
         lan_host: c.lan_host,
         server_name: c.server_name ?? existing.server_name,
+        server_id: c.server_id ?? existing.server_id,
         paired_at: c.paired_at ?? existing.paired_at,
         last_used: Date.now(),
         can_edit_keys: c.can_edit_keys ?? existing.can_edit_keys,
@@ -623,6 +626,7 @@ export async function saveCredentials(c: Credentials): Promise<void> {
     cloud_host: c.cloud_host,
     lan_host: c.lan_host,
     server_name: c.server_name,
+    server_id: c.server_id,
     paired_at: c.paired_at,
     last_used: Date.now(),
     can_edit_keys: c.can_edit_keys,
@@ -697,6 +701,57 @@ export async function switchServer(serverKey: string): Promise<Credentials | nul
   return _credCache;
 }
 
+export async function migrateServerKey(
+  oldKey: string | null | undefined,
+  newKey: string,
+  patch: Partial<ServerEntry> = {},
+): Promise<void> {
+  const targetKey = newKey.trim();
+  if (!targetKey) return;
+
+  if (!oldKey || oldKey === targetKey) {
+    const existing = await _getServerByKey(targetKey);
+    if (existing) {
+      const updated = { ...existing, ...patch, server_key: targetKey, server_id: targetKey };
+      await _saveServer(updated);
+      _credCache = _entryToCredentials(updated);
+    }
+    await initializeServerData(targetKey);
+    await setMeta('active_server_key', targetKey);
+    return;
+  }
+
+  const [oldEntry, existingTarget] = await Promise.all([
+    _getServerByKey(oldKey),
+    _getServerByKey(targetKey),
+  ]);
+  const mergedEntry: ServerEntry = {
+    ...(existingTarget ?? {}),
+    ...(oldEntry ?? {}),
+    ...patch,
+    server_key: targetKey,
+    server_id: targetKey,
+    last_used: Date.now(),
+  } as ServerEntry;
+
+  await _saveServer(mergedEntry);
+  await Promise.all([
+    moveScopedRows(STORE_SERVER_SONGS, oldKey, targetKey),
+    moveScopedRows(STORE_SERVER_LISTS, oldKey, targetKey),
+    moveScopedRows(STORE_SERVER_PRIVATE_LISTS, oldKey, targetKey),
+    moveScopedRows(STORE_SERVER_BIBLE_BOOKS, oldKey, targetKey),
+    moveScopedRows(STORE_SERVER_BIBLE_VERSES, oldKey, targetKey),
+    moveKeyedServerRow(STORE_SERVER_QUEUE, oldKey, targetKey),
+    moveKeyedServerRow(STORE_SERVER_SYNC_META, oldKey, targetKey),
+    moveKeyedServerRow(STORE_SERVER_CACHES, oldKey, targetKey),
+    movePendingMutations(oldKey, targetKey),
+  ]);
+  await _removeServer(oldKey);
+  await initializeServerData(targetKey);
+  await setMeta('active_server_key', targetKey);
+  _credCache = _entryToCredentials(mergedEntry);
+}
+
 export async function initializeServerData(serverKey: string): Promise<void> {
   const meta = await getServerSyncMeta(serverKey);
   if (!meta) {
@@ -716,11 +771,84 @@ function _entryToCredentials(e: ServerEntry): Credentials {
     cloud_host: e.cloud_host,
     lan_host: e.lan_host,
     server_name: e.server_name,
+    server_id: e.server_id,
     paired_at: e.paired_at,
     server_key: e.server_key,
     can_edit_keys: e.can_edit_keys,
     can_edit_songs: e.can_edit_songs,
   };
+}
+
+async function moveScopedRows(storeName: string, oldKey: string, newKey: string): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const rowsReq = store.getAll();
+    const keysReq = store.getAllKeys();
+    let rows: any[] | null = null;
+    let keys: IDBValidKey[] | null = null;
+
+    function maybeMove() {
+      if (!rows || !keys) return;
+      rows.forEach((row, index) => {
+        if (row?.server_key === oldKey) {
+          store.put({ ...row, server_key: newKey });
+          store.delete(keys![index]);
+        }
+      });
+    }
+
+    rowsReq.onsuccess = () => {
+      rows = (rowsReq.result ?? []) as any[];
+      maybeMove();
+    };
+    keysReq.onsuccess = () => {
+      keys = (keysReq.result ?? []) as IDBValidKey[];
+      maybeMove();
+    };
+    rowsReq.onerror = () => reject(rowsReq.error);
+    keysReq.onerror = () => reject(keysReq.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function moveKeyedServerRow(storeName: string, oldKey: string, newKey: string): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    const store = tx.objectStore(storeName);
+    const req = store.get(oldKey);
+    req.onsuccess = () => {
+      if (req.result) {
+        store.put({ ...req.result, server_key: newKey });
+        store.delete(oldKey);
+      }
+    };
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function movePendingMutations(oldKey: string, newKey: string): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PENDING, 'readwrite');
+    const store = tx.objectStore(STORE_PENDING);
+    const req = store.getAll();
+    req.onsuccess = () => {
+      for (const mutation of (req.result ?? []) as PendingMutation[]) {
+        if (mutation.id !== undefined && mutation.server_key === oldKey) {
+          store.put({ ...mutation, server_key: newKey });
+        }
+      }
+    };
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 async function _getServerByKey(key: string): Promise<ServerEntry | null> {
@@ -1048,6 +1176,62 @@ export async function putLists(lists: LibraryList[]): Promise<void> {
   await putScopedListRows(STORE_SERVER_LISTS, serverKey, lists);
 }
 
+function normalizedListName(name: string): string {
+  return name.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+}
+
+function stripListSyncStatus(list: LibraryList): LibraryList {
+  return {
+    name: list.name,
+    songs: (list.songs ?? []).map((song) => ({
+      path: song.path,
+      name: song.name,
+      folder: song.folder,
+    })),
+  };
+}
+
+function mergeServerListsWithPending(serverLists: LibraryList[], localLists: LibraryList[]): LibraryList[] {
+  const merged = serverLists.map(stripListSyncStatus);
+  const byName = new Map(merged.map((list) => [normalizedListName(list.name), list]));
+
+  for (const local of localLists) {
+    if (local.sync_status !== 'pending') continue;
+    const key = normalizedListName(local.name);
+    if (!key) continue;
+    const cleanLocal = stripListSyncStatus(local);
+    const existing = byName.get(key);
+    if (!existing) {
+      const pendingCopy: LibraryList = { ...cleanLocal, sync_status: 'pending' };
+      merged.push(pendingCopy);
+      byName.set(key, pendingCopy);
+      continue;
+    }
+
+    const seenPaths = new Set(existing.songs.map((song) => song.path));
+    for (const song of cleanLocal.songs) {
+      if (song.path && !seenPaths.has(song.path)) {
+        existing.songs.push(song);
+        seenPaths.add(song.path);
+      }
+    }
+    existing.sync_status = 'pending';
+  }
+
+  return merged;
+}
+
+export async function mergeServerLists(lists: LibraryList[]): Promise<LibraryList[]> {
+  const local = await loadAllLists();
+  const merged = mergeServerListsWithPending(lists, local);
+  await putLists(merged);
+  return merged;
+}
+
+export async function loadPendingPublicLists(): Promise<LibraryList[]> {
+  return (await loadAllLists()).filter((list) => list.sync_status === 'pending');
+}
+
 export async function loadAllLists(): Promise<LibraryList[]> {
   const serverKey = await requireActiveServerKey();
   if (!serverKey) return [];
@@ -1187,6 +1371,42 @@ export async function clearPendingMutations(): Promise<void> {
   const serverKey = await requireActiveServerKey();
   if (!serverKey) return;
   await clearPendingMutationsForServer(serverKey);
+}
+
+export async function deletePendingMutation(id: number | undefined): Promise<void> {
+  if (id === undefined) return;
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PENDING, 'readwrite');
+    tx.objectStore(STORE_PENDING).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function clearPendingListMutations(): Promise<void> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PENDING, 'readwrite');
+    const store = tx.objectStore(STORE_PENDING);
+    const req = store.getAll();
+    req.onsuccess = () => {
+      for (const mutation of (req.result ?? []) as PendingMutation[]) {
+        if (
+          mutation.id !== undefined
+          && mutation.server_key === serverKey
+          && mutation.type.startsWith('list.')
+        ) {
+          store.delete(mutation.id);
+        }
+      }
+    };
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 async function clearPendingMutationsForServer(serverKey: string): Promise<void> {

@@ -14,6 +14,7 @@
   let pairToken = $state<string | null>(null);
   let cloudHost = $state<string | null>(null);
   let lanHost = $state<string | null>(null);
+  let serverId = $state<string | null>(null);
   let error = $state<string | null>(null);
   let phase: 'idle' | 'pairing' | 'done' = $state('idle');
 
@@ -38,6 +39,7 @@
     pairToken = qs.get('pt');
     cloudHost = qs.get('c');
     lanHost = qs.get('l');
+    serverId = qs.get('sid');
 
     const isIOS =
       /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window);
@@ -77,6 +79,7 @@
     const pt = url.searchParams.get('pt');
     const c = url.searchParams.get('c');
     const l = url.searchParams.get('l');
+    const sid = url.searchParams.get('sid');
     if (!pt || (!c && !l)) {
       scanErr = 'Link is missing pt and c/l parameters.';
       return false;
@@ -84,6 +87,7 @@
     pairToken = pt;
     cloudHost = c;
     lanHost = l;
+    serverId = sid;
     return true;
   }
 
@@ -169,10 +173,11 @@
     phase = 'pairing';
 
     const device_id = await getOrCreateDeviceId();
-    const serverKey = crypto.randomUUID();
+    const serverKey = serverId || crypto.randomUUID();
     const finalName = deviceName.trim() || 'Phone';
     const provisional: ServerEntry = {
       server_key: serverKey,
+      server_id: serverId ?? undefined,
       device_id,
       device_token: '',
       device_name: finalName,
@@ -198,7 +203,7 @@
     });
 
     await remote.pair(
-      { server_key: serverKey, pair_token: pairToken, cloud_host: cloudHost, lan_host: lanHost },
+      { server_key: serverKey, server_id: serverId ?? undefined, pair_token: pairToken, cloud_host: cloudHost, lan_host: lanHost },
       finalName
     );
 
@@ -293,6 +298,7 @@
     <div class="endpoints muted">
       {#if cloudHost}<div>Cloud: <code>{cloudHost}</code></div>{/if}
       {#if lanHost}<div>LAN: <code>{lanHost}</code></div>{/if}
+      {#if serverId}<div>Server ID: <code>{serverId.slice(0, 8)}</code></div>{/if}
     </div>
 
     <button class="accent fw" onclick={startPair} disabled={phase === 'pairing'}>
