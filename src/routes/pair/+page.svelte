@@ -173,7 +173,7 @@
     phase = 'pairing';
 
     const device_id = await getOrCreateDeviceId();
-    const serverKey = serverId || crypto.randomUUID();
+    const serverKey = crypto.randomUUID();
     const finalName = deviceName.trim() || 'Phone';
     const provisional: ServerEntry = {
       server_key: serverKey,

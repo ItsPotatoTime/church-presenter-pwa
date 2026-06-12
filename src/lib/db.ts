@@ -690,6 +690,12 @@ export async function removeServer(serverKey: string): Promise<void> {
   }
 }
 
+export async function removeUnpairedServer(serverKey: string): Promise<void> {
+  const entry = await _getServerByKey(serverKey);
+  if (!entry || entry.device_token) return;
+  await removeServer(serverKey);
+}
+
 export async function switchServer(serverKey: string): Promise<Credentials | null> {
   const entry = await _getServerByKey(serverKey);
   if (!entry) return null;

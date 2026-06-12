@@ -24,8 +24,7 @@ import {
   getOrCreateDeviceId,
   loadCredentials,
   mergeServerLists,
-  migrateServerKey,
-  removeServer,
+  removeUnpairedServer,
   saveCredentials,
   type Credentials,
 } from './db';
@@ -97,6 +96,10 @@ class RemoteClient {
     if (this.ws && this.ws.readyState !== WebSocket.CLOSED) {
       return;
     }
+    await this.reconnectActive();
+  }
+
+  async reconnectActive(): Promise<void> {
     this.tearDown();
     const creds = await loadCredentials();
     if (!creds || !creds.device_token) {
@@ -310,7 +313,7 @@ class RemoteClient {
         const authoritativeServerId = (p.server_id ?? creds.server_id ?? '').trim() || undefined;
         const finalCreds: Credentials = {
           ...creds,
-          server_key: authoritativeServerId ?? creds.server_key,
+          server_key: creds.server_key,
           server_id: authoritativeServerId,
           device_token: pairToken ? p.device_token : creds.device_token,
           server_name: p.server_name,
@@ -330,18 +333,6 @@ class RemoteClient {
         // triggered by a service-worker update between auth.ok and navigation.
         void (async () => {
           try {
-            if (
-              authoritativeServerId
-              && creds.server_key
-              && creds.server_key !== authoritativeServerId
-            ) {
-              await migrateServerKey(creds.server_key, authoritativeServerId, {
-                ...finalCreds,
-                server_key: authoritativeServerId,
-                server_id: authoritativeServerId,
-                last_used: Date.now(),
-              });
-            }
             await saveCredentials(finalCreds);
           } catch { /* ignore — non-fatal; reconnect will retry */ }
           try {
@@ -393,7 +384,7 @@ class RemoteClient {
           this.forceClose = true;
           try { ws.close(); } catch { /* ignore */ }
           if (pairToken && creds.server_key) {
-            void removeServer(creds.server_key);
+            void removeUnpairedServer(creds.server_key);
           }
           connError.set(`Auth failed: ${p.reason}`);
         }
@@ -505,9 +496,7 @@ class RemoteClient {
       if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
       this.ws = null;
       if (pairToken && !authenticated) {
-        if (creds.server_key) {
-          void removeServer(creds.server_key);
-        }
+        if (creds.server_key) void removeUnpairedServer(creds.server_key);
         if (!this.forceClose) {
           connStatus.set('error');
           connError.set('Pairing connection closed before it finished');

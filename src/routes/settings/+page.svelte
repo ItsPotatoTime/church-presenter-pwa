@@ -232,8 +232,7 @@
     servers = await loadAllServers();
     await hydrateFromCache();
     lastSyncTs = await getLastSyncTs();
-    remote.disconnect();
-    void remote.connect();
+    void remote.reconnectActive();
   }
 
   const lastSyncHuman = $derived.by(() => {

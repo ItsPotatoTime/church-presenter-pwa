@@ -149,8 +149,7 @@
       exclusiveDeviceId.set(null);
       exclusiveDeviceName.set(null);
       await hydrateFromCache();
-      remote.disconnect();
-      void remote.connect();
+      void remote.reconnectActive();
       goto(`${base}/live/`);
     }
   }
