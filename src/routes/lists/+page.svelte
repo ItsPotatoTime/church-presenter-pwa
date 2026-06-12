@@ -142,7 +142,7 @@
         alert('Connect to the desktop to perform this action.');
         return;
       }
-      if (!typeIsListMutation(cmd.type)) {
+      if (typeIsListMutation(cmd.type)) {
         void addPendingMutation(cmd);
       }
       return;

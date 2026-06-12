@@ -1197,6 +1197,10 @@ function stripListSyncStatus(list: LibraryList): LibraryList {
   };
 }
 
+function stripAcceptedListSyncStatus(list: LibraryList): LibraryList {
+  return list.sync_status === 'pending' ? stripListSyncStatus(list) : list;
+}
+
 function mergeServerListsWithPending(serverLists: LibraryList[], localLists: LibraryList[]): LibraryList[] {
   const merged = serverLists.map(stripListSyncStatus);
   const byName = new Map(merged.map((list) => [normalizedListName(list.name), list]));
@@ -1229,7 +1233,11 @@ function mergeServerListsWithPending(serverLists: LibraryList[], localLists: Lib
 
 export async function mergeServerLists(lists: LibraryList[]): Promise<LibraryList[]> {
   const local = await loadAllLists();
-  const merged = mergeServerListsWithPending(lists, local);
+  const pending = await getPendingMutations();
+  const hasPendingListMutations = pending.some((mutation) => mutation.type.startsWith('list.'));
+  const merged = hasPendingListMutations
+    ? mergeServerListsWithPending(lists, local)
+    : lists.map(stripListSyncStatus);
   await putLists(merged);
   return merged;
 }
@@ -1284,7 +1292,9 @@ async function putScopedListRows(
       for (const key of req.result ?? []) {
         if (scopedKeyMatchesServer(key, serverKey)) store.delete(key);
       }
-      for (const list of lists) store.put({ ...toIndexedDbValue(list), server_key: serverKey });
+      for (const list of lists) {
+        store.put({ ...toIndexedDbValue(stripAcceptedListSyncStatus(list)), server_key: serverKey });
+      }
     };
     req.onerror = () => reject(req.error);
     tx.oncomplete = () => resolve();

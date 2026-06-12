@@ -100,23 +100,45 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// 2. Activate event: Clean up old application caches and claim all clients.
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) => {
-        return Promise.all(
-          keys.map((key) => {
-            if (key !== CACHE_NAME && key !== FONT_CACHE_NAME) {
-              console.log('[ServiceWorker] Deleting old cache:', key);
-              return caches.delete(key);
-            }
-          })
-        );
-      })
-      .then(() => self.clients.claim())
+async function reloadWindowClients(): Promise<void> {
+  const clients = await self.clients.matchAll({
+    includeUncontrolled: true,
+    type: 'window'
+  });
+
+  await Promise.all(
+    clients.map((client) => {
+      if ('navigate' in client) {
+        return (client as WindowClient).navigate(client.url);
+      }
+      return undefined;
+    })
   );
+}
+
+async function activateAppCache(): Promise<void> {
+  const keys = await caches.keys();
+  let replacedAppCache = false;
+
+  await Promise.all(
+    keys.map((key) => {
+      if (key !== CACHE_NAME && key !== FONT_CACHE_NAME) {
+        if (key.startsWith('cache-')) replacedAppCache = true;
+        console.log('[ServiceWorker] Deleting old cache:', key);
+        return caches.delete(key);
+      }
+      return undefined;
+    })
+  );
+
+  await self.clients.claim();
+  if (replacedAppCache) await reloadWindowClients();
+}
+
+// 2. Activate event: Clean up old application caches, claim clients, and open
+// the newly cached app shell immediately after an update.
+self.addEventListener('activate', (event) => {
+  event.waitUntil(activateAppCache());
 });
 
 // 3. Fetch event: Cache-First for static assets/fonts, Fallback SPA routing for navigations
