@@ -7,7 +7,7 @@
   import { sortBibleVerses } from '$lib/bible';
   import { loadCredentialsResilient } from '$lib/db';
   import { applyQueueCommandLocally, queueCommandForOfflineReplay } from '$lib/offlineQueue';
-  import type { BibleBook, BibleVerse, LibrarySong, SongSearchPayload } from '$lib/protocol';
+  import type { BibleBook, BibleSearchResult, BibleVerse, LibrarySong, SongSearchPayload } from '$lib/protocol';
   import { filterSongs, normalize, renderMarkdown } from '$lib/search';
   import { isReducedDataConnection, syncFull, syncNow } from '$lib/sync';
   import {
@@ -52,6 +52,16 @@ let query = $state('');
     failed: boolean;
   }>({ query: '', searchSlides: false, items: [], pending: false, failed: false });
   let searchRequestSeq = 0;
+  let bibleServerSearch = $state<{
+    query: string;
+    mode: BibleSearchMode;
+    items: BibleVerse[];
+    pending: boolean;
+    failed: boolean;
+  }>({ query: '', mode: 'reference', items: [], pending: false, failed: false });
+  let bibleSearchRequestSeq = 0;
+  let selectedBibleVerseKeys = $state<string[]>([]);
+  let selectedBibleScope = $state<{ book_num: number; chapter: number } | null>(null);
 
   const libraryMode = $derived(($page.url.searchParams.get('mode') as LibraryMode) || 'songs');
   let rawBibleQuery = $state(get(libraryBibleRawQuery));
@@ -127,6 +137,40 @@ let query = $state('');
     return () => {
       if (bibleDebounceTimer !== null) clearTimeout(bibleDebounceTimer);
     };
+  });
+
+  $effect(() => {
+    const q = normalize(bibleQuery);
+    const online = $connStatus === 'open';
+    if (!q || !online) {
+      bibleServerSearch = { query: bibleQuery, mode: bibleSearchMode, items: [], pending: false, failed: false };
+      return;
+    }
+
+    const seq = ++bibleSearchRequestSeq;
+    bibleServerSearch = { query: bibleQuery, mode: bibleSearchMode, items: [], pending: true, failed: false };
+    remote
+      .sendRequest('bible.search', { query: bibleQuery, mode: bibleSearchMode, limit: 120 }, 10000)
+      .then((payload: { ok?: boolean; results?: BibleSearchResult[] }) => {
+        if (seq !== bibleSearchRequestSeq) return;
+        if (!payload?.ok || !Array.isArray(payload.results)) {
+          bibleServerSearch = { query: bibleQuery, mode: bibleSearchMode, items: [], pending: false, failed: true };
+          return;
+        }
+        const items = payload.results.map((result) => ({
+          id: `${result.book_num}:${result.chapter}:${result.verse}`,
+          book_num: result.book_num,
+          chapter: result.chapter,
+          verse: result.verse,
+          text: result.text,
+          normalized_text: normalize(result.text)
+        }));
+        bibleServerSearch = { query: bibleQuery, mode: bibleSearchMode, items, pending: false, failed: false };
+      })
+      .catch(() => {
+        if (seq !== bibleSearchRequestSeq) return;
+        bibleServerSearch = { query: bibleQuery, mode: bibleSearchMode, items: [], pending: false, failed: true };
+      });
   });
 
   // Sync state changes to persistent stores
@@ -256,6 +300,13 @@ let query = $state('');
     if (bibleSearchMode !== 'text') return [];
     const q = normalize(bibleQuery);
     if (!q) return [];
+    if (
+      !bibleServerSearch.failed &&
+      bibleServerSearch.query === bibleQuery &&
+      bibleServerSearch.mode === bibleSearchMode
+    ) {
+      return bibleServerSearch.items;
+    }
     const results: BibleVerse[] = [];
     for (const verse of $bibleVersesStore) {
       if ((verse.normalized_text ?? normalize(verse.text)).includes(q)) results.push(verse);
@@ -334,6 +385,50 @@ let query = $state('');
       await queueCommandForOfflineReplay(cmd);
     }
   }
+
+  function bibleVerseKey(verse: BibleVerse): string {
+    return `${verse.book_num}:${verse.chapter}:${verse.verse}`;
+  }
+
+  function isBibleVerseSelected(verse: BibleVerse): boolean {
+    return selectedBibleVerseKeys.includes(bibleVerseKey(verse));
+  }
+
+  function toggleBibleVerseSelection(verse: BibleVerse): void {
+    const key = bibleVerseKey(verse);
+    if (!selectedBibleScope || selectedBibleScope.book_num !== verse.book_num || selectedBibleScope.chapter !== verse.chapter) {
+      selectedBibleScope = { book_num: verse.book_num, chapter: verse.chapter };
+      selectedBibleVerseKeys = [key];
+      return;
+    }
+    selectedBibleVerseKeys = selectedBibleVerseKeys.includes(key)
+      ? selectedBibleVerseKeys.filter((item) => item !== key)
+      : [...selectedBibleVerseKeys, key];
+    if (!selectedBibleVerseKeys.length) selectedBibleScope = null;
+  }
+
+  async function addSelectedBibleVersesToQueue() {
+    if ($isViewOnly || !selectedBibleScope || !selectedBibleVerseKeys.length) return;
+    const book = bibleBookMap.get(selectedBibleScope.book_num)?.name;
+    if (!book) return;
+    const verses = selectedBibleVerseKeys
+      .map((key) => Number(key.split(':')[2]))
+      .filter((verse) => Number.isFinite(verse) && verse > 0)
+      .sort((a, b) => a - b);
+    if (!verses.length) return;
+    const cmd = {
+      type: 'queue.add_bible_verses',
+      payload: { book, chapter: selectedBibleScope.chapter, verses }
+    } as const;
+    if ($connStatus === 'open') {
+      remote.send(cmd);
+    } else if (await applyQueueCommandLocally(cmd)) {
+      await queueCommandForOfflineReplay(cmd);
+    }
+    selectedBibleVerseKeys = [];
+    selectedBibleScope = null;
+  }
+
 
   function openPreview(song: LibrarySong) {
     previewSong = song;
@@ -696,6 +791,18 @@ let query = $state('');
       </div>
     {/if}
 
+
+    {#if selectedBibleVerseKeys.length > 0}
+      <button
+        class="selected-add"
+        type="button"
+        onclick={() => void addSelectedBibleVersesToQueue()}
+        disabled={$isViewOnly}
+      >
+        Add selected ({selectedBibleVerseKeys.length})
+      </button>
+    {/if}
+
     {#if !hasBibleData}
       <section class="panel muted bible-empty">
         Bible data has not reached the phone cache yet. Keep the desktop connected, then tap refresh.
@@ -712,11 +819,18 @@ let query = $state('');
       {:else}
         <div class="bible-results">
           {#each bibleTextResults as verse (verse.id)}
-            <div class="verse-row">
-              <article class="verse-card">
+            <div class="verse-row" class:selected={isBibleVerseSelected(verse)}>
+              <button
+                class="verse-select"
+                class:selected={isBibleVerseSelected(verse)}
+                type="button"
+                aria-label={`Select ${bibleVerseRef(verse)}`}
+                onclick={() => toggleBibleVerseSelection(verse)}
+              >{isBibleVerseSelected(verse) ? '✓' : ''}</button>
+              <button class="verse-card verse-card-button" type="button" onclick={() => toggleBibleVerseSelection(verse)}>
                 <div class="verse-ref">{bibleVerseRef(verse)}</div>
                 <div class="verse-text">{verse.text}</div>
-              </article>
+              </button>
               <button
                 class="add verse-add"
                 aria-label={`Add ${bibleVerseRef(verse)} to queue`}
@@ -731,11 +845,18 @@ let query = $state('');
       {#if bibleReferenceVerses.length}
         <div class="bible-results">
           {#each bibleReferenceVerses as verse (verse.id)}
-            <div class="verse-row">
-              <article class="verse-card">
+            <div class="verse-row" class:selected={isBibleVerseSelected(verse)}>
+              <button
+                class="verse-select"
+                class:selected={isBibleVerseSelected(verse)}
+                type="button"
+                aria-label={`Select ${bibleVerseRef(verse)}`}
+                onclick={() => toggleBibleVerseSelection(verse)}
+              >{isBibleVerseSelected(verse) ? '✓' : ''}</button>
+              <button class="verse-card verse-card-button" type="button" onclick={() => toggleBibleVerseSelection(verse)}>
                 <div class="verse-ref">{bibleVerseRef(verse)}</div>
                 <div class="verse-text">{verse.text}</div>
-              </article>
+              </button>
               <button
                 class="add verse-add"
                 aria-label={`Add ${bibleVerseRef(verse)} to queue`}
@@ -770,11 +891,18 @@ let query = $state('');
     {:else if bibleCurrentChapter !== null}
       <div class="bible-results">
         {#each currentBibleVerses as verse (verse.id)}
-          <div class="verse-row">
-            <article class="verse-card">
+          <div class="verse-row" class:selected={isBibleVerseSelected(verse)}>
+            <button
+              class="verse-select"
+              class:selected={isBibleVerseSelected(verse)}
+              type="button"
+              aria-label={`Select ${bibleVerseRef(verse)}`}
+              onclick={() => toggleBibleVerseSelection(verse)}
+            >{isBibleVerseSelected(verse) ? '✓' : ''}</button>
+            <button class="verse-card verse-card-button" type="button" onclick={() => toggleBibleVerseSelection(verse)}>
               <div class="verse-ref">{bibleVerseRef(verse)}</div>
               <div class="verse-text">{verse.text}</div>
-            </article>
+            </button>
             <button
               class="add verse-add"
               aria-label={`Add ${bibleVerseRef(verse)} to queue`}
@@ -1269,6 +1397,12 @@ let query = $state('');
     white-space: pre-wrap;
   }
   .bible-empty { margin: 0; }
+
+  .verse-row.selected .verse-card { border-color: rgba(62, 166, 255, 0.65); background: rgba(62, 166, 255, 0.08); }
+  .verse-card-button { width: 100%; text-align: left; color: inherit; font: inherit; }
+  .verse-select { width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--border); background: var(--panel); color: var(--accent); font-weight: 800; flex: 0 0 36px; }
+  .verse-select.selected { border-color: var(--accent); background: rgba(62, 166, 255, 0.14); }
+  .selected-add { width: 100%; margin: 0 0 10px; padding: 12px; border-radius: 6px; border: 1px solid var(--accent); background: rgba(62, 166, 255, 0.14); color: var(--text); font-weight: 700; }
  
   .modal-back {
     position: fixed;

@@ -68,6 +68,31 @@ export async function applyQueueCommandLocally(cmd: ClientCommand): Promise<bool
     return true;
   }
 
+
+  if (cmd.type === 'queue.add_bible_verses') {
+    const verses = [...new Set(cmd.payload.verses)].sort((a, b) => a - b);
+    if (!verses.length) return true;
+    const first = verses[0];
+    const last = verses[verses.length - 1];
+    const contiguous = verses.every((verse, index) => index === 0 || verse === verses[index - 1] + 1);
+    const name =
+      verses.length === 1
+        ? `${cmd.payload.book} ${cmd.payload.chapter}:${first}`
+        : contiguous
+          ? `${cmd.payload.book} ${cmd.payload.chapter}:${first}-${last}`
+          : `${cmd.payload.book} ${cmd.payload.chapter} (${verses.length} verses)`;
+    const items = [...current.items];
+    items.splice(clampInsertPosition(cmd.payload.position, items.length), 0, {
+      path: `bible://${cmd.payload.book}/${cmd.payload.chapter}/${verses.join(',')}`,
+      name,
+      folder: 'Bible',
+      is_bible: true,
+      bible_refs: verses.map((verse) => ({ book: cmd.payload.book, chapter: cmd.payload.chapter, verse }))
+    });
+    await persistQueue({ ...current, items });
+    return true;
+  }
+
   if (cmd.type === 'queue.remove') {
     const items = current.items.filter((_, index) => index !== cmd.payload.position);
     await persistQueue({

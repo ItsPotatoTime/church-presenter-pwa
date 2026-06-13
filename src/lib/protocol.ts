@@ -95,6 +95,15 @@ export interface BibleVerse {
   normalized_text?: string;
 }
 
+export interface BibleSearchResult {
+  book_num: number;
+  book_name: string;
+  chapter: number;
+  verse: number;
+  text: string;
+  score: number;
+}
+
 export interface BibleSyncData {
   version: string | null;
   books: BibleBook[];
@@ -181,6 +190,7 @@ export type ClientCommand =
   | { type: 'live.follow'; payload: { enabled: boolean } }
   | { type: 'queue.add'; payload: { song_path: string; position?: number } }
   | { type: 'queue.add_bible_verse'; payload: { book: string; chapter: number; verse: number; position?: number } }
+  | { type: 'queue.add_bible_verses'; payload: { book: string; chapter: number; verses: number[]; position?: number } }
   | { type: 'queue.remove'; payload: { position: number } }
   | { type: 'queue.reorder'; payload: { from: number; to: number } }
   | { type: 'queue.clear' }
@@ -194,6 +204,7 @@ export type ClientCommand =
   | { type: 'list.merge_pending'; id?: string; payload: { lists: LibraryList[] } }
   | { type: 'sync.request'; id?: string; payload: { since_ts: number; bible_version?: string | null } }
   | { type: 'song.search'; id?: string; payload: { query: string; search_slides: boolean } }
+  | { type: 'bible.search'; id?: string; payload: { query: string; mode: 'reference' | 'text'; limit?: number } }
   | { type: 'device.rename'; payload: { new_name: string } }
   | { type: 'live.toggle_present' }
   | { type: 'live.font_size'; payload: { delta: number } }
