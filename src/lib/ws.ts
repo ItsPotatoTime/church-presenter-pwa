@@ -328,13 +328,26 @@ class RemoteClient {
         canEditSongs.set(!!p.can_edit_songs);
         this.backoffIdx = 0;
 
-        // Persist credentials first, THEN flush mutations, THEN mark open.
-        // Keeping this sequential ensures credentials survive a page reload
-        // triggered by a service-worker update between auth.ok and navigation.
+        // Persist credentials first so they survive a reload triggered by a
+        // service-worker update, then mark the authenticated socket usable.
+        // Offline replay is best-effort and must not keep the UI connecting.
         void (async () => {
           try {
             await saveCredentials(finalCreds);
-          } catch { /* ignore — non-fatal; reconnect will retry */ }
+
+            if (!isCurrent()) return;
+            connStatus.set('open');
+            connError.set(null);
+            this.startHeartbeat(myGen, ws);
+          } catch (err) {
+            console.warn('[ws] Failed to persist credentials:', err);
+            if (isCurrent()) {
+              connStatus.set('error');
+              connError.set('Failed to save pairing on this device');
+            }
+            return;
+          }
+
           try {
             const { flushPendingLists } = await import('./sync');
             await flushPendingLists();
@@ -349,10 +362,6 @@ class RemoteClient {
               }
             }
           } catch { /* ignore — stale mutations are harmless */ }
-          if (!isCurrent()) return;
-          connStatus.set('open');
-          connError.set(null);
-          this.startHeartbeat(myGen, ws);
         })();
         return;
       }
