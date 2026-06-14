@@ -1,12 +1,4 @@
-// Search normalization — mirrors Python `search.normalize()` so queries
-// behave identically on desktop and phone.
-//
-// Rules:
-//   • lowercase
-//   • strip combining diacritics (NFD, drop Mn category)
-//   • replace punctuation (anything not letter/digit/space) with a space
-//   • collapse runs of whitespace
-// Result: "Cântați, cântați" → "cantati cantati", matching user query "cantati cantati".
+// Search normalization mirrors desktop Python smart_search.normalize().
 
 const PUNCT_RE = /[^\p{L}\p{N}\s]+/gu;
 const PUNCT_CHAR_RE = /[^\p{L}\p{N}\s]/u;
@@ -25,6 +17,10 @@ export function normalize(s: string): string {
     .trim();
 }
 
+function compact(s: string): string {
+  return s.replaceAll(' ', '');
+}
+
 /** Convert **bold** markers to <b>bold</b>. Input is HTML-escaped first so it is XSS-safe. */
 export function renderMarkdown(text: string): string {
   if (!text) return '';
@@ -35,6 +31,8 @@ export function renderMarkdown(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(BOLD_RE, '<b>$1</b>');
 }
+
+export default renderMarkdown;
 
 export type ScoredResult<T> = {
   item: T;
@@ -61,11 +59,74 @@ function contiguousTokensWordPrefix(tokens: string[], text: string): boolean {
   const textWords = words(text);
   if (tokens.length === 0 || textWords.length < tokens.length) return false;
   for (let start = 0; start <= textWords.length - tokens.length; start++) {
-    if (tokens.every((token, offset) => textWords[start + offset].startsWith(token))) {
-      return true;
-    }
+    if (tokens.every((token, offset) => textWords[start + offset].startsWith(token))) return true;
   }
   return false;
+}
+
+function levenshtein(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a) return b.length;
+  if (!b) return a.length;
+
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  let curr = new Array<number>(b.length + 1);
+  for (let i = 1; i <= a.length; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      curr[j] = Math.min(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[b.length];
+}
+
+function ratio(a: string, b: string): number {
+  if (!a || !b) return 0;
+  const maxLen = Math.max(a.length, b.length);
+  return maxLen === 0 ? 100 : ((maxLen - levenshtein(a, b)) / maxLen) * 100;
+}
+
+function partialRatio(a: string, b: string): number {
+  if (!a || !b) return 0;
+  if (a.length > b.length) [a, b] = [b, a];
+  if (b.includes(a)) return 100;
+  const window = a.length;
+  let best = 0;
+  const step = b.length > 240 ? 2 : 1;
+  for (let start = 0; start <= Math.max(0, b.length - window); start += step) {
+    best = Math.max(best, ratio(a, b.slice(start, start + window)));
+    if (best >= 100) break;
+  }
+  return best;
+}
+
+function tokenSetRatio(a: string, b: string): number {
+  const aTokens = new Set(words(a));
+  const bTokens = new Set(words(b));
+  if (aTokens.size === 0 || bTokens.size === 0) return 0;
+  let overlap = 0;
+  for (const token of aTokens) {
+    if (bTokens.has(token)) overlap++;
+  }
+  return (overlap / new Set([...aTokens, ...bTokens]).size) * 100;
+}
+
+function wrRatio(a: string, b: string): number {
+  return Math.max(ratio(a, b), partialRatio(a, b), tokenSetRatio(a, b));
+}
+
+function bestWordRatio(query: string, text: string): number {
+  const q = compact(query);
+  if (q.length < 4) return 0;
+  let best = 0;
+  for (const word of words(text)) {
+    if (Math.abs(word.length - q.length) <= Math.max(2, Math.floor(q.length / 4))) {
+      best = Math.max(best, ratio(q, word));
+    }
+  }
+  return best;
 }
 
 function textScore(
@@ -73,23 +134,52 @@ function textScore(
   q: string,
   tokens: string[],
   weights: [number, number, number, number, number, number],
+  fuzzy = true,
+  orderedTokens = false,
 ): number {
   const [exact, starts, wordPrefix, contains, allPrefixes, allTokens] = weights;
-  if (!text) return 0;
+  if (!text || !q) return 0;
   if (text === q) return exact;
   if (text.startsWith(q)) return starts;
   if (words(text).some((word) => word.startsWith(q))) return wordPrefix;
   if (text.includes(q)) return contains;
-  if (tokens.length > 1 && allTokensWordPrefix(tokens, text)) return allPrefixes;
-  if (tokens.length > 1 && allTokensPresent(tokens, text)) return allTokens;
-  return 0;
+
+  const qCompact = compact(q);
+  const textCompact = compact(text);
+  if (qCompact.length >= 4 && textCompact.includes(qCompact)) return Math.max(1, contains - 8);
+
+  if (tokens.length > 1) {
+    if (contiguousTokensWordPrefix(tokens, text)) return allPrefixes;
+    if (!orderedTokens && allTokensWordPrefix(tokens, text)) return Math.max(1, allPrefixes - 8);
+    if (!orderedTokens && allTokensPresent(tokens, text)) return allTokens;
+  }
+
+  if (!fuzzy || qCompact.length < 4) return 0;
+
+  const fuzzyCeiling = Math.max(1, allTokens - 1);
+  const fuzzyFloor = Math.max(1, allTokens - 90);
+  let best: number;
+  let threshold: number;
+  if (tokens.length <= 1) {
+    best = Math.max(bestWordRatio(q, text), partialRatio(qCompact, textCompact));
+    threshold = qCompact.length <= 6 ? 82 : 78;
+  } else if (orderedTokens) {
+    best = Math.max(partialRatio(q, text), partialRatio(qCompact, textCompact));
+    threshold = tokens.length >= 4 ? 72 : 78;
+  } else {
+    best = Math.max(wrRatio(q, text), tokenSetRatio(q, text));
+    threshold = tokens.length >= 4 ? 74 : 78;
+  }
+  if (best < threshold) return 0;
+  return Math.min(
+    fuzzyCeiling,
+    Math.max(fuzzyFloor, fuzzyFloor + Math.floor(((best - threshold) * (fuzzyCeiling - fuzzyFloor)) / Math.max(1, 100 - threshold))),
+  );
 }
 
 function slideTextScore(text: string, q: string, tokens: string[]): number {
   if (tokens.length <= 1) return textScore(text, q, tokens, [300, 290, 280, 270, 260, 250]);
-  if (text.includes(q)) return 270;
-  if (contiguousTokensWordPrefix(tokens, text)) return 260;
-  return 0;
+  return textScore(text, q, tokens, [300, 285, 275, 270, 260, 250], true, true);
 }
 
 function normalizeWithMap(raw: string): { text: string; offsets: number[] } {
@@ -149,7 +239,7 @@ function snippetForMatch(raw: string, q: string, tokens: string[]): string {
   const rawEnd = (mapped.offsets[rawEndIdx] ?? rawStart) + 1;
   const start = Math.max(0, rawStart - 20);
   const end = Math.min(raw.length, rawEnd + 40);
-  return (start > 0 ? '…' : '') + raw.slice(start, end).trim() + (end < raw.length ? '…' : '');
+  return (start > 0 ? '...' : '') + raw.slice(start, end).trim() + (end < raw.length ? '...' : '');
 }
 
 export function matchScore<
@@ -163,7 +253,7 @@ export function matchScore<
     _norm_name?: string;
     _norm_folder?: string;
     _norm_blob?: string;
-  }
+  },
 >(
   q: string,
   item: T,
@@ -192,15 +282,12 @@ export function matchScore<
 
   if (searchSlides && item.slide_texts) {
     const normalizedBlob = item.normalized_blob ?? item._norm_blob;
-    // Fast rejection check using pre-normalized blob
-    if (tokens.length <= 1 && normalizedBlob && !normalizedBlob.includes(q)) {
+    if (tokens.length <= 1 && compact(q).length < 4 && normalizedBlob && !normalizedBlob.includes(q)) {
       return { score: 0, snippet: '' };
     }
 
     if (!cached.nSlides) {
-      cached.nSlides = normalizedBlob
-        ? normalizedBlob.split(' | ')
-        : item.slide_texts.map(normalize);
+      cached.nSlides = normalizedBlob ? normalizedBlob.split(' | ') : item.slide_texts.map(normalize);
     }
     for (let si = 0; si < cached.nSlides.length; si++) {
       const ns = cached.nSlides[si];
@@ -229,9 +316,7 @@ export function filterSongs<T extends { name: string; folder?: string; slide_tex
 
   for (const item of items) {
     const { score, snippet } = matchScore(q, item, searchSlides, cache);
-    if (score > 0) {
-      results.push({ item, score, snippet });
-    }
+    if (score > 0) results.push({ item, score, snippet });
   }
 
   results.sort((a, b) => b.score - a.score);
