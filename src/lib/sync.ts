@@ -13,6 +13,7 @@ import {
   getBibleVersion,
   getCachedQueueState,
   getLastSyncTs,
+  getPendingMutations,
   loadPendingPublicLists,
   loadAllBibleBooks,
   loadAllBibleVerses,
@@ -125,10 +126,19 @@ function stripListSyncStatus(list: { name: string; songs: { path: string; name: 
 
 export async function flushPendingLists(): Promise<void> {
   const pendingLists = await loadPendingPublicLists();
-  if (!pendingLists.length) return;
+  const pendingMutations = (await getPendingMutations()).filter((mutation) => mutation.type.startsWith('list.'));
+  if (!pendingLists.length && !pendingMutations.length) return;
 
   const payloadLists = pendingLists.map(stripListSyncStatus);
-  const resp = await remote.sendRequest('list.merge_pending', { lists: payloadLists }, 25000);
+  const payloadMutations = pendingMutations.map((mutation) => ({
+    type: mutation.type,
+    payload: mutation.payload,
+  }));
+  const resp = await remote.sendRequest(
+    'list.merge_pending',
+    { lists: payloadLists, mutations: payloadMutations },
+    25000,
+  );
   if (!resp?.ok || !Array.isArray(resp.lists)) {
     throw new Error(resp?.error ?? 'pending list merge failed');
   }

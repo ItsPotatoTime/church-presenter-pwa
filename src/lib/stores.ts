@@ -100,6 +100,7 @@ export const listsActiveTab: Writable<'public' | 'private'> = writable('public')
 export const listsSelectedName: Writable<string | null> = writable(null);
 export const listsShowPicker: Writable<boolean> = writable(false);
 export const listsPickerRawQuery: Writable<string> = writable('');
+export const listsPickerSearchSlides: Writable<boolean> = persistentBoolean('lists_picker_search_slides', false);
 export const listsScrollY: Writable<number> = writable(0);
 
 const MANAGER_ACCESS_EXPIRES_AT_KEY = 'manager_access_expires_at';

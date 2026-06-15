@@ -201,7 +201,14 @@ export type ClientCommand =
   | { type: 'list.remove_song'; payload: { list_name: string; position: number } }
   | { type: 'list.reorder'; payload: { list_name: string; from: number; to: number } }
   | { type: 'list.load_to_queue'; payload: { list_name: string } }
-  | { type: 'list.merge_pending'; id?: string; payload: { lists: LibraryList[] } }
+  | {
+      type: 'list.merge_pending';
+      id?: string;
+      payload: {
+        lists: LibraryList[];
+        mutations?: { type: string; payload?: unknown }[];
+      };
+    }
   | { type: 'sync.request'; id?: string; payload: { since_ts: number; bible_version?: string | null } }
   | { type: 'song.search'; id?: string; payload: { query: string; search_slides: boolean } }
   | { type: 'bible.search'; id?: string; payload: { query: string; mode: 'reference' | 'text'; limit?: number } }

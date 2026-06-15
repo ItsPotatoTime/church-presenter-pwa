@@ -8,7 +8,7 @@
   import { get } from 'svelte/store';
   import {
     connStatus, isViewOnly, listsStore, privateListsStore, songsStore, canEditKeys, activeModals,
-    listsActiveTab, listsSelectedName, listsShowPicker, listsPickerRawQuery, listsScrollY
+    listsActiveTab, listsSelectedName, listsShowPicker, listsPickerRawQuery, listsPickerSearchSlides, listsScrollY
   } from '$lib/stores';
   import type { LibraryList, LibrarySong, SongSearchPayload } from '$lib/protocol';
   import { normalize, filterSongs, renderMarkdown } from '$lib/search';
@@ -42,7 +42,7 @@
 
   let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
   let promptDialog = $state<{ title: string; initial: string; value: string; resolve: (v: string | null) => void } | null>(null);
-  let pickerSearchSlides = $state(false);
+  let pickerSearchSlides = $state($listsPickerSearchSlides);
   let pickerServerSearch = $state<{
     query: string;
     searchSlides: boolean;
@@ -64,6 +64,9 @@
   });
   $effect(() => {
     listsPickerRawQuery.set(rawPickerQuery);
+  });
+  $effect(() => {
+    listsPickerSearchSlides.set(pickerSearchSlides);
   });
 
   function showConfirm(message: string): Promise<boolean> {
@@ -143,7 +146,7 @@
         return;
       }
       if (typeIsListMutation(cmd.type)) {
-        void addPendingMutation(cmd);
+        await addPendingMutation(cmd);
       }
       return;
     }
@@ -213,7 +216,7 @@
     } else {
       return false;
     }
-    void putLists(get(listsStore));
+    await putLists(get(listsStore));
     return true;
   }
 
@@ -378,16 +381,21 @@
     };
   });
 
+  function localPickerResults(q: string): ScoredResult<LibrarySong>[] {
+    return filterSongs(q, $songsStore, pickerSearchSlides, 300);
+  }
+
   const pickerFiltered = $derived.by<ScoredResult<LibrarySong>[]>(() => {
     const q = pickerQuery.trim();
     if (!q) return $songsStore.map((s) => ({ item: s, score: 0, snippet: '' }));
     if ($connStatus === 'open' && !pickerServerSearch.failed) {
       if (pickerServerSearch.query === pickerQuery && pickerServerSearch.searchSlides === pickerSearchSlides) {
-        return pickerServerSearch.items;
+        return pickerServerSearch.items.length || !pickerServerSearch.pending
+          ? pickerServerSearch.items
+          : localPickerResults(q);
       }
-      return [];
     }
-    return filterSongs(q, $songsStore, pickerSearchSlides, Number.POSITIVE_INFINITY);
+    return localPickerResults(q);
   });
   const pickerSearchPending = $derived(
     pickerQuery.trim().length > 0
@@ -408,7 +416,7 @@
     const seq = ++pickerSearchSeq;
     pickerServerSearch = { query: pickerQuery, searchSlides: pickerSearchSlides, items: [], pending: true, failed: false };
     remote
-      .sendRequest('song.search', { query: pickerQuery, search_slides: pickerSearchSlides }, 10000)
+      .sendRequest('song.search', { query: pickerQuery, search_slides: pickerSearchSlides }, 2500)
       .then((payload: SongSearchPayload) => {
         if (seq !== pickerSearchSeq) return;
         if (!payload?.ok) {
@@ -444,7 +452,6 @@
     if (!selectedList) return;
     rawPickerQuery = '';
     pickerQuery = '';
-    pickerSearchSlides = false;
     showPicker = true;
   }
   function closePicker() { showPicker = false; }
@@ -643,23 +650,22 @@
       </div>
       <div class="picker-list">
         {#if pickerSearchPending}
-          <div class="muted small" style="padding: 12px;">Searching songs...</div>
-        {:else}
-          <VirtualList items={pickerFiltered} itemHeight={86} class="picker-virtual-list">
-            {#snippet children(sr)}
-              <button class="picker-item" onclick={() => addSong(sr.item)}>
-                <div class="name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
-                  <div class="name" style="font-weight: 600;">{sr.item.name}</div>
-                  {#if sr.item.key}
-                    <span class="key-badge">{sr.item.key}</span>
-                  {/if}
-                </div>
-                {#if sr.item.folder}<div class="muted small">{sr.item.folder}</div>{/if}
-                {#if sr.snippet}<div class="snippet">{@html renderMarkdown(sr.snippet)}</div>{/if}
-              </button>
-            {/snippet}
-          </VirtualList>
+          <div class="muted small picker-status">Searching songs...</div>
         {/if}
+        <VirtualList items={pickerFiltered} itemHeight={104} class="picker-virtual-list">
+          {#snippet children(sr)}
+            <button class="picker-item" onclick={() => addSong(sr.item)}>
+              <div class="name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+                <div class="name" style="font-weight: 600;">{sr.item.name}</div>
+                {#if sr.item.key}
+                  <span class="key-badge">{sr.item.key}</span>
+                {/if}
+              </div>
+              {#if sr.item.folder}<div class="muted small">{sr.item.folder}</div>{/if}
+              {#if sr.snippet}<div class="snippet">{@html renderMarkdown(sr.snippet)}</div>{/if}
+            </button>
+          {/snippet}
+        </VirtualList>
       </div>
     </div>
   </div>
@@ -959,11 +965,19 @@
   }
  
   .picker-list { display: flex; flex-direction: column; gap: 4px; }
+  .picker-status {
+    padding: 4px 2px 8px;
+  }
   :global(.picker-virtual-list) {
     height: min(55vh, 520px);
     min-height: 260px;
+    width: 100%;
   }
   .picker-item {
+    display: block;
+    width: 100%;
+    min-height: 96px;
+    box-sizing: border-box;
     text-align: left;
     background: var(--elevated);
     border: 1px solid var(--border);
@@ -984,6 +998,10 @@
     font-size: 11px;
     color: var(--text-secondary);
     line-height: 1.3;
+    max-height: 1.3em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
  
   .modal-dialog {

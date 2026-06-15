@@ -1201,9 +1201,63 @@ function stripAcceptedListSyncStatus(list: LibraryList): LibraryList {
   return list.sync_status === 'pending' ? stripListSyncStatus(list) : list;
 }
 
-function mergeServerListsWithPending(serverLists: LibraryList[], localLists: LibraryList[]): LibraryList[] {
+function mergeServerListsWithPending(
+  serverLists: LibraryList[],
+  localLists: LibraryList[],
+  pendingMutations: PendingMutation[],
+): LibraryList[] {
   const merged = serverLists.map(stripListSyncStatus);
   const byName = new Map(merged.map((list) => [normalizedListName(list.name), list]));
+  const localPendingByName = new Map(
+    localLists
+      .filter((list) => list.sync_status === 'pending')
+      .map((list) => [normalizedListName(list.name), list]),
+  );
+
+  function removeMergedList(name: unknown) {
+    const key = normalizedListName(String(name ?? ''));
+    if (!key) return;
+    const existing = byName.get(key);
+    if (!existing) return;
+    const index = merged.indexOf(existing);
+    if (index >= 0) merged.splice(index, 1);
+    byName.delete(key);
+  }
+
+  function useLocalPendingList(name: unknown) {
+    const key = normalizedListName(String(name ?? ''));
+    if (!key) return;
+    const local = localPendingByName.get(key);
+    if (!local) return;
+    const pendingCopy: LibraryList = { ...stripListSyncStatus(local), sync_status: 'pending' };
+    const existing = byName.get(key);
+    if (existing) {
+      const index = merged.indexOf(existing);
+      if (index >= 0) merged[index] = pendingCopy;
+    } else {
+      merged.push(pendingCopy);
+    }
+    byName.set(key, pendingCopy);
+  }
+
+  for (const mutation of pendingMutations) {
+    if (!mutation.type.startsWith('list.')) continue;
+    const payload = (mutation.payload ?? {}) as Record<string, unknown>;
+    if (mutation.type === 'list.delete') {
+      removeMergedList(payload.name);
+    } else if (mutation.type === 'list.rename') {
+      removeMergedList(payload.old);
+      useLocalPendingList(payload.new);
+    } else if (mutation.type === 'list.create') {
+      useLocalPendingList(payload.name);
+    } else if (
+      mutation.type === 'list.add_song'
+      || mutation.type === 'list.remove_song'
+      || mutation.type === 'list.reorder'
+    ) {
+      useLocalPendingList(payload.list_name);
+    }
+  }
 
   for (const local of localLists) {
     if (local.sync_status !== 'pending') continue;
@@ -1236,7 +1290,7 @@ export async function mergeServerLists(lists: LibraryList[]): Promise<LibraryLis
   const pending = await getPendingMutations();
   const hasPendingListMutations = pending.some((mutation) => mutation.type.startsWith('list.'));
   const merged = hasPendingListMutations
-    ? mergeServerListsWithPending(lists, local)
+    ? mergeServerListsWithPending(lists, local, pending)
     : lists.map(stripListSyncStatus);
   await putLists(merged);
   return merged;

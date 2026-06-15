@@ -121,6 +121,7 @@
     min-height: 320px;
     overflow-y: auto;
     overscroll-behavior: contain;
+    width: 100%;
   }
 
   .virtual-spacer {
@@ -140,5 +141,6 @@
     position: absolute;
     right: 0;
     top: 0;
+    width: 100%;
   }
 </style>
