@@ -47,6 +47,11 @@ import { handleSyncMessage } from './sync';
 
 const RECONNECT_BACKOFF_MS = [250, 500, 1000, 2000, 4000, 8000, 15000];
 const AUTH_TIMEOUT_MS = 8000;
+// Deadline for the WSS handshake itself (new WebSocket() -> onopen).
+// Through a cloudflared tunnel in a bad state the upgrade can hang without
+// ever firing onopen OR onclose/onerror, leaving connStatus stuck at
+// 'connecting' forever. This forces a close -> normal reconnect path.
+const CONNECT_TIMEOUT_MS = 12000;
 
 export type PairParams = {
   server_key: string;
@@ -65,6 +70,7 @@ class RemoteClient {
   private currentEndpoint: 'cloud' | 'lan' | null = null;
   private alternateNext = false;
   private authTimer: number | null = null;
+  private connectTimer: number | null = null;
   private pendingRequests = new Map<string, (payload: any) => void>();
   private heartbeatTimer: number | null = null;
   private lastMessageTime = 0;
@@ -79,16 +85,18 @@ class RemoteClient {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState !== 'visible') return;
         if (this.forceClose) return;
-        this.tearDown();
-        void this.connect();
+        // Use reconnectActive() (not connect()) so a socket stuck in the
+        // CONNECTING state is forcibly torn down instead of short-circuited
+        // by connect()'s idempotency check. This is the recovery path for a
+        // hung WSS handshake discovered after returning to the app.
+        void this.reconnectActive();
       });
     }
     // When the device regains network access, reconnect immediately.
     if (typeof window !== 'undefined') {
       window.addEventListener('online', () => {
         if (this.forceClose) return;
-        this.tearDown();
-        void this.connect();
+        void this.reconnectActive();
       });
     }
   }
@@ -204,6 +212,10 @@ class RemoteClient {
       clearTimeout(this.authTimer);
       this.authTimer = null;
     }
+    if (this.connectTimer !== null) {
+      clearTimeout(this.connectTimer);
+      this.connectTimer = null;
+    }
     for (const [id, resolve] of this.pendingRequests.entries()) {
       resolve({ ok: false, error: 'connection_lost' });
     }
@@ -272,8 +284,27 @@ class RemoteClient {
     this.ws = ws;
     const isCurrent = () => this.gen === myGen && this.ws === ws;
 
+    // Handshake deadline: if onopen doesn't fire within CONNECT_TIMEOUT_MS
+    // (e.g. a cloudflared tunnel that accepts the upgrade then stalls, never
+    // delivering onopen OR onclose), force the socket closed so onclose runs
+    // the normal reconnect path. Without this, connStatus sticks at
+    // 'connecting' indefinitely and connect() short-circuits on every retry.
+    if (this.connectTimer !== null) clearTimeout(this.connectTimer);
+    this.connectTimer = window.setTimeout(() => {
+      if (!isCurrent()) return;
+      if (ws.readyState === WebSocket.OPEN) return; // opened, just racing
+      console.warn('[ws] Connect handshake timed out; closing to trigger reconnect.');
+      connError.set('Connection timed out');
+      try { ws.close(); } catch { /* ignore */ }
+    }, CONNECT_TIMEOUT_MS);
+
     ws.onopen = () => {
       if (!isCurrent()) return;
+      // Handshake completed — disarm the connect timer.
+      if (this.connectTimer !== null) {
+        clearTimeout(this.connectTimer);
+        this.connectTimer = null;
+      }
       connStatus.set('authenticating');
       const payload = pairToken
         ? {
@@ -568,6 +599,7 @@ class RemoteClient {
       // Stale close (from a previous socket we superseded): ignore completely.
       if (!isCurrent()) return;
       if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
+      if (this.connectTimer !== null) { clearTimeout(this.connectTimer); this.connectTimer = null; }
       this.ws = null;
       if (pairToken && !authenticated) {
         if (creds.server_key) void removeUnpairedServer(creds.server_key);

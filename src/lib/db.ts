@@ -599,24 +599,45 @@ export async function saveCredentials(c: Credentials): Promise<void> {
   if (activeKey) {
     const existing = await _getServerByKey(activeKey);
     if (existing) {
-      const updated: ServerEntry = {
-        ...existing,
-        device_id: c.device_id,
-        device_token: c.device_token,
-        device_name: c.device_name,
-        cloud_host: c.cloud_host,
-        lan_host: c.lan_host,
-        server_name: c.server_name ?? existing.server_name,
-        server_id: c.server_id ?? existing.server_id,
-        paired_at: c.paired_at ?? existing.paired_at,
-        last_used: Date.now(),
-        can_edit_keys: c.can_edit_keys ?? existing.can_edit_keys,
-        can_edit_songs: c.can_edit_songs ?? existing.can_edit_songs,
-      };
-      await _saveServer(updated);
-      await initializeServerData(activeKey);
-      _credCache = _entryToCredentials(updated);
-      return;
+      // Identity guard: never overwrite one desktop's record with another
+      // desktop's data. During a server switch, a pending write-back from the
+      // PREVIOUS connection (or a race between _credCache and
+      // active_server_key) could otherwise route Biserica's reported name onto
+      // VM's stored record (and vice-versa). Only merge when the server_id
+      // values agree (or either side is missing one, e.g. legacy entries).
+      const incomingId = (c.server_id ?? '').trim();
+      const existingId = (existing.server_id ?? '').trim();
+      const sameIdentity = !incomingId || !existingId || incomingId === existingId;
+
+      if (sameIdentity) {
+        const updated: ServerEntry = {
+          ...existing,
+          device_id: c.device_id,
+          device_token: c.device_token,
+          device_name: c.device_name,
+          cloud_host: c.cloud_host,
+          lan_host: c.lan_host,
+          server_name: c.server_name ?? existing.server_name,
+          server_id: c.server_id ?? existing.server_id,
+          paired_at: c.paired_at ?? existing.paired_at,
+          last_used: Date.now(),
+          can_edit_keys: c.can_edit_keys ?? existing.can_edit_keys,
+          can_edit_songs: c.can_edit_songs ?? existing.can_edit_songs,
+        };
+        await _saveServer(updated);
+        await initializeServerData(activeKey);
+        _credCache = _entryToCredentials(updated);
+        return;
+      }
+
+      // Identity mismatch: writing here would clobber the wrong server's
+      // record. Fall through to the create path, which writes to a fresh
+      // record keyed by c.server_key (or a new UUID) instead.
+      console.warn(
+        '[db] saveCredentials: identity mismatch — refusing to overwrite ' +
+          `"${existing.server_name ?? activeKey}" (server_id=${existingId.slice(0, 8)}) ` +
+          `with data for server_id=${incomingId.slice(0, 8)}; creating a new record.`,
+      );
     }
   }
 
