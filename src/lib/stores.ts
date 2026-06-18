@@ -33,6 +33,11 @@ export const bibleVersionStore: Writable<string | null> = writable(null);
 export type SyncStatus = 'idle' | 'syncing' | 'error';
 export const syncStatus: Writable<SyncStatus> = writable('idle');
 
+// Last error from the deferred pending-list sync flow (offline → reconnect).
+// Null means last attempt succeeded or hasn't run yet. Surfaced to the user as
+// a toast/banner — pending mutations stay in IDB for retry on next reconnect.
+export const pendingSyncError: Writable<string | null> = writable(null);
+
 // Exclusive mode — null means open (everyone can control).
 export const exclusiveDeviceId: Writable<string | null> = writable(null);
 export const exclusiveDeviceName: Writable<string | null> = writable(null);

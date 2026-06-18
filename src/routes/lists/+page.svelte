@@ -8,7 +8,8 @@
   import { get } from 'svelte/store';
   import {
     connStatus, isViewOnly, listsStore, privateListsStore, songsStore, canEditKeys, activeModals,
-    listsActiveTab, listsSelectedName, listsShowPicker, listsPickerRawQuery, listsPickerSearchSlides, listsScrollY
+    listsActiveTab, listsSelectedName, listsShowPicker, listsPickerRawQuery, listsPickerSearchSlides, listsScrollY,
+    pendingSyncError
   } from '$lib/stores';
   import type { LibraryList, LibrarySong } from '$lib/protocol';
   import { normalize, renderMarkdown } from '$lib/search';
@@ -132,18 +133,25 @@
   );
 
   async function send(cmd: { type: string; payload?: any }) {
-    if ($isViewOnly) return;
-    if ($connStatus !== 'open') {
-      if (!await applyLocally(cmd)) {
-        alert('Connect to the desktop to perform this action.');
-        return;
-      }
-      if (typeIsListMutation(cmd.type)) {
-        await addPendingMutation(cmd);
-      }
+    if ($isViewOnly) {
+      showToast('View-only mode — cannot edit lists', 'warning');
       return;
     }
-    remote.send(cmd as any);
+    // Unified path: every mutation is applied locally (with pending badge) AND
+    // queued as a pending mutation for fallback. When online, the live send
+    // fires too — if the server silently drops it (duplicate name, missing
+    // song, …), the pending mutation will retry via flushPendingLists on next reconnect.
+    const handled = await applyLocally(cmd);
+    if (!handled) {
+      showToast('Cannot apply this list action right now', 'warning');
+      return;
+    }
+    if (typeIsListMutation(cmd.type) && cmd.type !== 'list.load_to_queue') {
+      await addPendingMutation(cmd);
+    }
+    if ($connStatus === 'open') {
+      remote.send(cmd as any);
+    }
   }
 
   function typeIsListMutation(type: string): boolean {
@@ -168,12 +176,17 @@
       );
       if (selectedName === payload.old) selectedName = payload.new;
     } else if (type === 'list.add_song') {
-      const song = get(songsStore).find((s) => s.path === payload.song_path);
-      if (!song) return false;
+      // If the song isn't in the local cache, fall back to a placeholder entry
+      // carrying just the path — the server slot resolves it via db_queue_get_song.
+      const cached = get(songsStore).find((s) => s.path === payload.song_path);
+      const entry = cached
+        ? { path: cached.path, name: cached.name, folder: cached.folder }
+        : { path: String(payload.song_path ?? ''), name: String(payload.song_path ?? 'Untitled'), folder: '' };
+      if (!entry.path) return false;
       listsStore.update((ls) =>
         ls.map((l) =>
           l.name === payload.list_name
-            ? markPending({ ...l, songs: [...l.songs, { path: song.path, name: song.name, folder: song.folder }] })
+            ? markPending({ ...l, songs: [...l.songs, entry] })
             : l
         )
       );
@@ -192,7 +205,8 @@
           const songs = [...l.songs];
           const from = payload.from;
           const to = Math.max(0, Math.min(songs.length - 1, payload.to));
-          if (from < 0 || from >= songs.length || from === to) return markPending(l);
+          // No-op reorder: do not mark pending (avoids spurious sync churn).
+          if (from < 0 || from >= songs.length || from === to) return l;
           const [moved] = songs.splice(from, 1);
           songs.splice(to, 0, moved);
           return markPending({ ...l, songs });
@@ -485,6 +499,12 @@
   </button>
 </div>
 
+{#if $pendingSyncError}
+  <section class="panel muted" style="margin-top:12px; border-color: var(--warning); color: var(--warning);">
+    Pending sync failed: {$pendingSyncError}. Will retry on next reconnect.
+  </section>
+{/if}
+
 {#if currentLists.length === 0}
   <section class="panel muted" style="margin-top:12px;">
     No {activeTab} lists yet. Tap <b>＋ New</b> to create one.
@@ -499,7 +519,7 @@
         onclick={() => selectList(l.name)}
       >
         {l.name}
-        {#if l.sync_status === 'pending'}<span class="pending-badge">pending</span>{/if}
+        {#if l.sync_status === 'pending'}<span class="pending-badge">PENDING SYNC</span>{/if}
         <span class="count">{l.songs.length}</span>
       </button>
     {/each}
@@ -510,7 +530,7 @@
   <section class="list-head">
     <div class="list-title">
       {selectedList.name}
-      {#if selectedList.sync_status === 'pending'}<span class="pending-badge">pending sync</span>{/if}
+      {#if selectedList.sync_status === 'pending'}<span class="pending-badge">PENDING SYNC</span>{/if}
     </div>
     <div class="list-actions">
       <button class="ghost" onclick={renameList} disabled={activeTab === 'public' && $isViewOnly}>✎ Rename</button>

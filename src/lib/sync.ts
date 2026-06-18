@@ -22,12 +22,14 @@ import {
   loadAllSongs,
   clearPendingListMutations,
   mergeServerLists,
+  normalizedListName,
   putBibleBooks,
   putBibleVerses,
   putLists,
   putSongs,
   setBibleVersion,
   setLastSyncTs,
+  stripListSyncStatus,
 } from './db';
 import type { BibleBook, BibleVerse, LibraryList, LibrarySong, SyncDelta, SyncFull } from './protocol';
 import {
@@ -113,23 +115,12 @@ export function isReducedDataConnection(): boolean {
   return connection.effectiveType === 'slow-2g' || connection.effectiveType === '2g';
 }
 
-function stripListSyncStatus(list: { name: string; songs: { path: string; name: string; folder: string }[] }) {
-  return {
-    name: list.name,
-    songs: (list.songs ?? []).map((song) => ({
-      path: song.path,
-      name: song.name,
-      folder: song.folder,
-    })),
-  };
-}
-
 export async function flushPendingLists(): Promise<void> {
   const pendingLists = await loadPendingPublicLists();
   const pendingMutations = (await getPendingMutations()).filter((mutation) => mutation.type.startsWith('list.'));
   if (!pendingLists.length && !pendingMutations.length) return;
 
-  const payloadLists = pendingLists.map(stripListSyncStatus);
+  const payloadLists = pendingLists.map((l) => stripListSyncStatus(l));
   const payloadMutations = pendingMutations.map((mutation) => ({
     type: mutation.type,
     payload: mutation.payload,
@@ -142,6 +133,16 @@ export async function flushPendingLists(): Promise<void> {
   if (!resp?.ok || !Array.isArray(resp.lists)) {
     throw new Error(resp?.error ?? 'pending list merge failed');
   }
+
+  // Verification gate: ensure the server actually confirmed every local pending list.
+  // If any are missing, DO NOT clobber local state — keep mutations for retry on next reconnect.
+  const respNames = new Set((resp.lists as LibraryList[]).map((l) => normalizedListName(l.name)));
+  const lostPending = pendingLists.filter((p) => !respNames.has(normalizedListName(p.name)));
+  if (lostPending.length > 0) {
+    const missingNames = lostPending.map((p) => p.name).join(', ');
+    throw new Error(`Server did not confirm pending list(s): ${missingNames}`);
+  }
+
   await putLists(resp.lists);
   await clearPendingListMutations();
   listsStore.set(resp.lists);

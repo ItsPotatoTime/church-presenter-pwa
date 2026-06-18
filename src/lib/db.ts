@@ -1233,11 +1233,7 @@ export async function putLists(lists: LibraryList[]): Promise<void> {
   await putScopedListRows(STORE_SERVER_LISTS, serverKey, lists);
 }
 
-function normalizedListName(name: string): string {
-  return name.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
-}
-
-function stripListSyncStatus(list: LibraryList): LibraryList {
+export function stripListSyncStatus(list: LibraryList): LibraryList {
   return {
     name: list.name,
     songs: (list.songs ?? []).map((song) => ({
@@ -1248,17 +1244,20 @@ function stripListSyncStatus(list: LibraryList): LibraryList {
   };
 }
 
-function stripAcceptedListSyncStatus(list: LibraryList): LibraryList {
-  return list.sync_status === 'pending' ? stripListSyncStatus(list) : list;
+export function normalizedListName(name: string): string {
+  return name.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
 }
 
 function mergeServerListsWithPending(
   serverLists: LibraryList[],
   localLists: LibraryList[],
   pendingMutations: PendingMutation[],
-): LibraryList[] {
+): { merged: LibraryList[]; confirmedKeys: Set<string> } {
   const merged = serverLists.map(stripListSyncStatus);
   const byName = new Map(merged.map((list) => [normalizedListName(list.name), list]));
+  const initialServerByName = new Map(
+    serverLists.map((list) => [normalizedListName(list.name), list]),
+  );
   const localPendingByName = new Map(
     localLists
       .filter((list) => list.sync_status === 'pending')
@@ -1310,11 +1309,43 @@ function mergeServerListsWithPending(
     }
   }
 
+  const confirmedKeys = new Set<string>();
+
   for (const local of localLists) {
     if (local.sync_status !== 'pending') continue;
     const key = normalizedListName(local.name);
     if (!key) continue;
     const cleanLocal = stripListSyncStatus(local);
+    const pendingSongPaths = new Set(
+      cleanLocal.songs.map((s) => s.path).filter(Boolean),
+    );
+
+    // Server-side confirmation gate: did the server actually push this list with at
+    // least every song the phone's pending copy held? If so, treat pending mutations
+    // targeting it as ack'd — drop the badge and queue the mutations for cleanup.
+    const serverOriginal = initialServerByName.get(key);
+    if (serverOriginal) {
+      const serverSongs = stripListSyncStatus(serverOriginal).songs;
+      const serverPaths = new Set(serverSongs.map((s) => s.path).filter(Boolean));
+      const superset = [...pendingSongPaths].every((p) => serverPaths.has(p));
+      if (superset) {
+        confirmedKeys.add(key);
+        // Restore server's confirmed version (drops the local pending overlay).
+        const existing = byName.get(key);
+        if (existing) {
+          const idx = merged.indexOf(existing);
+          if (idx >= 0) {
+            const restored = stripListSyncStatus(serverOriginal);
+            merged[idx] = restored;
+            byName.set(key, restored);
+          }
+        }
+        continue;
+      }
+    }
+
+    // Server did not confirm (or superset fails) — preserve pending overlay and
+    // union-merge any songs the phone knows about that the server push lacked.
     const existing = byName.get(key);
     if (!existing) {
       const pendingCopy: LibraryList = { ...cleanLocal, sync_status: 'pending' };
@@ -1333,18 +1364,86 @@ function mergeServerListsWithPending(
     existing.sync_status = 'pending';
   }
 
-  return merged;
+  return { merged, confirmedKeys };
 }
 
 export async function mergeServerLists(lists: LibraryList[]): Promise<LibraryList[]> {
   const local = await loadAllLists();
   const pending = await getPendingMutations();
   const hasPendingListMutations = pending.some((mutation) => mutation.type.startsWith('list.'));
-  const merged = hasPendingListMutations
-    ? mergeServerListsWithPending(lists, local, pending)
-    : lists.map(stripListSyncStatus);
+
+  let merged: LibraryList[];
+  let confirmedKeys = new Set<string>();
+
+  if (hasPendingListMutations) {
+    const result = mergeServerListsWithPending(lists, local, pending);
+    merged = result.merged;
+    confirmedKeys = result.confirmedKeys;
+  } else {
+    // No pending mutations: server is authoritative, but any leftover local pending
+    // badges (e.g. orphaned after a partial flush) still need reconciliation.
+    merged = lists.map(stripListSyncStatus);
+    for (const localList of local) {
+      if (localList.sync_status !== 'pending') continue;
+      const key = normalizedListName(localList.name);
+      if (!key) continue;
+      const serverMatch = merged.find((m) => normalizedListName(m.name) === key);
+      if (!serverMatch) continue;
+      const cleanLocal = stripListSyncStatus(localList);
+      const localPaths = new Set(cleanLocal.songs.map((s) => s.path).filter(Boolean));
+      const serverPaths = new Set(serverMatch.songs.map((s) => s.path).filter(Boolean));
+      const superset = [...localPaths].every((p) => serverPaths.has(p));
+      if (superset) {
+        confirmedKeys.add(key);
+      } else {
+        const seen = new Set(serverMatch.songs.map((s) => s.path));
+        for (const s of cleanLocal.songs) {
+          if (s.path && !seen.has(s.path)) {
+            serverMatch.songs.push(s);
+            seen.add(s.path);
+          }
+        }
+        serverMatch.sync_status = 'pending';
+      }
+    }
+  }
+
   await putLists(merged);
+  if (confirmedKeys.size > 0) {
+    await clearPendingListMutationsForListNames(confirmedKeys);
+  }
   return merged;
+}
+
+export async function clearPendingListMutationsForListNames(names: Set<string>): Promise<void> {
+  if (!names.size) return;
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return;
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_PENDING, 'readwrite');
+    const store = tx.objectStore(STORE_PENDING);
+    const req = store.getAll();
+    req.onsuccess = () => {
+      for (const mutation of (req.result ?? []) as PendingMutation[]) {
+        if (mutation.id === undefined) continue;
+        if (mutation.server_key !== serverKey) continue;
+        if (!mutation.type.startsWith('list.')) continue;
+        const payload = (mutation.payload ?? {}) as Record<string, unknown>;
+        // Match by any name-carrying field used by list.* mutations.
+        const candidates = [payload.name, payload.list_name, payload.new, payload.old];
+        const matched = candidates.some(
+          (c) => typeof c === 'string' && names.has(normalizedListName(c)),
+        );
+        if (matched) {
+          store.delete(mutation.id);
+        }
+      }
+    };
+    req.onerror = () => reject(req.error);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 export async function loadPendingPublicLists(): Promise<LibraryList[]> {
@@ -1398,7 +1497,10 @@ async function putScopedListRows(
         if (scopedKeyMatchesServer(key, serverKey)) store.delete(key);
       }
       for (const list of lists) {
-        store.put({ ...toIndexedDbValue(stripAcceptedListSyncStatus(list)), server_key: serverKey });
+        // Preserve sync_status: 'pending' for public lists so the offline
+        // pending state survives reloads and reconnects. stripListSyncStatus
+        // is still called explicitly wherever lists cross the wire to the server.
+        store.put({ ...toIndexedDbValue(list), server_key: serverKey });
       }
     };
     req.onerror = () => reject(req.error);

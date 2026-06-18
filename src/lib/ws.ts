@@ -18,7 +18,6 @@ import type {
 import {
   cacheQueueState,
   clearCredentials,
-  clearPendingListMutations,
   deletePendingMutation,
   getPendingMutations,
   getOrCreateDeviceId,
@@ -38,6 +37,7 @@ import {
   exclusiveDeviceName,
   listsStore,
   liveState,
+  pendingSyncError,
   queueState,
   serverName,
   canEditKeys,
@@ -359,17 +359,23 @@ class RemoteClient {
           try {
             const { flushPendingLists } = await import('./sync');
             await flushPendingLists();
-            await clearPendingListMutations();
+            pendingSyncError.set(null);
             const mutations = await getPendingMutations();
             for (const m of mutations) {
               if (!isCurrent() || ws.readyState !== WebSocket.OPEN) return;
-              if (m.type.startsWith('list.')) continue;
+              if (m.type.startsWith('list.')) continue;          // already flushed above
               const ack = await this.sendRequest(m.type, m.payload, 15000);
               if (ack?.ok !== false) {
                 await deletePendingMutation(m.id);
               }
             }
-          } catch { /* ignore — stale mutations are harmless */ }
+          } catch (err) {
+            // Pending-list sync failed (server unavailable, missing confirmation, …).
+            // Keep mutations in IDB so the next reconnect retries them. Surface to UI.
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn('[ws] Pending list sync failed (will retry next connect):', msg);
+            pendingSyncError.set(msg ?? 'pending-list sync failed');
+          }
         })();
         return;
       }
