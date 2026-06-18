@@ -7,7 +7,7 @@
   import { sortBibleVerses } from '$lib/bible';
   import { loadCredentialsResilient } from '$lib/db';
   import { applyQueueCommandLocally, queueCommandForOfflineReplay } from '$lib/offlineQueue';
-  import type { BibleBook, BibleSearchResult, BibleVerse, LibrarySong, SongSearchPayload } from '$lib/protocol';
+  import type { BibleBook, BibleVerse, LibrarySong } from '$lib/protocol';
   import { normalize, renderMarkdown } from '$lib/search';
   import { isReducedDataConnection, syncFull, syncNow } from '$lib/sync';
   import { useSongSearch, useBibleSearch } from '$lib/useSearch.svelte';
@@ -45,22 +45,6 @@ let query = $state('');
   let searchSlides = $state(get(librarySearchSlides));
   let previewSong = $state<LibrarySong | null>(null);
   let debounceTimer: number | null = null;
-  let serverSearch = $state<{
-    query: string;
-    searchSlides: boolean;
-    items: SongResult[];
-    pending: boolean;
-    failed: boolean;
-  }>({ query: '', searchSlides: false, items: [], pending: false, failed: false });
-  let searchRequestSeq = 0;
-  let bibleServerSearch = $state<{
-    query: string;
-    mode: BibleSearchMode;
-    items: BibleVerse[];
-    pending: boolean;
-    failed: boolean;
-  }>({ query: '', mode: 'reference', items: [], pending: false, failed: false });
-  let bibleSearchRequestSeq = 0;
   let selectedBibleVerseKeys = $state<string[]>([]);
   let selectedBibleScope = $state<{ book_num: number; chapter: number } | null>(null);
 
@@ -140,40 +124,6 @@ let query = $state('');
     };
   });
 
-  $effect(() => {
-    const q = normalize(bibleQuery);
-    const online = $connStatus === 'open';
-    if (!q || !online) {
-      bibleServerSearch = { query: bibleQuery, mode: bibleSearchMode, items: [], pending: false, failed: false };
-      return;
-    }
-
-    const seq = ++bibleSearchRequestSeq;
-    bibleServerSearch = { query: bibleQuery, mode: bibleSearchMode, items: [], pending: true, failed: false };
-    remote
-      .sendRequest('bible.search', { query: bibleQuery, mode: bibleSearchMode, limit: 120 }, 10000)
-      .then((payload: { ok?: boolean; results?: BibleSearchResult[] }) => {
-        if (seq !== bibleSearchRequestSeq) return;
-        if (!payload?.ok || !Array.isArray(payload.results)) {
-          bibleServerSearch = { query: bibleQuery, mode: bibleSearchMode, items: [], pending: false, failed: true };
-          return;
-        }
-        const items = payload.results.map((result) => ({
-          id: `${result.book_num}:${result.chapter}:${result.verse}`,
-          book_num: result.book_num,
-          chapter: result.chapter,
-          verse: result.verse,
-          text: result.text,
-          normalized_text: normalize(result.text)
-        }));
-        bibleServerSearch = { query: bibleQuery, mode: bibleSearchMode, items, pending: false, failed: false };
-      })
-      .catch(() => {
-        if (seq !== bibleSearchRequestSeq) return;
-        bibleServerSearch = { query: bibleQuery, mode: bibleSearchMode, items: [], pending: false, failed: true };
-      });
-  });
-
   // Sync state changes to persistent stores
   $effect(() => {
     librarySearchSlides.set(searchSlides);
@@ -209,83 +159,35 @@ let query = $state('');
 
   const hasQuery = $derived(normalize(query).length > 0);
   const browseSongs = $derived<LibrarySong[]>(hasQuery ? [] : $songsStore);
-  const songByPath = $derived.by(() => new Map($songsStore.map((song) => [song.path, song])));
 
-  type SongResult = { s: LibrarySong; score: number; snippet: string };
-
-  $effect(() => {
-    const q = normalize(query);
-    const online = $connStatus === 'open';
-    if (!q || !online) {
-      serverSearch = { query, searchSlides, items: [], pending: false, failed: false };
-      return;
-    }
-
-    const seq = ++searchRequestSeq;
-    serverSearch = { query, searchSlides, items: [], pending: true, failed: false };
-    remote
-      .sendRequest('song.search', { query, search_slides: searchSlides }, 10000)
-      .then((payload: SongSearchPayload) => {
-        if (seq !== searchRequestSeq) return;
-        if (!payload?.ok) {
-          serverSearch = { query, searchSlides, items: [], pending: false, failed: true };
-          return;
-        }
-        const items = payload.results
-          .map((result) => {
-            const song = songByPath.get(result.path);
-            return song ? { s: song, score: result.score, snippet: result.snippet } : null;
-          })
-          .filter((item): item is SongResult => item !== null);
-        serverSearch = { query, searchSlides, items, pending: false, failed: false };
-      })
-      .catch(() => {
-        if (seq !== searchRequestSeq) return;
-        serverSearch = { query, searchSlides, items: [], pending: false, failed: true };
-      });
-  });
-
-  // Worker-backed local search — used when the desktop is offline or the
-  // server search failed. Mirrors the desktop's FTS5 + fuzzy-score approach
-  // but runs entirely off the main thread so 3500-song searches no longer
-  // freeze the UI.
+  // Unified worker-backed song search with an optional parallel server
+  // race. Local results (~50ms) fill in instantly while the server request
+  // runs with a 3s timeout; on success the server results override the
+  // local ones (server-always-wins), on timeout/failure the local results
+  // stay visible. Both paths are cancelled/stale-guarded automatically, so
+  // the UI never blocks waiting for an unreachable desktop.
   const localSearch = useSongSearch({
     items: () => $songsStore,
     query: () => query,
     searchSlides: () => searchSlides,
     maxResults: 200,
     debounceMs: 180,
+    serverTimeoutMs: 3000,
   });
 
-  // Worker-backed Bible text search fallback for offline use.
+  // Unified worker-backed Bible text search with the same race + cache
+  // semantics as `localSearch`. Only fires when `bibleSearchMode === 'text'`.
   const localBibleSearch = useBibleSearch({
     verses: () => $bibleVersesStore,
     query: () => bibleQuery,
+    mode: () => bibleSearchMode,
     maxResults: 120,
     debounceMs: 180,
+    serverTimeoutMs: 3000,
   });
 
-  const searchData = $derived.by<{ items: SongResult[]; pending: boolean }>(() => {
-    const q = normalize(query);
-    if (!q) return { items: [], pending: false };
-    if ($connStatus === 'open' && !serverSearch.failed) {
-      if (serverSearch.query === query && serverSearch.searchSlides === searchSlides) {
-        return { items: serverSearch.items, pending: serverSearch.pending };
-      }
-      return { items: [], pending: true };
-    }
-    return {
-      items: localSearch.results.map((result) => ({
-        s: result.item,
-        score: result.score,
-        snippet: result.snippet,
-      })),
-      pending: localSearch.pending,
-    };
-  });
-
-  const searchResults = $derived(searchData.items);
-  const searchPending = $derived(searchData.pending);
+  const searchResults = $derived(localSearch.results);
+  const searchPending = $derived(localSearch.pending);
 
   const parsedBibleReference = $derived.by<BibleReferenceParse>(() =>
     parseBibleReference(bibleQuery, $bibleBooksStore),
@@ -316,20 +218,7 @@ let query = $state('');
     return sortBibleVerses(verses);
   });
 
-  const bibleTextResults = $derived.by(() => {
-    if (bibleSearchMode !== 'text') return [];
-    const q = normalize(bibleQuery);
-    if (!q) return [];
-    if (
-      !bibleServerSearch.failed &&
-      bibleServerSearch.query === bibleQuery &&
-      bibleServerSearch.mode === bibleSearchMode
-    ) {
-      return bibleServerSearch.items;
-    }
-    // Offline or server failed/pending — fall back to worker-backed local search.
-    return localBibleSearch.results;
-  });
+  const bibleTextResults = $derived(localBibleSearch.results);
 
   function parseBibleReference(queryText: string, books: BibleBook[]): BibleReferenceParse {
     const normalized = normalize(queryText);
@@ -694,27 +583,27 @@ let query = $state('');
       <VirtualList items={searchResults} itemHeight={76} rowGap={6}>
         {#snippet children(result)}
           <div class="song">
-            <button class="song-main" onclick={() => openPreview(result.s)}>
+            <button class="song-main" onclick={() => openPreview(result.item)}>
               <div class="song-name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
-                <div class="song-name">{result.s.name}</div>
-                {#if result.s.key}
-                  <span class="key-badge">{result.s.key}</span>
+                <div class="song-name">{result.item.name}</div>
+                {#if result.item.key}
+                  <span class="key-badge">{result.item.key}</span>
                 {/if}
               </div>
               <div class="muted small song-meta-line">
                 {#if result.snippet}
                   {@html renderMarkdown(result.snippet)}
-                {:else if result.s.slide_texts?.length}
-                  {result.s.slide_texts.length} slides
+                {:else if result.item.slide_texts?.length}
+                  {result.item.slide_texts.length} slides
                 {:else}
-                  {result.s.folder || '-'}
+                  {result.item.folder || '-'}
                 {/if}
               </div>
             </button>
             <button
               class="add"
               aria-label="Add to queue"
-              onclick={() => addToQueue(result.s.path)}
+              onclick={() => addToQueue(result.item.path)}
               disabled={$connStatus !== 'open' || $isViewOnly}
             >+</button>
           </div>

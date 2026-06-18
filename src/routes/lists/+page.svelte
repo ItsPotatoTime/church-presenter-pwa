@@ -10,7 +10,7 @@
     connStatus, isViewOnly, listsStore, privateListsStore, songsStore, canEditKeys, activeModals,
     listsActiveTab, listsSelectedName, listsShowPicker, listsPickerRawQuery, listsPickerSearchSlides, listsScrollY
   } from '$lib/stores';
-  import type { LibraryList, LibrarySong, SongSearchPayload } from '$lib/protocol';
+  import type { LibraryList, LibrarySong } from '$lib/protocol';
   import { normalize, renderMarkdown } from '$lib/search';
   import type { ScoredResult } from '$lib/search';
   import { useSongSearch } from '$lib/useSearch.svelte';
@@ -44,14 +44,6 @@
   let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
   let promptDialog = $state<{ title: string; initial: string; value: string; resolve: (v: string | null) => void } | null>(null);
   let pickerSearchSlides = $state($listsPickerSearchSlides);
-  let pickerServerSearch = $state<{
-    query: string;
-    searchSlides: boolean;
-    items: ScoredResult<LibrarySong>[];
-    pending: boolean;
-    failed: boolean;
-  }>({ query: '', searchSlides: false, items: [], pending: false, failed: false });
-  let pickerSearchSeq = 0;
 
   // Sync state back to stores reactively
   $effect(() => {
@@ -382,88 +374,29 @@
     };
   });
 
-  // Worker-backed local search — replaces the synchronous filterSongs() call
-  // that was freezing the UI on every keystroke with 3500+ songs in the
-  // library. The worker owns an inverted index and runs all fuzzy scoring
-  // off the main thread.
+  // Unified worker-backed local search with an optional parallel server
+  // race. Local results (~50ms) fill in instantly while the server request
+  // runs with a 3s timeout; on success the server results override the
+  // local ones (server-always-wins), on timeout/failure the local results
+  // stay visible. The "Searching…" empty-state from the old code path is
+  // gone — the user always sees something immediately.
   const localPickerSearch = useSongSearch({
     items: () => $songsStore,
     query: () => pickerQuery,
     searchSlides: () => pickerSearchSlides,
     maxResults: 300,
     debounceMs: 180,
+    serverTimeoutMs: 3000,
   });
 
   const pickerFiltered = $derived.by<ScoredResult<LibrarySong>[]>(() => {
     const q = pickerQuery.trim();
     if (!q) return $songsStore.map((s) => ({ item: s, score: 0, snippet: '' }));
-    if ($connStatus === 'open' && !pickerServerSearch.failed) {
-      // Online path: prefer server results. While the server search is
-      // in-flight or the user has typed a new query that the server hasn't
-      // seen yet, return an empty list so the UI shows "Searching…"
-      // rather than thrashing the local search on every keystroke.
-      if (
-        pickerServerSearch.query === pickerQuery
-        && pickerServerSearch.searchSlides === pickerSearchSlides
-        && !pickerServerSearch.pending
-      ) {
-        return pickerServerSearch.items;
-      }
-      return [];
-    }
-    // Offline OR server search failed: use worker-backed local results.
     return localPickerSearch.results;
   });
-  const pickerSearchPending = $derived(
-    pickerQuery.trim().length > 0
-      && $connStatus === 'open'
-      && !pickerServerSearch.failed
-      && (
-        pickerServerSearch.pending
-        || pickerServerSearch.query !== pickerQuery
-        || pickerServerSearch.searchSlides !== pickerSearchSlides
-      ),
-  );
-  // Local worker pending flag — only relevant when offline or the server
-  // search has already failed.
-  const pickerLocalPending = $derived(
-    ($connStatus !== 'open' || pickerServerSearch.failed)
-      && pickerQuery.trim().length > 0
-      && localPickerSearch.pending,
-  );
+  const pickerSearchPending = $derived(localPickerSearch.pending);
 
-  const songByPath = $derived.by(() => new Map($songsStore.map((song) => [song.path, song])));
-
-  $effect(() => {
-    const q = normalize(pickerQuery);
-    if (!q || $connStatus !== 'open') {
-      pickerServerSearch = { query: pickerQuery, searchSlides: pickerSearchSlides, items: [], pending: false, failed: false };
-      return;
-    }
-
-    const seq = ++pickerSearchSeq;
-    pickerServerSearch = { query: pickerQuery, searchSlides: pickerSearchSlides, items: [], pending: true, failed: false };
-    remote
-      .sendRequest('song.search', { query: pickerQuery, search_slides: pickerSearchSlides }, 2500)
-      .then((payload: SongSearchPayload) => {
-        if (seq !== pickerSearchSeq) return;
-        if (!payload?.ok) {
-          pickerServerSearch = { query: pickerQuery, searchSlides: pickerSearchSlides, items: [], pending: false, failed: true };
-          return;
-        }
-        const items = payload.results
-          .map((result) => {
-            const song = songByPath.get(result.path);
-            return song ? { item: song, score: result.score, snippet: result.snippet } : null;
-          })
-          .filter((item): item is ScoredResult<LibrarySong> => item !== null);
-        pickerServerSearch = { query: pickerQuery, searchSlides: pickerSearchSlides, items, pending: false, failed: false };
-      })
-      .catch(() => {
-        if (seq !== pickerSearchSeq) return;
-        pickerServerSearch = { query: pickerQuery, searchSlides: pickerSearchSlides, items: [], pending: false, failed: true };
-      });
-  });
+  const songKeyMap = $derived.by(() => new Map($songsStore.map((song) => [song.path, song.key])));
 
   let toast = $state<{ message: string; type: 'success' | 'warning' } | null>(null);
   let toastTimer: number | null = null;
@@ -509,8 +442,6 @@
       showToast(`Added "${s.name}"`, 'success');
     }
   }
-
-  const songKeyMap = $derived.by(() => new Map($songsStore.map((song) => [song.path, song.key])));
 
   // Scroll retention handling
   function handleScroll() {
@@ -677,7 +608,7 @@
         </label>
       </div>
       <div class="picker-list">
-        {#if pickerSearchPending || pickerLocalPending}
+        {#if pickerSearchPending}
           <div class="muted small picker-status">Searching songs...</div>
         {/if}
         <VirtualList items={pickerFiltered} itemHeight={104} class="picker-virtual-list">
