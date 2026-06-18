@@ -231,6 +231,9 @@ function migrateLegacyCredentials(tx: IDBTransaction): void {
       cloud_host: creds.cloud_host,
       lan_host: creds.lan_host,
       server_name: creds.server_name,
+      // Preserve the legacy server_id so a reconnect attempt can still hit
+      // the right backend instead of looking like a brand-new server.
+      server_id: creds.server_id,
       paired_at: creds.paired_at,
       last_used: Date.now(),
     };
@@ -718,7 +721,15 @@ export async function migrateServerKey(
   if (!oldKey || oldKey === targetKey) {
     const existing = await _getServerByKey(targetKey);
     if (existing) {
-      const updated = { ...existing, ...patch, server_key: targetKey, server_id: targetKey };
+      // Preserve the real server_id (UUID) — never overwrite it with the host
+      // string. A stale host as server_id would make the phone hit wrong_server
+      // against the live backend every time.
+      const updated = {
+        ...existing,
+        ...patch,
+        server_key: targetKey,
+        server_id: existing.server_id ?? patch.server_id ?? targetKey,
+      };
       await _saveServer(updated);
       _credCache = _entryToCredentials(updated);
     }
@@ -736,7 +747,14 @@ export async function migrateServerKey(
     ...(oldEntry ?? {}),
     ...patch,
     server_key: targetKey,
-    server_id: targetKey,
+    // Carry forward any real server_id (UUID) we already had; only fall back
+    // to targetKey (which is a host string) as a last resort. Without this,
+    // a host-key migration would silently break auth against the live server.
+    server_id:
+      existingTarget?.server_id ??
+      oldEntry?.server_id ??
+      patch.server_id ??
+      targetKey,
     last_used: Date.now(),
   } as ServerEntry;
 

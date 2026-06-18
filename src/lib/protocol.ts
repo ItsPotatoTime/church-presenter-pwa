@@ -41,6 +41,11 @@ export interface AuthFail {
     | 'bad_token'
     | 'banned'
     | 'wrong_server';
+  // Server includes its own identity in every auth.fail so the phone can
+  // auto-switch to the right stored server entry on wrong_server, and
+  // surface a useful diagnostic otherwise.
+  server_id?: string;
+  server_name?: string;
 }
 
 // ── Live state broadcast ─────────────────────────────────────────────

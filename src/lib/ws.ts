@@ -22,10 +22,12 @@ import {
   deletePendingMutation,
   getPendingMutations,
   getOrCreateDeviceId,
+  loadAllServers,
   loadCredentials,
   mergeServerLists,
   removeUnpairedServer,
   saveCredentials,
+  switchServer,
   type Credentials,
 } from './db';
 import {
@@ -66,6 +68,9 @@ class RemoteClient {
   private pendingRequests = new Map<string, (payload: any) => void>();
   private heartbeatTimer: number | null = null;
   private lastMessageTime = 0;
+  // Tracks server_keys we've already tried auto-switching to after a
+  // wrong_server, so a stale stored entry can't cause an infinite switch loop.
+  private _wrongServerTried: Set<string> = new Set();
 
   constructor() {
     // iOS Safari kills WebSockets when the PWA moves to background.
@@ -309,6 +314,9 @@ class RemoteClient {
       if (msg.type === 'auth.ok') {
         authenticated = true;
         if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
+        // Successful auth — clear any prior wrong_server switch attempts so a
+        // future wrong_server (in a later session) can try the same server again.
+        this._wrongServerTried.clear();
         const p = (msg.payload ?? {}) as AuthOk;
         const authoritativeServerId = (p.server_id ?? creds.server_id ?? '').trim() || undefined;
         const finalCreds: Credentials = {
@@ -384,10 +392,61 @@ class RemoteClient {
           connStatus.set('error');
           connError.set('This server rejected the saved pairing. Choose another server or scan a new QR code.');
         } else if (p.reason === 'wrong_server') {
-          this.forceClose = true;
+          // Server reports a different identity than our stored creds.
+          // Try to auto-switch to a stored server entry whose server_id matches
+          // the server's reported identity. If we can't find one (or we already
+          // tried switching and it didn't help), surface a clear re-pair CTA.
+          //
+          // Critical: never auto-delete stored servers on wrong_server — the
+          // device_token may simply be stale for this backend of a shared
+          // cloudflared hostname, and the same stored entry could still work
+          // against another backend or after a re-pair.
+          if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
+          const serverHint = p.server_id;
+          // Bump gen so this socket's onclose doesn't schedule a reconnect
+          // with the (wrong) creds we just used. Capture it as our own
+          // "current" gen for the async chain below.
+          const switchGen = ++this.gen;
           try { ws.close(); } catch { /* ignore */ }
-          connStatus.set('error');
-          connError.set('This pairing belongs to a different desktop. Choose the matching server or scan this desktop QR again.');
+          this.ws = null;
+
+          void (async () => {
+            if (serverHint) {
+              try {
+                const all = await loadAllServers();
+                if (this.gen !== switchGen) return; // superseded while awaiting
+                const match = all.find(
+                  (s) =>
+                    s.server_id === serverHint &&
+                    s.server_id !== creds.server_id &&
+                    !this._wrongServerTried.has(s.server_key),
+                );
+                if (match) {
+                  this._wrongServerTried.add(match.server_key);
+                  console.info(
+                    `[ws] wrong_server: auto-switching to stored server "${match.server_name || match.server_key}" (id=${serverHint.slice(0, 8)})`,
+                  );
+                  await switchServer(match.server_key);
+                  if (this.gen !== switchGen) return; // superseded while awaiting
+                  connStatus.set('connecting');
+                  connError.set(null);
+                  // reconnectActive() will call openSocket() which bumps gen
+                  // again and creates the new socket — our async chain stops here.
+                  await this.reconnectActive();
+                  return;
+                }
+              } catch (err) {
+                console.warn('[ws] wrong_server auto-switch failed:', err);
+              }
+            }
+            // No eligible stored match — surface a clear re-pair message.
+            if (this.gen !== switchGen) return; // superseded by another switch
+            this.forceClose = true;
+            connStatus.set('error');
+            connError.set(
+              'This pairing belongs to a different desktop. Open Settings → Servers and pick the matching one, or scan this desktop QR again.',
+            );
+          })();
         } else {
           connStatus.set('error');
           this.forceClose = true;
