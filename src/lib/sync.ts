@@ -29,7 +29,7 @@ import {
   setBibleVersion,
   setLastSyncTs,
 } from './db';
-import type { SyncDelta, SyncFull } from './protocol';
+import type { BibleBook, BibleVerse, LibraryList, LibrarySong, SyncDelta, SyncFull } from './protocol';
 import {
   bibleBooksStore,
   bibleVersesStore,
@@ -151,11 +151,11 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
   syncStatus.set('syncing');
   try {
     const resp = await requestSync(since, cachedBibleVersion);
-    let songs = await loadAllSongs();
-    let lists = await loadAllLists();
-    let bibleBooks = await loadAllBibleBooks();
-    let bibleVerses = await loadAllBibleVerses();
-    let bibleVersion = await getBibleVersion();
+    let songs: LibrarySong[] = [];
+    let lists: LibraryList[] = [];
+    let bibleBooks: BibleBook[] = [];
+    let bibleVerses: BibleVerse[] = [];
+    let bibleVersion: string | null = cachedBibleVersion;
 
     if (resp.type === 'sync.full') {
       const p = resp.payload as SyncFull;
@@ -179,8 +179,6 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         bibleVersion = p.bible.version;
       } else {
         bibleVersion = await getBibleVersion();
-      }
-      if (!p.bible) {
         bibleBooks = [];
         bibleVerses = [];
       }
@@ -195,6 +193,8 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
       if (toDelete.length) await deleteSongsByPath(toDelete);
       if (p.lists !== null) {
         lists = await mergeServerLists(p.lists);
+      } else {
+        lists = await loadAllLists();
       }
       if (p.bible) {
         const sortedVerses = sortBibleVerses(p.bible.verses);
@@ -204,6 +204,10 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         bibleBooks = p.bible.books;
         bibleVerses = sortedVerses;
         bibleVersion = p.bible.version;
+      } else {
+        bibleBooks = await loadAllBibleBooks();
+        bibleVerses = await loadAllBibleVerses();
+        bibleVersion = await getBibleVersion();
       }
       await setLastSyncTs(p.server_ts);
     } else {
@@ -211,9 +215,12 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
     }
 
     // Reload songs from IndexedDB after putting them. This ensures Svelte store gets the merged keys and timestamps.
+    // Sorting happens here at the store layer (used to be inside loadAllSongs on every call).
     songs = await loadAllSongs();
+    songs = sortSongsForDisplay(songs);
     songsStore.set(songs);
-    listsStore.set(lists);
+    if (lists.length > 0) listsStore.set(lists);
+    else listsStore.set(await loadAllLists());
     bibleBooksStore.set(bibleBooks);
     bibleVersesStore.set(bibleVerses);
     bibleVersionStore.set(bibleVersion);
@@ -223,6 +230,16 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
     syncStatus.set('error');
     console.warn('[sync]', e?.message ?? e);
   }
+}
+
+/** Sort songs for display: alphabetic with digit-prefixed names last. */
+function sortSongsForDisplay(songs: LibrarySong[]): LibrarySong[] {
+  return songs.sort((a, b) => {
+    const aDigit = (a.name && a.name.charAt(0) >= '0' && a.name.charAt(0) <= '9') ? 1 : 0;
+    const bDigit = (b.name && b.name.charAt(0) >= '0' && b.name.charAt(0) <= '9') ? 1 : 0;
+    if (aDigit !== bDigit) return aDigit - bDigit;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 /** Load whatever is in IndexedDB into the Svelte stores (for offline UI). */
@@ -236,7 +253,7 @@ export async function hydrateFromCache(): Promise<void> {
     getBibleVersion(),
     getCachedQueueState(),
   ]);
-  songsStore.set(songs);
+  songsStore.set(sortSongsForDisplay(songs));
   listsStore.set(lists);
   privateListsStore.set(privateLists);
   bibleBooksStore.set(bibleBooks);

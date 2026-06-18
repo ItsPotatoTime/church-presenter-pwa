@@ -40,7 +40,17 @@ export type ScoredResult<T> = {
   snippet: string;
 };
 
-type NormCache = { nName: string; nFolder: string; nSlides: string[] | null };
+export type NormCache = {
+  nName: string;
+  nFolder: string;
+  nSlides: string[] | null;
+  /** Pre-split words of `nName`. Filled lazily; null = not yet computed. */
+  nNameWords: string[] | null;
+  /** Pre-split words of `nFolder`. Filled lazily; null = not yet computed. */
+  nFolderWords: string[] | null;
+  /** Pre-split words of each slide in `nSlides`. Lazily aligned with nSlides. */
+  nSlideWords: (string[] | null)[] | null;
+};
 
 function words(text: string): string[] {
   return text ? text.split(' ') : [];
@@ -55,8 +65,20 @@ function allTokensWordPrefix(tokens: string[], text: string): boolean {
   return tokens.length > 0 && tokens.every((token) => textWords.some((word) => word.startsWith(token)));
 }
 
+function allTokensWordPrefixCached(tokens: string[], textWords: string[]): boolean {
+  return tokens.length > 0 && tokens.every((token) => textWords.some((word) => word.startsWith(token)));
+}
+
 function contiguousTokensWordPrefix(tokens: string[], text: string): boolean {
   const textWords = words(text);
+  if (tokens.length === 0 || textWords.length < tokens.length) return false;
+  for (let start = 0; start <= textWords.length - tokens.length; start++) {
+    if (tokens.every((token, offset) => textWords[start + offset].startsWith(token))) return true;
+  }
+  return false;
+}
+
+function contiguousTokensWordPrefixCached(tokens: string[], textWords: string[]): boolean {
   if (tokens.length === 0 || textWords.length < tokens.length) return false;
   for (let start = 0; start <= textWords.length - tokens.length; start++) {
     if (tokens.every((token, offset) => textWords[start + offset].startsWith(token))) return true;
@@ -141,7 +163,8 @@ function textScore(
   if (!text || !q) return 0;
   if (text === q) return exact;
   if (text.startsWith(q)) return starts;
-  if (words(text).some((word) => word.startsWith(q))) return wordPrefix;
+  const textWords = words(text);
+  if (textWords.some((word) => word.startsWith(q))) return wordPrefix;
   if (text.includes(q)) return contains;
 
   const qCompact = compact(q);
@@ -149,8 +172,8 @@ function textScore(
   if (qCompact.length >= 4 && textCompact.includes(qCompact)) return Math.max(1, contains - 8);
 
   if (tokens.length > 1) {
-    if (contiguousTokensWordPrefix(tokens, text)) return allPrefixes;
-    if (!orderedTokens && allTokensWordPrefix(tokens, text)) return Math.max(1, allPrefixes - 8);
+    if (contiguousTokensWordPrefixCached(tokens, textWords)) return allPrefixes;
+    if (!orderedTokens && allTokensWordPrefixCached(tokens, textWords)) return Math.max(1, allPrefixes - 8);
     if (!orderedTokens && allTokensPresent(tokens, text)) return allTokens;
   }
 
@@ -177,9 +200,64 @@ function textScore(
   );
 }
 
-function slideTextScore(text: string, q: string, tokens: string[]): number {
-  if (tokens.length <= 1) return textScore(text, q, tokens, [300, 290, 280, 270, 260, 250]);
-  return textScore(text, q, tokens, [300, 285, 275, 270, 260, 250], true, true);
+function textScoreCached(
+  text: string,
+  q: string,
+  tokens: string[],
+  weights: [number, number, number, number, number, number],
+  textWords: string[],
+  fuzzy = true,
+  orderedTokens = false,
+): number {
+  const [exact, starts, wordPrefix, contains, allPrefixes, allTokens] = weights;
+  if (!text || !q) return 0;
+  if (text === q) return exact;
+  if (text.startsWith(q)) return starts;
+  if (textWords.some((word) => word.startsWith(q))) return wordPrefix;
+  if (text.includes(q)) return contains;
+
+  const qCompact = compact(q);
+  const textCompact = compact(text);
+  if (qCompact.length >= 4 && textCompact.includes(qCompact)) return Math.max(1, contains - 8);
+
+  if (tokens.length > 1) {
+    if (contiguousTokensWordPrefixCached(tokens, textWords)) return allPrefixes;
+    if (!orderedTokens && allTokensWordPrefixCached(tokens, textWords)) return Math.max(1, allPrefixes - 8);
+    if (!orderedTokens && allTokensPresent(tokens, text)) return allTokens;
+  }
+
+  if (!fuzzy || qCompact.length < 4) return 0;
+
+  const fuzzyCeiling = Math.max(1, allTokens - 1);
+  const fuzzyFloor = Math.max(1, allTokens - 90);
+  let best: number;
+  let threshold: number;
+  if (tokens.length <= 1) {
+    best = Math.max(bestWordRatio(q, text), partialRatio(qCompact, textCompact));
+    threshold = qCompact.length <= 6 ? 82 : 78;
+  } else if (orderedTokens) {
+    best = Math.max(partialRatio(q, text), partialRatio(qCompact, textCompact));
+    threshold = tokens.length >= 4 ? 72 : 78;
+  } else {
+    best = Math.max(wrRatio(q, text), tokenSetRatio(q, text));
+    threshold = tokens.length >= 4 ? 74 : 78;
+  }
+  if (best < threshold) return 0;
+  return Math.min(
+    fuzzyCeiling,
+    Math.max(fuzzyFloor, fuzzyFloor + Math.floor(((best - threshold) * (fuzzyCeiling - fuzzyFloor)) / Math.max(1, 100 - threshold))),
+  );
+}
+
+function slideTextScore(text: string, q: string, tokens: string[], textWords?: string[]): number {
+  if (tokens.length <= 1) {
+    return textWords
+      ? textScoreCached(text, q, tokens, [300, 290, 280, 270, 260, 250], textWords)
+      : textScore(text, q, tokens, [300, 290, 280, 270, 260, 250]);
+  }
+  return textWords
+    ? textScoreCached(text, q, tokens, [300, 285, 275, 270, 260, 250], textWords, true, true)
+    : textScore(text, q, tokens, [300, 285, 275, 270, 260, 250], true, true);
 }
 
 function normalizeWithMap(raw: string): { text: string; offsets: number[] } {
@@ -270,14 +348,19 @@ export function matchScore<
       nName: item.normalized_name ?? item._norm_name ?? normalize(item.name),
       nFolder: item.normalized_folder ?? item._norm_folder ?? normalize(item.folder ?? ''),
       nSlides: normalizedBlob ? normalizedBlob.split(' | ') : null,
+      nNameWords: null,
+      nFolderWords: null,
+      nSlideWords: null,
     };
     normCache?.set(item, cached);
   }
 
-  let score = textScore(cached.nName, q, tokens, [700, 680, 660, 640, 620, 600]);
+  const nameWords = cached.nNameWords ?? (cached.nNameWords = words(cached.nName));
+  let score = textScoreCached(cached.nName, q, tokens, [700, 680, 660, 640, 620, 600], nameWords);
   if (score) return { score, snippet: '' };
 
-  score = textScore(cached.nFolder, q, tokens, [500, 480, 460, 440, 420, 400]);
+  const folderWords = cached.nFolderWords ?? (cached.nFolderWords = words(cached.nFolder));
+  score = textScoreCached(cached.nFolder, q, tokens, [500, 480, 460, 440, 420, 400], folderWords);
   if (score) return { score, snippet: '' };
 
   if (searchSlides && item.slide_texts) {
@@ -288,10 +371,21 @@ export function matchScore<
 
     if (!cached.nSlides) {
       cached.nSlides = normalizedBlob ? normalizedBlob.split(' | ') : item.slide_texts.map(normalize);
+      cached.nSlideWords = null;
+    }
+    let slideWords = cached.nSlideWords;
+    if (!slideWords) {
+      slideWords = new Array(cached.nSlides.length).fill(null);
+      cached.nSlideWords = slideWords;
     }
     for (let si = 0; si < cached.nSlides.length; si++) {
       const ns = cached.nSlides[si];
-      score = slideTextScore(ns, q, tokens);
+      let sw = slideWords[si];
+      if (!sw) {
+        sw = words(ns);
+        slideWords[si] = sw;
+      }
+      score = slideTextScore(ns, q, tokens, sw);
       if (score) {
         const raw = item.slide_texts[si] ?? '';
         return { score, snippet: snippetForMatch(raw, q, tokens) };

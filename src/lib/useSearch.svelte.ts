@@ -272,6 +272,15 @@ export function useSongSearch(opts: UseSongSearchOptions): UseSongSearchResult {
   let indexed = $state(false);
   let source = $state<'local' | 'server' | null>(null);
 
+  // Shallow fingerprint of the items array used to skip the structured-clone
+  // + worker re-index when a sync only touched non-search-relevant fields
+  // like `key` or `key_ts`. Without this guard, every delta sync would
+  // re-clone ~5-10MB of songs through the structured clone, rebuild the
+  // inverted index from scratch (~100-200ms), and stall the search box
+  // during the rebuild window. Same songs + same modified_ts + same slide
+  // counts → no rebuild needed.
+  let lastItemsFingerprint = '';
+
   // Subscribe to worker acks for the lifetime of this hook instance.
   $effect(() => {
     const listener: SongAckListener = () => {
@@ -283,11 +292,40 @@ export function useSongSearch(opts: UseSongSearchOptions): UseSongSearchResult {
     };
   });
 
-  // Re-index whenever the songs array changes. We mark `indexed = false`
-  // up front so the search effect doesn't fire against stale data.
+  // Re-index whenever the items array changes — but only if the
+  // search-relevant fields actually changed. Falls through as a no-op when
+  // the fingerprint matches, so sync deltas that only update song keys
+  // (the common case) no longer churn the worker.
   $effect(() => {
     const songs = opts.items();
     void songs.length; // touch length so empty array swaps still re-run
+
+    let fingerprint: string;
+    if (songs.length === 0) {
+      fingerprint = 'empty';
+    } else {
+      // Cheap to compute (~1-5ms for 3500 songs). Includes the exact slide
+      // count per song so adding/removing lyrics invalidates the cache
+      // while changing just `key`/`key_ts` does not.
+      let fp = songs.length.toString();
+      for (let i = 0; i < songs.length; i++) {
+        const s = songs[i];
+        fp += '|';
+        fp += s.path;
+        fp += ':';
+        fp += s.modified_ts ?? 0;
+        fp += ':';
+        fp += s.slide_texts?.length ?? 0;
+      }
+      fingerprint = fp;
+    }
+
+    if (fingerprint === lastItemsFingerprint) {
+      // Already indexed this exact dataset — skip the rebuild.
+      return;
+    }
+    lastItemsFingerprint = fingerprint;
+
     indexed = false;
     let cancelled = false;
     getWorker().then((w) => {
@@ -457,6 +495,12 @@ export function useBibleSearch(opts: UseBibleSearchOptions): UseBibleSearchResul
   let pending = $state(false);
   let indexed = $state(false);
   let source = $state<'local' | 'server' | null>(null);
+  // Bible verses are immutable for a given bible_version, so the diff-guard
+  // is coarse: we cache on (count, first-id, last-id) rather than hashing
+  // every verse. Bible re-sync very rarely changes a small subset of verses
+  // (which is captured by bible_version), so when the same count + boundary
+  // ids arrive we skip the re-index.
+  let lastVersesFingerprint = '';
 
   $effect(() => {
     const listener: BibleAckListener = () => {
@@ -471,6 +515,21 @@ export function useBibleSearch(opts: UseBibleSearchOptions): UseBibleSearchResul
   $effect(() => {
     const verses = opts.verses();
     void verses.length;
+
+    let fingerprint: string;
+    if (verses.length === 0) {
+      fingerprint = 'empty';
+    } else {
+      const first = verses[0];
+      const last = verses[verses.length - 1];
+      fingerprint = `${verses.length}|${first.id ?? first.book_num ?? ''}:${first.chapter}:${first.verse}|${last.id ?? last.book_num ?? ''}:${last.chapter}:${last.verse}`;
+    }
+
+    if (fingerprint === lastVersesFingerprint) {
+      return;
+    }
+    lastVersesFingerprint = fingerprint;
+
     indexed = false;
     let cancelled = false;
     getWorker().then((w) => {

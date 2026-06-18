@@ -1011,32 +1011,51 @@ export async function putSongs(songs: LibrarySong[]): Promise<void> {
   if (!serverKey) return;
   const activeServerKey = serverKey;
   const db = await openDb();
+
+  // Pre-fetch existing keys/timestamps once so we can decide which incoming
+  // rows need to inherit the locally-stored song key (key_ts newer locally).
+  // Previously this was a sequential get→put chain per song (~3500 round
+  // trips through the IndexedDB event loop). Now it's one getAll + N puts
+  // issued back-to-back inside the same transaction.
+  const existingByKey = new Map<string, { key: string | null | undefined; key_ts: number }>();
+  await new Promise<void>((resolve, reject) => {
+    const readTx = db.transaction(STORE_SERVER_SONGS, 'readonly');
+    const readReq = readTx.objectStore(STORE_SERVER_SONGS).getAll();
+    readReq.onsuccess = () => {
+      const rows = (readReq.result ?? []) as ScopedSong[];
+      for (const row of rows) {
+        if (row.server_key === activeServerKey && row.path) {
+          existingByKey.set(row.path, { key: row.key, key_ts: row.key_ts || 0 });
+        }
+      }
+      resolve();
+    };
+    readReq.onerror = () => reject(readReq.error);
+  });
+
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_SERVER_SONGS, 'readwrite');
     const store = tx.objectStore(STORE_SERVER_SONGS);
-    let index = 0;
     const syncQueue: { path: string; key: string | null | undefined; key_ts: number }[] = [];
 
-    function next() {
-      if (index >= songs.length) return;
-      const s = toIndexedDbValue(songs[index++]) as ScopedSong;
+    // Issue all puts up front. IndexedDB will queue them inside the
+    // transaction; we don't need to wait for each one's onsuccess before
+    // issuing the next. This is dramatically faster than serial get→put
+    // chaining for 3500-song syncs.
+    for (let i = 0; i < songs.length; i++) {
+      const s = toIndexedDbValue(songs[i]) as ScopedSong;
       s.server_key = activeServerKey;
-      const getReq = store.get([activeServerKey, s.path]);
-      getReq.onsuccess = () => {
-        const existing = getReq.result as ScopedSong | undefined;
-        if (existing) {
-          const localTs = existing.key_ts || 0;
-          const incomingTs = s.key_ts || 0;
-          if (localTs > incomingTs) {
-            s.key = existing.key;
-            s.key_ts = existing.key_ts;
-            syncQueue.push({ path: s.path, key: s.key, key_ts: s.key_ts ?? 0 });
-          }
+      const existing = existingByKey.get(s.path);
+      if (existing) {
+        const localTs = existing.key_ts || 0;
+        const incomingTs = s.key_ts || 0;
+        if (localTs > incomingTs) {
+          s.key = existing.key;
+          s.key_ts = existing.key_ts;
+          syncQueue.push({ path: s.path, key: s.key, key_ts: s.key_ts ?? 0 });
         }
-        store.put(s);
-        next();
-      };
-      getReq.onerror = () => reject(getReq.error);
+      }
+      store.put(s);
     }
 
     tx.oncomplete = () => {
@@ -1065,7 +1084,6 @@ export async function putSongs(songs: LibrarySong[]): Promise<void> {
       resolve();
     };
     tx.onerror = () => reject(tx.error);
-    next();
   });
 }
 
@@ -1093,19 +1111,34 @@ export async function loadAllSongs(): Promise<LibrarySong[]> {
   const serverKey = await requireActiveServerKey();
   if (!serverKey) return [];
   const rows = await loadScopedRows<ScopedSong>(STORE_SERVER_SONGS, serverKey);
-  const songs = rows.map((row) => stripServerKey(row) as LibrarySong);
-  songs.sort((a, b) => {
-    const aDigit = (a.name && a.name.charAt(0) >= '0' && a.name.charAt(0) <= '9') ? 1 : 0;
-    const bDigit = (b.name && b.name.charAt(0) >= '0' && b.name.charAt(0) <= '9') ? 1 : 0;
-    if (aDigit !== bDigit) return aDigit - bDigit;
-    return a.name.localeCompare(b.name);
-  });
-  return songs;
+  // NOTE: callers that need display order should sort at the store/UI layer
+  // (see sync.ts:sortSongsForDisplay). Sorting here wastes time on every call.
+  return rows.map((row) => stripServerKey(row) as LibrarySong);
 }
 
 export async function getAllSongPaths(): Promise<string[]> {
-  const songs = await loadAllSongs();
-  return songs.map((song) => song.path);
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return [];
+  const db = await openDb();
+  // getAllKeys on the compound [server_key, path] index is much cheaper than
+  // loadAllSongs() + .map(s => s.path) — it skips deserializing slide_texts
+  // for every song just to extract the path component.
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVER_SONGS, 'readonly');
+    const req = tx.objectStore(STORE_SERVER_SONGS).getAllKeys();
+    req.onsuccess = () => {
+      const keys = (req.result ?? []) as unknown[][];
+      const paths: string[] = [];
+      for (const key of keys) {
+        // Compound key is [server_key, path]
+        if (Array.isArray(key) && key[0] === serverKey && key.length > 1) {
+          paths.push(String(key[1]));
+        }
+      }
+      resolve(paths);
+    };
+    req.onerror = () => reject(req.error);
+  });
 }
 
 async function loadScopedRows<T extends { server_key: string }>(
