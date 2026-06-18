@@ -11,8 +11,9 @@
     listsActiveTab, listsSelectedName, listsShowPicker, listsPickerRawQuery, listsPickerSearchSlides, listsScrollY
   } from '$lib/stores';
   import type { LibraryList, LibrarySong, SongSearchPayload } from '$lib/protocol';
-  import { normalize, filterSongs, renderMarkdown } from '$lib/search';
+  import { normalize, renderMarkdown } from '$lib/search';
   import type { ScoredResult } from '$lib/search';
+  import { useSongSearch } from '$lib/useSearch.svelte';
   import SongPreviewModal from '$lib/SongPreviewModal.svelte';
   import VirtualList from '$lib/VirtualList.svelte';
 
@@ -381,27 +382,54 @@
     };
   });
 
-  function localPickerResults(q: string): ScoredResult<LibrarySong>[] {
-    return filterSongs(q, $songsStore, pickerSearchSlides, 300);
-  }
+  // Worker-backed local search — replaces the synchronous filterSongs() call
+  // that was freezing the UI on every keystroke with 3500+ songs in the
+  // library. The worker owns an inverted index and runs all fuzzy scoring
+  // off the main thread.
+  const localPickerSearch = useSongSearch({
+    items: () => $songsStore,
+    query: () => pickerQuery,
+    searchSlides: () => pickerSearchSlides,
+    maxResults: 300,
+    debounceMs: 180,
+  });
 
   const pickerFiltered = $derived.by<ScoredResult<LibrarySong>[]>(() => {
     const q = pickerQuery.trim();
     if (!q) return $songsStore.map((s) => ({ item: s, score: 0, snippet: '' }));
     if ($connStatus === 'open' && !pickerServerSearch.failed) {
-      if (pickerServerSearch.query === pickerQuery && pickerServerSearch.searchSlides === pickerSearchSlides) {
-        return pickerServerSearch.items.length || !pickerServerSearch.pending
-          ? pickerServerSearch.items
-          : localPickerResults(q);
+      // Online path: prefer server results. While the server search is
+      // in-flight or the user has typed a new query that the server hasn't
+      // seen yet, return an empty list so the UI shows "Searching…"
+      // rather than thrashing the local search on every keystroke.
+      if (
+        pickerServerSearch.query === pickerQuery
+        && pickerServerSearch.searchSlides === pickerSearchSlides
+        && !pickerServerSearch.pending
+      ) {
+        return pickerServerSearch.items;
       }
+      return [];
     }
-    return localPickerResults(q);
+    // Offline OR server search failed: use worker-backed local results.
+    return localPickerSearch.results;
   });
   const pickerSearchPending = $derived(
     pickerQuery.trim().length > 0
       && $connStatus === 'open'
       && !pickerServerSearch.failed
-      && (pickerServerSearch.pending || pickerServerSearch.query !== pickerQuery || pickerServerSearch.searchSlides !== pickerSearchSlides)
+      && (
+        pickerServerSearch.pending
+        || pickerServerSearch.query !== pickerQuery
+        || pickerServerSearch.searchSlides !== pickerSearchSlides
+      ),
+  );
+  // Local worker pending flag — only relevant when offline or the server
+  // search has already failed.
+  const pickerLocalPending = $derived(
+    ($connStatus !== 'open' || pickerServerSearch.failed)
+      && pickerQuery.trim().length > 0
+      && localPickerSearch.pending,
   );
 
   const songByPath = $derived.by(() => new Map($songsStore.map((song) => [song.path, song])));
@@ -649,7 +677,7 @@
         </label>
       </div>
       <div class="picker-list">
-        {#if pickerSearchPending}
+        {#if pickerSearchPending || pickerLocalPending}
           <div class="muted small picker-status">Searching songs...</div>
         {/if}
         <VirtualList items={pickerFiltered} itemHeight={104} class="picker-virtual-list">

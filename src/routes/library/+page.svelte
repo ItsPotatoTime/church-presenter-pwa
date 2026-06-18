@@ -8,8 +8,9 @@
   import { loadCredentialsResilient } from '$lib/db';
   import { applyQueueCommandLocally, queueCommandForOfflineReplay } from '$lib/offlineQueue';
   import type { BibleBook, BibleSearchResult, BibleVerse, LibrarySong, SongSearchPayload } from '$lib/protocol';
-  import { filterSongs, normalize, renderMarkdown } from '$lib/search';
+  import { normalize, renderMarkdown } from '$lib/search';
   import { isReducedDataConnection, syncFull, syncNow } from '$lib/sync';
+  import { useSongSearch, useBibleSearch } from '$lib/useSearch.svelte';
   import {
     bibleBooksStore,
     bibleVersesStore,
@@ -244,6 +245,26 @@ let query = $state('');
       });
   });
 
+  // Worker-backed local search — used when the desktop is offline or the
+  // server search failed. Mirrors the desktop's FTS5 + fuzzy-score approach
+  // but runs entirely off the main thread so 3500-song searches no longer
+  // freeze the UI.
+  const localSearch = useSongSearch({
+    items: () => $songsStore,
+    query: () => query,
+    searchSlides: () => searchSlides,
+    maxResults: 200,
+    debounceMs: 180,
+  });
+
+  // Worker-backed Bible text search fallback for offline use.
+  const localBibleSearch = useBibleSearch({
+    verses: () => $bibleVersesStore,
+    query: () => bibleQuery,
+    maxResults: 120,
+    debounceMs: 180,
+  });
+
   const searchData = $derived.by<{ items: SongResult[]; pending: boolean }>(() => {
     const q = normalize(query);
     if (!q) return { items: [], pending: false };
@@ -253,14 +274,13 @@ let query = $state('');
       }
       return { items: [], pending: true };
     }
-    const results = filterSongs(query, $songsStore, searchSlides, Number.POSITIVE_INFINITY);
     return {
-      items: results.map((result) => ({
+      items: localSearch.results.map((result) => ({
         s: result.item,
         score: result.score,
         snippet: result.snippet,
       })),
-      pending: false,
+      pending: localSearch.pending,
     };
   });
 
@@ -307,12 +327,8 @@ let query = $state('');
     ) {
       return bibleServerSearch.items;
     }
-    const results: BibleVerse[] = [];
-    for (const verse of $bibleVersesStore) {
-      if ((verse.normalized_text ?? normalize(verse.text)).includes(q)) results.push(verse);
-      if (results.length >= 120) break;
-    }
-    return results;
+    // Offline or server failed/pending — fall back to worker-backed local search.
+    return localBibleSearch.results;
   });
 
   function parseBibleReference(queryText: string, books: BibleBook[]): BibleReferenceParse {
