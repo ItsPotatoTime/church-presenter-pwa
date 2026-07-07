@@ -13,6 +13,10 @@
 
   // State
   let slides = $state([...song.slide_texts]);
+  // Baseline slides as loaded — sent to the desktop so it can compute
+  // per-slide overrides (matching the desktop editor's override model)
+  // instead of overwriting the whole slide set.
+  let originalSlides = $state([...song.slide_texts]);
   let songName = $state(song.name);
   let selectedIndex = $state<number | null>(null);
   let isVirtual = $derived(song.path.startsWith('virtual://') || song.path.startsWith('virtual:'));
@@ -235,6 +239,7 @@
       song_path: song.path,
       name: songName.trim(),
       slide_texts: slideTexts,
+      original_slides: originalSlides,
       chorus_index: primaryChorusIndex,
       chorus_ranges: ranges.length > 0 ? ranges : null,
       end_slide_index: endSlideIndex,
