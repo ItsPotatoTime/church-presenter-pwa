@@ -191,6 +191,7 @@ export type ClientCommand =
   | { type: 'live.prev' }
   | { type: 'live.blank' }
   | { type: 'live.freeze' }
+  | { type: 'live.chorus' }
   | { type: 'live.goto'; payload: { song_index: number; slide_index: number } }
   | { type: 'live.follow'; payload: { enabled: boolean } }
   | { type: 'queue.add'; payload: { song_path: string; position?: number } }

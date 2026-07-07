@@ -10,7 +10,6 @@
     isViewOnly,
   } from '$lib/stores';
 
-  let textVisible = $state(true);
   let fontBoost = $state(1.0); // local preview zoom only
 
   onMount(async () => {
@@ -39,6 +38,7 @@
   function next()  { remote.send({ type: 'live.next' }); }
   function prev()  { remote.send({ type: 'live.prev' }); }
   function blank() { remote.send({ type: 'live.blank' }); }
+  function chorus() { remote.send({ type: 'live.chorus' }); }
 
   function togglePresenting() {
     remote.send({ type: 'live.toggle_present' });
@@ -100,7 +100,7 @@
 <section class="slide-box" class:blanked={$liveState?.blanked}>
   {#if $liveState?.blanked}
     <div class="blank-label">● BLACKED OUT</div>
-  {:else if textVisible && currentSlideText}
+  {:else if currentSlideText}
     <div class="slide-text" style="font-size: {Math.round(18 * fontBoost)}px">
       {#each currentSlideText.split('\n') as line}
         <div>{@html renderMarkdown(line) || '\u00A0'}</div>
@@ -109,8 +109,6 @@
     {#if $liveState?.bible_ref_display}
       <div class="bible-ref">{$liveState.bible_ref_display}</div>
     {/if}
-  {:else if !textVisible}
-    <div class="muted">Text hidden on this phone</div>
   {:else}
     <div class="muted">Waiting for slide…</div>
   {/if}
@@ -134,9 +132,7 @@
 </section>
 
 <section class="row">
-  <button onclick={() => (textVisible = !textVisible)}>
-    {textVisible ? 'Hide text' : 'Show text'}
-  </button>
+  <button onclick={chorus} disabled={$isViewOnly}>🎵 Go to chorus</button>
 </section>
 
 <section class="row font-row">
