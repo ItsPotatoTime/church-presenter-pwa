@@ -1,12 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { loadCredentialsResilient } from '$lib/db';
   import { applyQueueCommandLocally, queueCommandForOfflineReplay } from '$lib/offlineQueue';
   import type { ClientCommand, LibrarySong } from '$lib/protocol';
   import { remote } from '$lib/ws';
-  import { connStatus, isViewOnly, queueState, songsStore, activeModals } from '$lib/stores';
+  import { connStatus, isViewOnly, queueState, queueDragActive, songsStore, activeModals } from '$lib/stores';
   import SongPreviewModal from '$lib/SongPreviewModal.svelte';
 
   const songByPath = $derived.by(() => new Map($songsStore.map((song) => [song.path, song])));
@@ -59,6 +60,11 @@
 
   async function tapJump(i: number) {
     if (dragging !== null) return; // swallow taps that end a drag
+    // Keep the desktop's focused/selected queue item in lockstep with the tap.
+    // This drives the desktop preview (or pending preview while presenting) so
+    // the phone and desktop agree on which song is "current".
+    send({ type: 'queue.select', payload: { song_index: i } });
+
     const item = $queueState?.items[i];
     const song = item && !item.is_bible && !item.is_merged ? (songByPath.get(item.path) ?? null) : null;
     if (song) {
@@ -69,6 +75,12 @@
     if ($isViewOnly) return;
     const name = $queueState?.items[i]?.name || 'this song';
     if (!await showConfirm(`Switch to "${name}"?`)) return;
+    send({ type: 'live.goto', payload: { song_index: i, slide_index: 0 } });
+  }
+
+  // "Go live" from the queue: jump the desktop live presentation to this song.
+  function goLive(i: number) {
+    if ($isViewOnly) return;
     send({ type: 'live.goto', payload: { song_index: i, slide_index: 0 } });
   }
 
@@ -140,6 +152,7 @@
 
     dragging  = i;
     insertAt  = i;
+    queueDragActive.set(true);
     const qi = $queueState?.items[i];
     ghostItem = { name: qi?.name ?? '', folder: qi?.folder, is_merged: qi?.is_merged, is_bible: qi?.is_bible };
     ghostStyle = `top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;height:${rect.height}px`;
@@ -154,6 +167,13 @@
     e.preventDefault();
 
     ghostStyle = `top:${e.clientY - _pointerOffsetY}px;left:${_ghostLeft}px;width:${_ghostWidth}px`;
+
+    // Refresh geometry from the live DOM each move (the list may have re-rendered
+    // since grip-down). Using stale cached positions would compute the wrong
+    // drop index — the source of the flaky reorder.
+    const els = document.querySelectorAll<HTMLElement>('.qitem');
+    _tops    = Array.from(els, el => el.getBoundingClientRect().top);
+    _heights = Array.from(els, el => el.getBoundingClientRect().height);
 
     // Count items (excluding dragged) whose midpoint is above the pointer.
     let rank = 0;
@@ -173,9 +193,19 @@
     dragging  = null;
     insertAt  = null;
     ghostItem = null;
+    queueDragActive.set(false);
 
     if (from !== null && to !== null && from !== to) {
       send({ type: 'queue.reorder', payload: { from, to } });
+      // Optimistically mirror the move locally so a fast second drag starts from
+      // the correct order instead of waiting for the desktop's echo.
+      const qs = get(queueState);
+      if (qs) {
+        const items = qs.items.slice();
+        const [m] = items.splice(from, 1);
+        items.splice(to, 0, m);
+        queueState.set({ ...qs, items });
+      }
     }
   }
 
@@ -183,6 +213,7 @@
     window.removeEventListener('pointermove', onDragMove);
     window.removeEventListener('pointerup',     onDragEnd);
     window.removeEventListener('pointercancel', onDragEnd);
+    queueDragActive.set(false);
   });
 </script>
 
@@ -241,6 +272,9 @@
           {/if}
         </button>
         <button class="rm" aria-label="Remove" onclick={() => remove(i)} disabled={$isViewOnly}>✕</button>
+        {#if $queueState.playing_song_index !== i}
+          <button class="golive" aria-label="Go live" title="Go live" onclick={() => goLive(i)} disabled={$isViewOnly}>▶</button>
+        {/if}
       </li>
     {/each}
   </ul>
@@ -377,6 +411,13 @@
   }
   .rm:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
   .rm:active:not(:disabled) { transform: scale(0.95); background: rgba(239, 68, 68, 0.15); }
+  .golive {
+    width: 40px; padding: 0; font-size: 14px;
+    background: transparent; color: var(--accent); border-color: var(--border);
+    transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease, transform 100ms ease;
+  }
+  .golive:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+  .golive:active:not(:disabled) { transform: scale(0.95); background: rgba(124, 196, 255, 0.15); }
   a.btn.disabled { pointer-events: none; opacity: 0.45; }
  
   /* ── Floating drag ghost ──────────────────────────────────────────── */

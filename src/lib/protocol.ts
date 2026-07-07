@@ -80,6 +80,8 @@ export interface QueueItem {
 
 export interface QueueState {
   items: QueueItem[];
+  // current_song_index: the focused/selected queue item (driven by `queue.select`).
+  // Distinct from playing_song_index when the item is previewed but not yet live.
   current_song_index: number;
   playing_song_index: number;
   current_slide_index: number;
@@ -200,6 +202,7 @@ export type ClientCommand =
   | { type: 'queue.remove'; payload: { position: number } }
   | { type: 'queue.reorder'; payload: { from: number; to: number } }
   | { type: 'queue.clear' }
+  | { type: 'queue.select'; payload: { song_index: number } } // focus/select a queue item on desktop (preview, not go-live)
   | { type: 'list.create'; payload: { name: string } }
   | { type: 'list.delete'; payload: { name: string } }
   | { type: 'list.rename'; payload: { old: string; new: string } }

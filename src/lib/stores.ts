@@ -23,6 +23,10 @@ export const connEndpoint: Writable<'cloud' | 'lan' | null> = writable(null);
 
 export const liveState: Writable<LiveState | null> = writable(null);
 export const queueState: Writable<QueueState | null> = writable(null);
+// True while the user is mid-drag reordering the queue on this device. Used to
+// suppress incoming queue.state echoes so a re-render mid-drag can't corrupt the
+// drop-index calculation.
+export const queueDragActive: Writable<boolean> = writable(false);
 
 export const songsStore: Writable<LibrarySong[]> = writable([]);
 export const listsStore: Writable<LibraryList[]> = writable([]);

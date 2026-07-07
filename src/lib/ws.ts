@@ -5,6 +5,7 @@
 // Each open socket gets a generation id; every handler is guarded so that a
 // late event from a previous socket can never corrupt the current state.
 
+import { get } from 'svelte/store';
 import type {
   AuthFail,
   AuthOk,
@@ -38,6 +39,7 @@ import {
   listsStore,
   liveState,
   pendingSyncError,
+  queueDragActive,
   queueState,
   serverName,
   canEditKeys,
@@ -502,6 +504,9 @@ class RemoteClient {
       }
 
       if (msg.type === 'queue.state') {
+        // While this device is mid-drag reordering, ignore echoes so a re-render
+        // can't corrupt the drop-index calculation (see queue/+page.svelte).
+        if (get(queueDragActive)) return;
         const qs = msg.payload as QueueState;
         queueState.set(qs);
         void cacheQueueState(qs);
