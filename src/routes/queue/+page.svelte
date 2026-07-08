@@ -7,7 +7,7 @@
   import { applyQueueCommandLocally, queueCommandForOfflineReplay } from '$lib/offlineQueue';
   import type { ClientCommand, LibrarySong } from '$lib/protocol';
   import { remote } from '$lib/ws';
-  import { connStatus, isViewOnly, queueState, queueDragActive, songsStore, activeModals } from '$lib/stores';
+  import { connStatus, isViewOnly, queueState, queueDragActive, liveState, songsStore, activeModals } from '$lib/stores';
   import SongPreviewModal from '$lib/SongPreviewModal.svelte';
 
   const songByPath = $derived.by(() => new Map($songsStore.map((song) => [song.path, song])));
@@ -60,27 +60,20 @@
 
   async function tapJump(i: number) {
     if (dragging !== null) return; // swallow taps that end a drag
-    // Keep the desktop's focused/selected queue item in lockstep with the tap.
-    // This drives the desktop preview (or pending preview while presenting) so
-    // the phone and desktop agree on which song is "current".
-    send({ type: 'queue.select', payload: { song_index: i } });
 
     const item = $queueState?.items[i];
     const song = item && !item.is_bible && !item.is_merged ? (songByPath.get(item.path) ?? null) : null;
     if (song) {
+      // Open the phone-only song preview menu. Nothing is sent to the desktop
+      // until the user Confirm's in that menu (see confirmPreviewSwitch).
       previewSong = song;
       previewSwitchIndex = $isViewOnly ? null : i;
       return;
     }
     if ($isViewOnly) return;
+    // Bible/merged items can't be previewed as a song — go live on confirm (as before).
     const name = $queueState?.items[i]?.name || 'this song';
     if (!await showConfirm(`Switch to "${name}"?`)) return;
-    send({ type: 'live.goto', payload: { song_index: i, slide_index: 0 } });
-  }
-
-  // "Go live" from the queue: jump the desktop live presentation to this song.
-  function goLive(i: number) {
-    if ($isViewOnly) return;
     send({ type: 'live.goto', payload: { song_index: i, slide_index: 0 } });
   }
 
@@ -95,7 +88,15 @@
 
   function confirmPreviewSwitch() {
     if (previewSwitchIndex === null || $isViewOnly) return;
-    send({ type: 'live.goto', payload: { song_index: previewSwitchIndex, slide_index: 0 } });
+    const idx = previewSwitchIndex;
+    if ($liveState?.presenting) {
+      // A show is already running and we're away from the laptop — switch live now
+      // instead of waiting on the desktop's pending-confirm banner.
+      send({ type: 'live.goto', payload: { song_index: idx, slide_index: 0 } });
+    } else {
+      // Idle: just select/load the song in the desktop main app (no live yet).
+      send({ type: 'queue.select', payload: { song_index: idx } });
+    }
     closePreview();
   }
 
@@ -272,9 +273,6 @@
           {/if}
         </button>
         <button class="rm" aria-label="Remove" onclick={() => remove(i)} disabled={$isViewOnly}>✕</button>
-        {#if $queueState.playing_song_index !== i}
-          <button class="golive" aria-label="Go live" title="Go live" onclick={() => goLive(i)} disabled={$isViewOnly}>▶</button>
-        {/if}
       </li>
     {/each}
   </ul>
@@ -411,13 +409,6 @@
   }
   .rm:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
   .rm:active:not(:disabled) { transform: scale(0.95); background: rgba(239, 68, 68, 0.15); }
-  .golive {
-    width: 40px; padding: 0; font-size: 14px;
-    background: transparent; color: var(--accent); border-color: var(--border);
-    transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease, transform 100ms ease;
-  }
-  .golive:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
-  .golive:active:not(:disabled) { transform: scale(0.95); background: rgba(124, 196, 255, 0.15); }
   a.btn.disabled { pointer-events: none; opacity: 0.45; }
  
   /* ── Floating drag ghost ──────────────────────────────────────────── */
