@@ -190,13 +190,32 @@
     await switchServer(serverKey);
     await hydrateFromCache();
 
-    const unsub = connStatus.subscribe((s) => {
+    let unsub: (() => void) | null = null;
+    let pairTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    // Safety net: if pairing neither succeeds nor errors within ~20s (e.g. a
+    // hung handshake, silent socket death), surface a timeout so the user is
+    // never permanently stuck on the "pairing…" spinner.
+    pairTimeout = setTimeout(() => {
+      if (phase === 'pairing') {
+        error = 'Pairing timed out — check your connection and try again';
+        phase = 'idle';
+        if (pairTimeout) { clearTimeout(pairTimeout); pairTimeout = null; }
+      }
+    }, 20000);
+
+    const cleanup = () => {
+      if (unsub) { unsub(); unsub = null; }
+      if (pairTimeout) { clearTimeout(pairTimeout); pairTimeout = null; }
+    };
+
+    unsub = connStatus.subscribe((s) => {
       if (s === 'open') {
+        cleanup();
         phase = 'done';
-        unsub();
         setTimeout(() => goto(`${base}/live/`), 600);
       } else if (s === 'error') {
-        unsub();
+        cleanup();
         connError.subscribe((e) => { error = e || 'Pair failed'; })();
         phase = 'idle';
       }
@@ -208,8 +227,8 @@
     );
 
     if (get(connStatus) === 'open') {
+      cleanup();
       phase = 'done';
-      unsub();
       setTimeout(() => goto(`${base}/live/`), 600);
     }
   }

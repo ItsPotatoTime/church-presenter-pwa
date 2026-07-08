@@ -615,13 +615,17 @@ class RemoteClient {
       if (this.connectTimer !== null) { clearTimeout(this.connectTimer); this.connectTimer = null; }
       this.ws = null;
       if (pairToken && !authenticated) {
+        // Pairing socket closed before auth completed. Always surface an
+        // error so the pair page's spinner (phase='pairing') resolves and the
+        // user can re-scan. Using 'closed' here (the old behaviour under
+        // forceClose) left the user permanently stuck on "pairing…".
         if (creds.server_key) void removeUnpairedServer(creds.server_key);
-        if (!this.forceClose) {
-          connStatus.set('error');
-          connError.set('Pairing connection closed before it finished');
-        } else {
-          connStatus.set('closed');
-        }
+        connStatus.set('error');
+        connError.set(
+          this.forceClose
+            ? 'Pairing failed — connection closed'
+            : 'Pairing connection closed before it finished'
+        );
         return;
       }
       if (this.forceClose) {
