@@ -155,11 +155,19 @@ export interface SyncFull {
 
 export interface SyncDelta {
   songs_changed: LibrarySong[];
-  all_song_paths: string[];    // every current path — drives removal detection
+  songs_removed: string[];     // paths deleted since since_ts — removal detection
   lists: LibraryList[] | null; // null means no list changes
   all_list_names: string[];
   bible?: BibleSyncData | null;
   server_ts: number;
+}
+
+// Targeted push: a song's musical key changed (server-authoritative value),
+// so phones can update instantly without a full sync.delta round-trip.
+export interface SongKeyChanged {
+  song_path: string;
+  key: string | null;
+  key_ts?: number | null;
 }
 
 export interface SongSearchResult {

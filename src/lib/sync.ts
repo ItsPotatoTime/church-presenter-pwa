@@ -30,6 +30,7 @@ import {
   setBibleVersion,
   setLastSyncTs,
   stripListSyncStatus,
+  updateSongKey,
 } from './db';
 import type { BibleBook, BibleVerse, LibraryList, LibrarySong, SyncDelta, SyncFull } from './protocol';
 import {
@@ -187,11 +188,8 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
     } else if (resp.type === 'sync.delta') {
       const p = resp.payload as SyncDelta;
       if (p.songs_changed.length) await putSongs(p.songs_changed);
-      // Remove songs that vanished on the server
-      const haveNow = new Set(p.all_song_paths);
-      const local = await getAllSongPaths();
-      const toDelete = local.filter((x) => !haveNow.has(x));
-      if (toDelete.length) await deleteSongsByPath(toDelete);
+      // Remove only the songs the server journaled as deleted since our last sync
+      if (p.songs_removed?.length) await deleteSongsByPath(p.songs_removed);
       if (p.lists !== null) {
         lists = await mergeServerLists(p.lists);
       } else {
@@ -261,4 +259,29 @@ export async function hydrateFromCache(): Promise<void> {
   bibleVersesStore.set(bibleVerses);
   bibleVersionStore.set(bibleVersion);
   queueState.set(cachedQueue);
+}
+
+/**
+ * Apply a remote key change pushed via the `song.key_changed` message. Updates
+ * the cached song in IndexedDB and the in-memory store immediately, so the UI
+ * re-renders the key badge without waiting for a full sync.delta round-trip.
+ */
+export async function applyRemoteKeyChange(
+  songPath: string,
+  key: string | null | undefined,
+  keyTs?: number | null,
+): Promise<void> {
+  await updateSongKey(songPath, key, keyTs);
+  songsStore.update((songs) => {
+    const idx = songs.findIndex((s) => s.path === songPath);
+    if (idx === -1) return songs;
+    const updated = [...songs];
+    const current = updated[idx];
+    const incoming = keyTs ?? 0;
+    const local = current.key_ts ?? 0;
+    if (incoming === 0 || incoming >= local) {
+      updated[idx] = { ...current, key: key ?? null, key_ts: incoming || local };
+    }
+    return updated;
+  });
 }

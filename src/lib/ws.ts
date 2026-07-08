@@ -560,6 +560,14 @@ class RemoteClient {
         }
       }
 
+      if (msg.type === 'song.key_changed') {
+        const p = msg.payload as { song_path: string; key: string | null; key_ts?: number | null };
+        import('./sync').then(({ applyRemoteKeyChange }) => {
+          void applyRemoteKeyChange(p.song_path, p.key, p.key_ts);
+        });
+        return;
+      }
+
       if (msg.type === 'library.changed') {
         import('./sync').then(({ syncNow }) => {
           void syncNow();

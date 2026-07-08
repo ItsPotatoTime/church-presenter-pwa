@@ -1122,6 +1122,43 @@ export async function deleteSongsByPath(paths: string[]): Promise<void> {
   });
 }
 
+/**
+ * Apply a remote key change to a single cached song without touching the rest
+ * of the library (used by the targeted `song.key_changed` push). Keeps the
+ * locally-newer key if the incoming one is older, and only writes if the song
+ * is actually cached for the active server.
+ */
+export async function updateSongKey(
+  path: string,
+  key: string | null | undefined,
+  keyTs?: number | null,
+): Promise<boolean> {
+  const serverKey = await requireActiveServerKey();
+  if (!serverKey) return false;
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_SERVER_SONGS, 'readwrite');
+    const store = tx.objectStore(STORE_SERVER_SONGS);
+    const getReq = store.get([serverKey, path]);
+    getReq.onsuccess = () => {
+      const row = getReq.result as (ScopedSong & { key?: string | null; key_ts?: number }) | undefined;
+      if (!row) {
+        resolve(false);
+        return;
+      }
+      const incoming = keyTs ?? 0;
+      const local = row.key_ts ?? 0;
+      if (incoming === 0 || incoming >= local) {
+        row.key = key ?? null;
+        row.key_ts = incoming || local;
+        store.put(row);
+      }
+      resolve(true);
+    };
+    getReq.onerror = () => reject(getReq.error);
+  });
+}
+
 export async function clearSongs(): Promise<void> {
   const serverKey = await requireActiveServerKey();
   if (!serverKey) return;
