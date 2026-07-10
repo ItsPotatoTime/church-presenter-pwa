@@ -34,6 +34,7 @@ import {
   connStatus,
   connEndpoint,
   connError,
+  desktopOnline,
   exclusiveDeviceId,
   exclusiveDeviceName,
   listsStore,
@@ -220,6 +221,8 @@ class RemoteClient {
       clearTimeout(this.connectTimer);
       this.connectTimer = null;
     }
+    // Clear desktop liveness; it is only meaningful while a cloud socket is live.
+    desktopOnline.set(null);
     for (const [id, resolve] of this.pendingRequests.entries()) {
       resolve({ ok: false, error: 'connection_lost' });
     }
@@ -369,6 +372,14 @@ class RemoteClient {
         serverName.set(p.server_name || 'ChurchPresenter');
         canEditKeys.set(!!p.can_edit_keys);
         canEditSongs.set(!!p.can_edit_songs);
+        // Cloud bridge tells us whether the live desktop is up. `connEndpoint`
+        // is 'cloud' only when we reached the cloud bridge; if the field is
+        // present (cloud), reflect desktop liveness, else mark unknown.
+        if (this.currentEndpoint === 'cloud' && typeof p.desktop_online === 'boolean') {
+          desktopOnline.set(p.desktop_online);
+        } else {
+          desktopOnline.set(null);
+        }
         this.backoffIdx = 0;
 
         // Persist credentials first so they survive a reload triggered by a
@@ -600,6 +611,19 @@ class RemoteClient {
               await saveCredentials(c);
             }
           })();
+        }
+        return;
+      }
+
+      if (msg.type === 'server.status_changed') {
+        // Desktop liveness on the cloud bridge flipped (e.g. the live desktop
+        // went offline or came back, via /api/heartbeat). Only meaningful while
+        // we're on the cloud bridge.
+        if (isCurrent() && this.currentEndpoint === 'cloud') {
+          const p = msg.payload as { desktop_online?: boolean };
+          if (typeof p.desktop_online === 'boolean') {
+            desktopOnline.set(p.desktop_online);
+          }
         }
         return;
       }

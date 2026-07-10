@@ -7,7 +7,7 @@
   import { renderMarkdown } from '$lib/search';
   import {
     connStatus, connEndpoint, liveState,
-    isViewOnly,
+    isViewOnly, desktopOnline,
   } from '$lib/stores';
 
   let fontBoost = $state(1.0); // local preview zoom only
@@ -71,6 +71,27 @@
     } as const)[$connStatus]
   );
 
+  // Cloud-aware status. When connected to the cloud bridge we can be either
+  // "Live" (desktop up) or "Cloud only" (desktop offline, mirror available).
+  // This is the message shown on the top pill + an extra detail line.
+  const cloudLabel = $derived.by(() => {
+    if ($connStatus !== 'open') return statusLabel;
+    if ($connEndpoint === 'cloud') {
+      return $desktopOnline === false ? 'Cloud only' : 'Live (cloud)';
+    }
+    return 'Live';
+  });
+
+  const cloudDetail = $derived.by(() => {
+    if ($connStatus !== 'open') return null;
+    if ($connEndpoint === 'cloud') {
+      if ($desktopOnline === false) return 'Desktop offline — showing cloud backup';
+      if ($desktopOnline === true) return 'Desktop online — synced to cloud';
+      return 'Connected to cloud bridge';
+    }
+    return null;
+  });
+
   const currentSlideText = $derived.by(() => {
     const s = $liveState;
     if (!s || !s.slides || s.slide_index < 0) return '';
@@ -91,9 +112,12 @@
       </div>
     </div>
     <div class="pills">
-      <span class="pill {statusClass}">{statusLabel}</span>
+      <span class="pill {statusClass}">{cloudLabel}</span>
       {#if $connEndpoint}<span class="pill">{$connEndpoint}</span>{/if}
     </div>
+    {#if cloudDetail}
+      <div class="cloud-detail">{cloudDetail}</div>
+    {/if}
   </div>
 </header>
 
@@ -252,4 +276,10 @@
   .pill.ok   { color: var(--success); border-color: var(--success); }
   .pill.warn { color: var(--warning); border-color: var(--warning); }
   .pill.err  { color: var(--danger);  border-color: var(--danger); }
+
+  .cloud-detail {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
 </style>

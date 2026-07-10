@@ -20,6 +20,7 @@
   import {
     connStatus,
     connEndpoint,
+    desktopOnline,
     exclusiveDeviceId,
     exclusiveDeviceName,
     isViewOnly,
@@ -239,6 +240,42 @@
     if (!lastSyncTs) return 'never';
     const d = new Date(lastSyncTs * 1000);
     return d.toLocaleString();
+  });
+
+  // Cloud-aware connection status for the active server block, mirroring the
+  // LIVE tab: "Live", "Cloud only" (desktop offline, mirror up), or the raw
+  // connStatus when not on the cloud bridge.
+  const cloudStatusLabel = $derived.by(() => {
+    if ($connStatus !== 'open') {
+      return $connStatus.charAt(0).toUpperCase() + $connStatus.slice(1);
+    }
+    if ($connEndpoint === 'cloud') {
+      if ($desktopOnline === false) return 'Cloud only';
+      if ($desktopOnline === true) return 'Live (cloud)';
+      return 'Cloud';
+    }
+    return 'Live';
+  });
+
+  // Per-server status dot. For the *active* server we can read the live
+  // connection state; other servers are only known to be paired (grey).
+  function serverDotClass(s: ServerEntry): string {
+    if (s.server_key !== creds?.server_key) return 'dot-unknown';
+    if ($connStatus !== 'open') return 'dot-offline';
+    if ($connEndpoint === 'cloud') {
+      return $desktopOnline === false ? 'dot-cloud-only' : 'dot-online';
+    }
+    return 'dot-online';
+  }
+
+  // Dot class for the active-server "Status" row (creds optional before
+  // loadCredentials resolves).
+  const activeDotClass = $derived.by(() => {
+    if (!creds?.server_key) return 'dot-offline';
+    return serverDotClass({
+      ...creds,
+      server_key: creds.server_key,
+    } as ServerEntry);
   });
 
   let importDialog = $state<{ comparison: any; data: BackupData; resolve: (v: boolean) => void } | null>(null);
@@ -498,7 +535,10 @@
   </div>
   <div class="row">
     <span class="muted">Status</span>
-    <span>{$connStatus}{$connEndpoint ? ` (${$connEndpoint})` : ''}</span>
+    <span class="status-cell">
+      <span class="dot {activeDotClass}"></span>
+      {cloudStatusLabel}{$connEndpoint ? ` (${$connEndpoint})` : ''}
+    </span>
   </div>
   <div class="row">
     <span class="muted">Cloud</span>
@@ -517,12 +557,15 @@
   <section class="panel" style="margin-top:12px;">
     <h2>Paired servers</h2>
     {#each servers as s (s.server_key)}
-      <div class="server-row" class:active={s.server_key === creds?.server_key}>
-        <div class="server-info">
-          <div class="server-name">{s.server_name ?? '(unknown)'}</div>
-          <div class="muted small">{s.cloud_host ?? s.lan_host ?? '—'}</div>
-          <div class="muted small mono" style="opacity:0.5;">id: {s.server_key.slice(0, 8)}</div>
-        </div>
+       <div class="server-row" class:active={s.server_key === creds?.server_key}>
+         <div class="server-info">
+           <div class="server-name">
+             <span class="dot {serverDotClass(s)}"></span>
+             {s.server_name ?? '(unknown)'}
+           </div>
+           <div class="muted small">{s.cloud_host ?? s.lan_host ?? '—'}</div>
+           <div class="muted small mono" style="opacity:0.5;">id: {s.server_key.slice(0, 8)}</div>
+         </div>
         <div class="server-actions">
           {#if s.server_key === creds?.server_key}
             <span class="badge">active</span>
@@ -807,6 +850,22 @@
     border-radius: 6px;
     padding: 2px 6px;
   }
+
+  .dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: baseline;
+    flex: 0 0 auto;
+  }
+  .dot-online { background: var(--success); box-shadow: 0 0 0 2px color-mix(in srgb, var(--success) 25%, transparent); }
+  .dot-cloud-only { background: var(--warning); box-shadow: 0 0 0 2px color-mix(in srgb, var(--warning) 25%, transparent); }
+  .dot-offline { background: var(--danger); box-shadow: 0 0 0 2px color-mix(in srgb, var(--danger) 25%, transparent); }
+  .dot-unknown { background: var(--text-secondary); opacity: 0.4; }
+
+  .status-cell { display: inline-flex; align-items: center; gap: 2px; }
 
   button.fw, .btn-link { width: 100%; padding: 12px; margin-top: 12px; display: block; text-align: center; }
   button.ghost, .btn-link {

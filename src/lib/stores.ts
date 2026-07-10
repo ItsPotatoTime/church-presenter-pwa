@@ -21,6 +21,12 @@ export const connStatus: Writable<ConnStatus> = writable('idle');
 export const connError: Writable<string | null> = writable(null);
 export const connEndpoint: Writable<'cloud' | 'lan' | null> = writable(null);
 
+// When connected to the cloud bridge (wss://), this reflects whether the live
+// desktop is actually up (true) or only the cloud mirror is reachable (false).
+// Drives the LIVE tab "Live" vs "Cloud only" label and the settings status dot.
+// `null` = unknown / not connected to a cloud bridge.
+export const desktopOnline: Writable<boolean | null> = writable(null);
+
 export const liveState: Writable<LiveState | null> = writable(null);
 export const queueState: Writable<QueueState | null> = writable(null);
 // True while the user is mid-drag reordering the queue on this device. Used to

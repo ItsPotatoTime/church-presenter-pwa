@@ -30,6 +30,10 @@ export interface AuthOk {
   exclusive_device_id?: string | null;
   can_edit_keys?: boolean;
   can_edit_songs?: boolean;
+  // True when the *live desktop* is up behind the cloud bridge (drives the
+  // PWA "Live" vs "Cloud only" label). Only present when connected to the
+  // cloud server; older desktops / direct LAN never set it.
+  desktop_online?: boolean;
 }
 
 export interface AuthFail {
