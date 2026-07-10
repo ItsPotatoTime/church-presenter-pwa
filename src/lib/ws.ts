@@ -48,12 +48,14 @@ import {
 import { handleSyncMessage } from './sync';
 
 const RECONNECT_BACKOFF_MS = [250, 500, 1000, 2000, 4000, 8000, 15000];
-const AUTH_TIMEOUT_MS = 8000;
+const AUTH_TIMEOUT_MS = 6000;
 // Deadline for the WSS handshake itself (new WebSocket() -> onopen).
 // Through a cloudflared tunnel in a bad state the upgrade can hang without
 // ever firing onopen OR onclose/onerror, leaving connStatus stuck at
 // 'connecting' forever. This forces a close -> normal reconnect path.
-const CONNECT_TIMEOUT_MS = 12000;
+// 8s keeps the "pairing…" spinner from hanging for the full 12s+ before the
+// user can re-scan. The pair page also has its own 20s overall safety net.
+const CONNECT_TIMEOUT_MS = 8000;
 
 export type PairParams = {
   server_key: string;
