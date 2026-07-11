@@ -415,6 +415,11 @@ class RemoteClient {
         this._wrongServerTried.clear();
         const p = (msg.payload ?? {}) as AuthOk;
         const authoritativeServerId = (p.server_id ?? creds.server_id ?? '').trim() || undefined;
+        // The cloud server is authoritative for its own public URL. Capture it
+        // straight from auth.ok (in case it arrived before any server.url_changed)
+        // so the phone always knows the bridge to fall back to when the desktop
+        // closes. Prefer an explicit value; otherwise keep whatever we had.
+        const cloudUrlFromAuth = p.cloud_url ?? p.cloud_host ?? null;
         const finalCreds: Credentials = {
           ...creds,
           server_key: creds.server_key,
@@ -424,6 +429,9 @@ class RemoteClient {
           paired_at: creds.paired_at ?? Date.now(),
           can_edit_keys: !!p.can_edit_keys,
           can_edit_songs: !!p.can_edit_songs,
+          cloud_host: cloudUrlFromAuth ?? creds.cloud_host ?? null,
+          cloud_url: cloudUrlFromAuth ?? creds.cloud_url ?? null,
+          cloud_id: p.cloud_id ?? creds.cloud_id ?? null,
         };
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
         exclusiveDeviceName.set(null);

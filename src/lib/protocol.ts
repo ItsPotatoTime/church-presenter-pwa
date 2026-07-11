@@ -34,6 +34,12 @@ export interface AuthOk {
   // PWA "Live" vs "Cloud only" label). Only present when connected to the
   // cloud server; older desktops / direct LAN never set it.
   desktop_online?: boolean;
+  // Cloud bridge public URL (and id). The cloud server is authoritative for its
+  // own host; when present the phone learns the bridge to fall back to when the
+  // desktop closes, so it never loses connectivity entirely.
+  cloud_url?: string | null;
+  cloud_host?: string | null;
+  cloud_id?: string | null;
 }
 
 // Whether the cloud bridge for a server is reachable / the desktop behind it
