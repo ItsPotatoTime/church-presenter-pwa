@@ -762,7 +762,7 @@
     <p class="muted small">No cloud events recorded yet.</p>
   {:else}
     <div class="diag-list">
-      {#each $cloudDiagnostics as d (d.ts)}
+       {#each $cloudDiagnostics as d (d.id)}
         <div class="diag-row diag-{d.kind}">
           <span class="diag-time">{new Date(d.ts).toLocaleTimeString()}</span>
           <span class="diag-kind">{d.kind}</span>

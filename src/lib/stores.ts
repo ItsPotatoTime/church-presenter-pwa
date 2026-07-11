@@ -76,6 +76,11 @@ if (typeof window !== 'undefined') {
 // entry records what URL was *built* (after scheme normalization) and why the
 // probe succeeded or failed. Kept small (latest first).
 export interface CloudDiagnostic {
+  // `id` is a monotonic sequence number and is the stable, unique key for the
+  // Settings `{#each}`. `ts` (Date.now) is NOT unique enough — two events pushed
+  // in the same millisecond collide, which made Svelte throw `each_key_duplicate`
+  // and crash the Settings route.
+  id: number;
   ts: number;
   kind: 'endpoint' | 'ws' | 'status' | 'error' | 'info';
   message: string;
@@ -85,13 +90,14 @@ export interface CloudDiagnostic {
 export const cloudDiagnostics: Writable<CloudDiagnostic[]> = writable([]);
 
 const CLOUD_DIAG_MAX = 40;
+let cloudDiagSeq = 0;
 
 export function pushCloudDiagnostic(
   kind: CloudDiagnostic['kind'],
   message: string,
   detail?: string,
 ): void {
-  const entry: CloudDiagnostic = { ts: Date.now(), kind, message, detail };
+  const entry: CloudDiagnostic = { id: ++cloudDiagSeq, ts: Date.now(), kind, message, detail };
   cloudDiagnostics.update((list) => [entry, ...list].slice(0, CLOUD_DIAG_MAX));
 }
 
