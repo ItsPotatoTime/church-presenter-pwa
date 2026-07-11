@@ -111,6 +111,19 @@ class RemoteClient {
   // wrong_server, so a stale stored entry can't cause an infinite switch loop.
   private _wrongServerTried: Set<string> = new Set();
 
+  // When the cloud *bridge* rejects us with `revoked`, it's almost always
+  // because the cloud doesn't yet know this device (the desktop pushes the
+  // paired-device registry on a timer / race). Reconnecting straight back to
+  // the bridge would just get `revoked` again and again, pinning the status at
+  // "Closed (bridge)". We instead fall back to the desktop's own tunnel/LAN and
+  // throttle bridge retries for a short window so the desktop's device push has
+  // time to teach the cloud about us. `_bridgeBlocked` is a hard stop (cleared
+  // only by a *successful bridge auth*); the time-based cooldown softens the
+  // retry so we eventually use the bridge once the cloud knows the phone.
+  private _bridgeBlocked = false;
+  private _lastBridgeRevoked = 0;
+  private static readonly BRIDGE_REVOKED_COOLDOWN_MS = 30_000;
+
   constructor() {
     // iOS Safari kills WebSockets when the PWA moves to background.
     // On return to foreground, reconnect immediately instead of waiting for the backoff timer.
@@ -318,7 +331,32 @@ class RemoteClient {
       }
     }
 
-    if (creds.cloud_url) {
+    // The bridge is *available* but recently rejected this device with
+    // `revoked` (the cloud doesn't know us yet). Don't immediately re-choose it
+    // or we'd spin forever on "Closed (bridge)". Prefer the desktop's own
+    // tunnel/LAN for now; the cooldown below lets the desktop's device push
+    // catch up and we retry the bridge after the window elapses.
+    const bridgeUrl = creds.cloud_url;
+    const bridgeCoolingDown =
+      bridgeUrl && this._bridgeBlocked === false &&
+      Date.now() - this._lastBridgeRevoked < RemoteClient.BRIDGE_REVOKED_COOLDOWN_MS;
+
+    if (bridgeCoolingDown) {
+      console.info('[ws] endpoint: bridge recently revoked (cooldown) — using desktop fallback');
+      if (creds.cloud_host) {
+        return { host: creds.cloud_host, kind: 'cloud' };
+      }
+      if (creds.lan_host && !pageIsHttps) {
+        return { host: creds.lan_host, kind: 'lan' };
+      }
+      // No desktop fallback at all: the bridge is the only path, so we must try
+      // it (better a retry than a permanent dead-end). Don't hard-block.
+      if (this._bridgeBlocked) {
+        return { host: bridgeUrl, kind: 'bridge' };
+      }
+    }
+
+    if (creds.cloud_url && !this._bridgeBlocked) {
       console.info('[ws] endpoint: using cloud bridge %s', creds.cloud_url);
       return { host: creds.cloud_url, kind: 'bridge' };
     }
@@ -439,6 +477,14 @@ class RemoteClient {
       if (msg.type === 'auth.ok') {
         authenticated = true;
         if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
+        // Successful auth clears any bridge-revoked block: now that this
+        // endpoint accepted us, the cloud knows the device, so future bridge
+        // attempts are fine again (incl. when the desktop later goes offline).
+        if (this._bridgeBlocked) {
+          console.info('[ws] auth.ok cleared bridge-revoked block (endpoint=%s)', this.currentEndpoint);
+          this._bridgeBlocked = false;
+          this._lastBridgeRevoked = 0;
+        }
         // Successful auth — clear any prior wrong_server switch attempts so a
         // future wrong_server (in a later session) can try the same server again.
         this._wrongServerTried.clear();
@@ -531,12 +577,45 @@ class RemoteClient {
         if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
         const p = (msg.payload ?? {}) as AuthFail;
         if (p.reason === 'revoked') {
-          // Server explicitly kicked this device — remove this server entry
-          connStatus.set('error');
-          this.forceClose = true;
-          try { ws.close(); } catch { /* ignore */ }
-          void clearCredentials();
-          connError.set('Device revoked by server');
+          // Server explicitly kicked this device. There are two very different
+          // situations here:
+          //   1. The device was genuinely removed from the desktop's paired
+          //      list — we should drop this server entry.
+          //   2. We just paired against the desktop tunnel and the desktop
+          //      handed us the cloud bridge URL, but the cloud hasn't learned
+          //      about this device yet (its registry is pushed on a timer /
+          //      race). The bridge then rejects us with `revoked`. Deleting the
+          //      just-paired server here is the "back to Choose a server" bug.
+          // If we're on the bridge and the desktop's own tunnel (cloud_host) is
+          // still available, treat this as a transient bridge miss: block the
+          // bridge briefly + fall back to the desktop tunnel instead of wiping
+          // the pairing. A genuine revoke while on the desktop tunnel still
+          // deletes as before.
+          if (
+            this.currentEndpoint === 'bridge' &&
+            creds.cloud_host &&
+            (this.forceClose === false)
+          ) {
+            console.warn('[ws] revoked on bridge but desktop tunnel available — blocking bridge + falling back instead of deleting');
+            // Mark the bridge as blocked and start the cooldown so
+            // pickEndpoint() stops re-choosing it on the next immediate retry
+            // (which would just get `revoked` again and pin us at
+            // "Closed (bridge)"). The desktop's periodic device push teaches the
+            // cloud about this phone; after the cooldown we retry the bridge.
+            this._bridgeBlocked = true;
+            this._lastBridgeRevoked = Date.now();
+            this.forceClose = true;
+            try { ws.close(); } catch { /* ignore */ }
+            connStatus.set('connecting');
+            connError.set(null);
+            void this.reconnectActive();
+          } else {
+            connStatus.set('error');
+            this.forceClose = true;
+            try { ws.close(); } catch { /* ignore */ }
+            void clearCredentials();
+            connError.set('Device revoked by server');
+          }
         } else if (p.reason === 'bad_token') {
           // Token mismatch for the selected server. Do not try other stored
           // servers implicitly; the user chooses the active server now.
