@@ -35,6 +35,14 @@ export interface Credentials {
   device_name: string;
   cloud_host: string | null;
   lan_host: string | null;
+  // Cloud "big server" bridge. When set the PWA prefers this as a bridge that
+  // survives desktop outage (like tailscale joining two hosts). cloud_host is
+  // the desktop's own cloudflared tunnel (dies with the desktop); cloud_url is
+  // the always-on bridge that keeps library/queue/lists reachable offline and
+  // forwards live control when the desktop is online.
+  cloud_url?: string | null;
+  cloud_id?: string | null;
+  cloud_status?: 'online' | 'offline' | 'unknown';
   server_name?: string;
   server_id?: string;
   paired_at?: number;
@@ -50,6 +58,9 @@ export interface ServerEntry {
   device_name: string;
   cloud_host: string | null;
   lan_host: string | null;
+  cloud_url?: string | null;
+  cloud_id?: string | null;
+  cloud_status?: 'online' | 'offline' | 'unknown';
   server_name?: string;
   server_id?: string;
   paired_at?: number;
@@ -617,6 +628,9 @@ export async function saveCredentials(c: Credentials): Promise<void> {
           device_name: c.device_name,
           cloud_host: c.cloud_host,
           lan_host: c.lan_host,
+          cloud_url: c.cloud_url ?? existing.cloud_url ?? null,
+          cloud_id: c.cloud_id ?? existing.cloud_id ?? null,
+          cloud_status: c.cloud_status ?? existing.cloud_status ?? 'unknown',
           server_name: c.server_name ?? existing.server_name,
           server_id: c.server_id ?? existing.server_id,
           paired_at: c.paired_at ?? existing.paired_at,
@@ -649,6 +663,9 @@ export async function saveCredentials(c: Credentials): Promise<void> {
     device_name: c.device_name,
     cloud_host: c.cloud_host,
     lan_host: c.lan_host,
+    cloud_url: c.cloud_url ?? null,
+    cloud_id: c.cloud_id ?? null,
+    cloud_status: c.cloud_status ?? 'unknown',
     server_name: c.server_name,
     server_id: c.server_id,
     paired_at: c.paired_at,
@@ -815,6 +832,9 @@ function _entryToCredentials(e: ServerEntry): Credentials {
     device_name: e.device_name,
     cloud_host: e.cloud_host,
     lan_host: e.lan_host,
+    cloud_url: e.cloud_url ?? null,
+    cloud_id: e.cloud_id ?? null,
+    cloud_status: e.cloud_status ?? 'unknown',
     server_name: e.server_name,
     server_id: e.server_id,
     paired_at: e.paired_at,
@@ -934,6 +954,36 @@ async function _removeServer(key: string): Promise<void> {
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
+}
+
+/** Persist the cloud bridge URL/id a server registered with on the desktop. */
+export async function setServerCloudInfo(
+  serverKey: string,
+  info: { cloud_url?: string | null; cloud_id?: string | null },
+): Promise<void> {
+  const entry = await _getServerByKey(serverKey);
+  if (!entry) return;
+  if (info.cloud_url !== undefined) entry.cloud_url = info.cloud_url ?? null;
+  if (info.cloud_id !== undefined) entry.cloud_id = info.cloud_id ?? null;
+  await _saveServer(entry);
+}
+
+/** Update the cached per-server cloud liveness status (drives the Settings dot). */
+export async function setServerCloudStatus(
+  serverKey: string,
+  status: 'online' | 'offline' | 'unknown',
+): Promise<void> {
+  const entry = await _getServerByKey(serverKey);
+  if (!entry) return;
+  entry.cloud_status = status;
+  await _saveServer(entry);
+}
+
+export async function getServerCloudStatus(
+  serverKey: string,
+): Promise<'online' | 'offline' | 'unknown'> {
+  const entry = await _getServerByKey(serverKey);
+  return entry?.cloud_status ?? 'unknown';
 }
 
 async function _removeServerCache(key: string): Promise<void> {

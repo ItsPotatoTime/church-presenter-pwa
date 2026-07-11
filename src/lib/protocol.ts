@@ -36,6 +36,10 @@ export interface AuthOk {
   desktop_online?: boolean;
 }
 
+// Whether the cloud bridge for a server is reachable / the desktop behind it
+// is live. Drives the per-server status dot in Settings and the LIVE tab.
+export type CloudStatus = 'online' | 'offline' | 'unknown';
+
 export interface AuthFail {
   reason:
     | 'bad_device_id'

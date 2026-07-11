@@ -19,7 +19,7 @@ export type ConnStatus =
 
 export const connStatus: Writable<ConnStatus> = writable('idle');
 export const connError: Writable<string | null> = writable(null);
-export const connEndpoint: Writable<'cloud' | 'lan' | null> = writable(null);
+export const connEndpoint: Writable<'cloud' | 'lan' | 'bridge' | null> = writable(null);
 
 // When connected to the cloud bridge (wss://), this reflects whether the live
 // desktop is actually up (true) or only the cloud mirror is reachable (false).

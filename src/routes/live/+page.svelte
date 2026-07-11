@@ -44,6 +44,20 @@
     remote.send({ type: 'live.toggle_present' });
   }
 
+  // The LIVE controls (slide/blank/present) drive the *desktop's* presentation.
+  // They may only be used when the phone is connected to the live desktop:
+  //  - direct desktop tunnel (cloud) or LAN, OR
+  //  - the cloud bridge while the desktop is actually online.
+  // When we're on the cloud bridge but the desktop is offline, the desktop
+  // engine isn't reachable, so the buttons must be disabled (library/queue/
+  // lists still work from the cloud mirror).
+  const onCloudBridgeOffline = $derived(
+    $connStatus === 'open' &&
+    $connEndpoint === 'bridge' &&
+    $desktopOnline === false
+  );
+  const liveControlsDisabled = $derived($isViewOnly || onCloudBridgeOffline);
+
   function adjustFont(delta: number) {
     fontBoost = Math.max(0.6, Math.min(2.4, fontBoost + delta));
     remote.send({ type: 'live.font_size', payload: { delta: delta > 0 ? 1 : -1 } });
@@ -139,15 +153,15 @@
 </section>
 
 <section class="controls">
-  <button class="big" onclick={prev} aria-label="Previous" disabled={$isViewOnly}>◀ Prev</button>
-  <button class="big accent" onclick={next} aria-label="Next" disabled={$isViewOnly}>Next ▶</button>
+  <button class="big" onclick={prev} aria-label="Previous" disabled={liveControlsDisabled}>◀ Prev</button>
+  <button class="big accent" onclick={next} aria-label="Next" disabled={liveControlsDisabled}>Next ▶</button>
 </section>
 
 <section class="row">
-  <button onclick={blank} disabled={$isViewOnly}>⬛ Blank</button>
+  <button onclick={blank} disabled={liveControlsDisabled}>⬛ Blank</button>
   <button
     onclick={togglePresenting}
-    disabled={$isViewOnly}
+    disabled={liveControlsDisabled}
     class:present-on={presenting}
     class:present-off={!presenting}
   >
@@ -156,16 +170,23 @@
 </section>
 
 <section class="row">
-  <button onclick={chorus} disabled={$isViewOnly}>🎵 Go to chorus</button>
+  <button onclick={chorus} disabled={liveControlsDisabled}>🎵 Go to chorus</button>
 </section>
 
 <section class="row font-row">
-  <button onclick={() => adjustFont(-0.15)} disabled={$isViewOnly}>A−</button>
+  <button onclick={() => adjustFont(-0.15)} disabled={liveControlsDisabled}>A−</button>
   <span class="muted" style="align-self:center; min-width:50px; text-align:center;">
     {Math.round(fontBoost * 100)}%
   </span>
-  <button onclick={() => adjustFont(+0.15)} disabled={$isViewOnly}>A+</button>
+  <button onclick={() => adjustFont(+0.15)} disabled={liveControlsDisabled}>A+</button>
 </section>
+
+{#if onCloudBridgeOffline}
+  <section class="cloud-offline-banner">
+    Desktop is offline. Live controls are disabled — you can still browse the
+    library, queue and lists from the cloud backup.
+  </section>
+{/if}
 
 <style>
   header { padding: 4px 0 10px; }
@@ -232,6 +253,17 @@
   .row > button { flex: 1; }
  
   .font-row > button { flex: 1; }
+
+  .cloud-offline-banner {
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--warning);
+    border-radius: 10px;
+    background: rgba(255, 170, 0, 0.08);
+    color: var(--warning);
+    font-size: 13px;
+    text-align: center;
+  }
  
   button.present-on {
     background: var(--danger);

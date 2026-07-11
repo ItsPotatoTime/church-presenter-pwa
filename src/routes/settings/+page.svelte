@@ -257,15 +257,36 @@
     return 'Live';
   });
 
-  // Per-server status dot. For the *active* server we can read the live
-  // connection state; other servers are only known to be paired (grey).
+  // Per-server status dot. The active server reflects the live connection
+  // (cloud bridge + desktop liveness). For any server that has a registered
+  // cloud bridge, fall back to the last probed `cloud_status` so the dot shows
+  // real cloud availability even when we're currently on a different transport.
   function serverDotClass(s: ServerEntry): string {
-    if (s.server_key !== creds?.server_key) return 'dot-unknown';
-    if ($connStatus !== 'open') return 'dot-offline';
-    if ($connEndpoint === 'cloud') {
-      return $desktopOnline === false ? 'dot-cloud-only' : 'dot-online';
+    if (s.server_key === creds?.server_key) {
+      if ($connStatus !== 'open') return 'dot-offline';
+      if ($connEndpoint === 'bridge') {
+        return $desktopOnline === false ? 'dot-cloud-only' : 'dot-online';
+      }
+      if ($connEndpoint === 'cloud') {
+        return $desktopOnline === false ? 'dot-cloud-only' : 'dot-online';
+      }
+      return 'dot-online';
     }
-    return 'dot-online';
+    // Non-active, but a cloud bridge is registered: use the probed status.
+    if (s.cloud_url) {
+      if (s.cloud_status === 'online') return 'dot-online';
+      if (s.cloud_status === 'offline') return 'dot-offline';
+    }
+    return 'dot-unknown';
+  }
+
+  function serverCloudLabel(s: ServerEntry): string {
+    if (s.cloud_url) {
+      if (s.cloud_status === 'online') return 'Cloud: online';
+      if (s.cloud_status === 'offline') return 'Cloud: offline';
+      return 'Cloud: unknown';
+    }
+    return s.cloud_host ?? s.lan_host ?? 'No endpoint saved';
   }
 
   // Dot class for the active-server "Status" row (creds optional before
@@ -542,7 +563,7 @@
   </div>
   <div class="row">
     <span class="muted">Cloud</span>
-    <span class="mono">{creds?.cloud_host ?? '—'}</span>
+    <span class="mono" title={creds?.cloud_url ?? creds?.cloud_host ?? ''}>{creds?.cloud_url ?? creds?.cloud_host ?? '—'}</span>
   </div>
   <div class="row">
     <span class="muted">LAN</span>
@@ -563,8 +584,8 @@
              <span class="dot {serverDotClass(s)}"></span>
              {s.server_name ?? '(unknown)'}
            </div>
-           <div class="muted small">{s.cloud_host ?? s.lan_host ?? '—'}</div>
-           <div class="muted small mono" style="opacity:0.5;">id: {s.server_key.slice(0, 8)}</div>
+            <div class="muted small" title={s.cloud_url ?? ''}>{serverCloudLabel(s)}</div>
+            <div class="muted small mono" style="opacity:0.5;">id: {s.server_key.slice(0, 8)}</div>
          </div>
         <div class="server-actions">
           {#if s.server_key === creds?.server_key}

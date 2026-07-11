@@ -28,6 +28,7 @@ import {
   removeUnpairedServer,
   saveCredentials,
   switchServer,
+  setServerCloudStatus,
   type Credentials,
 } from './db';
 import {
@@ -64,6 +65,8 @@ export type PairParams = {
   pair_token: string;
   cloud_host: string | null;
   lan_host: string | null;
+  cloud_url?: string | null;
+  cloud_id?: string | null;
 };
 
 class RemoteClient {
@@ -72,13 +75,18 @@ class RemoteClient {
   private backoffIdx = 0;
   private reconnectTimer: number | null = null;
   private forceClose = false;
-  private currentEndpoint: 'cloud' | 'lan' | null = null;
+   private currentEndpoint: 'cloud' | 'lan' | 'bridge' | null = null;
   private alternateNext = false;
   private authTimer: number | null = null;
   private connectTimer: number | null = null;
   private pendingRequests = new Map<string, (payload: any) => void>();
   private heartbeatTimer: number | null = null;
   private lastMessageTime = 0;
+  // Periodic probe of the cloud bridge's /api/status so the per-server dot in
+  // Settings reflects reality (and the LIVE tab can disable when the desktop
+  // is offline) even if we're currently connected via LAN/tunnel.
+  private statusProbeTimer: number | null = null;
+  private static readonly STATUS_PROBE_MS = 20_000;
   // Tracks server_keys we've already tried auto-switching to after a
   // wrong_server, so a stale stored entry can't cause an infinite switch loop.
   private _wrongServerTried: Set<string> = new Set();
@@ -139,6 +147,8 @@ class RemoteClient {
       device_name: deviceName,
       cloud_host: params.cloud_host,
       lan_host: params.lan_host,
+      cloud_url: params.cloud_url ?? null,
+      cloud_id: params.cloud_id ?? null,
       server_id: params.server_id,
     };
     this.openSocket(provisional, params.pair_token);
@@ -209,6 +219,7 @@ class RemoteClient {
     this.gen += 1; // invalidate any in-flight handlers from the previous socket
     this.forceClose = true;
     this.stopHeartbeat();
+    this.stopStatusProbe();
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -237,37 +248,64 @@ class RemoteClient {
     this.backoffIdx = 0;
   }
 
-  private buildUrl(host: string, endpoint: 'cloud' | 'lan'): string {
-    // cloud = wss (Cloudflare terminates TLS). lan = ws (plain origin).
-    const scheme = endpoint === 'cloud' ? 'wss' : 'ws';
+  private buildUrl(host: string, endpoint: 'cloud' | 'lan' | 'bridge'): string {
+    // bridge/cloud = wss (TLS-terminated by the cloud proxy / Cloudflare).
+    // lan = ws (plain origin, skipped on HTTPS pages).
+    const scheme = endpoint === 'lan' ? 'ws' : 'wss';
     return `${scheme}://${host}`;
   }
 
-  private pickEndpoint(creds: Credentials): { host: string; kind: 'cloud' | 'lan' } | null {
+  private pickEndpoint(creds: Credentials): { host: string; kind: 'cloud' | 'lan' | 'bridge' } | null {
     // ws:// is mixed content on HTTPS pages and will be blocked by modern browsers.
     // Skip LAN (ws://) entirely when the page itself is served over HTTPS.
     const pageIsHttps = typeof location !== 'undefined' && location.protocol === 'https:';
 
+    // Endpoint priority (most-resilient first):
+    //   1. cloud_url (the "big server" bridge) — always-on, survives desktop
+    //      outage; forwards live control when the desktop is online.
+    //   2. cloud_host (the desktop's own cloudflared tunnel) — dies with the
+    //      desktop but is otherwise a direct path.
+    //   3. lan_host (same WiFi) — 0-latency fallback.
+    // We prefer the bridge so phones keep working (and can reach the live
+    // desktop) even when the desktop's tunnel/LAN is unreachable.
+    const preferBridge =
+      (this.currentEndpoint === 'bridge') ||
+      (this.alternateNext && this.currentEndpoint !== 'bridge') ||
+      (!this.alternateNext && !creds.cloud_url);
+
     if (this.alternateNext) {
       this.alternateNext = false;
+      if (this.currentEndpoint === 'bridge' && creds.cloud_host) {
+        console.info('[ws] endpoint: falling back from bridge to desktop cloud %s', creds.cloud_host);
+        return { host: creds.cloud_host, kind: 'cloud' };
+      }
       if (this.currentEndpoint === 'cloud' && creds.lan_host && !pageIsHttps) {
         console.info('[ws] endpoint: falling back to LAN %s', creds.lan_host);
         return { host: creds.lan_host, kind: 'lan' };
       }
       if (this.currentEndpoint === 'lan' && creds.cloud_host) {
-        console.info('[ws] endpoint: switching back to cloud %s', creds.cloud_host);
+        console.info('[ws] endpoint: switching back to desktop cloud %s', creds.cloud_host);
         return { host: creds.cloud_host, kind: 'cloud' };
       }
+      if (this.currentEndpoint === 'lan' && creds.cloud_url) {
+        console.info('[ws] endpoint: switching back to cloud bridge %s', creds.cloud_url);
+        return { host: creds.cloud_url, kind: 'bridge' };
+      }
+    }
+
+    if (creds.cloud_url) {
+      console.info('[ws] endpoint: using cloud bridge %s', creds.cloud_url);
+      return { host: creds.cloud_url, kind: 'bridge' };
     }
     if (creds.cloud_host) {
-      console.info('[ws] endpoint: using cloud %s', creds.cloud_host);
+      console.info('[ws] endpoint: using desktop cloud %s', creds.cloud_host);
       return { host: creds.cloud_host, kind: 'cloud' };
     }
     if (creds.lan_host && !pageIsHttps) {
       console.info('[ws] endpoint: using LAN %s', creds.lan_host);
       return { host: creds.lan_host, kind: 'lan' };
     }
-    console.warn('[ws] endpoint: no usable endpoint (cloud_host=%s lan_host=%s pageHttps=%s)', creds.cloud_host, creds.lan_host, pageIsHttps);
+    console.warn('[ws] endpoint: no usable endpoint (cloud_url=%s cloud_host=%s lan_host=%s pageHttps=%s)', creds.cloud_url, creds.cloud_host, creds.lan_host, pageIsHttps);
     return null;
   }
 
@@ -285,6 +323,9 @@ class RemoteClient {
     connEndpoint.set(pick.kind);
     connStatus.set('connecting');
     connError.set(null);
+    // Probe the cloud bridge liveness for the Settings dot (and to refine
+    // desktopOnline even when we're currently on the desktop's own tunnel).
+    this.startStatusProbe(myGen);
 
     let ws: WebSocket;
     let authenticated = false;
@@ -299,6 +340,13 @@ class RemoteClient {
 
     this.ws = ws;
     const isCurrent = () => this.gen === myGen && this.ws === ws;
+
+    // While connected through a cloud path we know whether the *desktop* is up
+    // only once the server tells us. Default to "unknown" (not null, which the
+    // UI reads as LAN); the probe/auth.ok/status_changed will refine it.
+    if (pick.kind === 'bridge' || pick.kind === 'cloud') {
+      desktopOnline.set(null);
+    }
 
     // Handshake deadline: if onopen doesn't fire within CONNECT_TIMEOUT_MS
     // (e.g. a cloudflared tunnel that accepts the upgrade then stalls, never
@@ -383,11 +431,15 @@ class RemoteClient {
         canEditKeys.set(!!p.can_edit_keys);
         canEditSongs.set(!!p.can_edit_songs);
         // Cloud bridge tells us whether the live desktop is up. `connEndpoint`
-        // is 'cloud' only when we reached the cloud bridge; if the field is
-        // present (cloud), reflect desktop liveness, else mark unknown.
-        if (this.currentEndpoint === 'cloud' && typeof p.desktop_online === 'boolean') {
+        // is 'bridge' when we reached the cloud "big server" and 'cloud' when
+        // we reached the desktop's own tunnel. In both cloud cases the field
+        // (if present) reflects the live desktop; direct LAN has none.
+        if (
+          (this.currentEndpoint === 'bridge' || this.currentEndpoint === 'cloud') &&
+          typeof p.desktop_online === 'boolean'
+        ) {
           desktopOnline.set(p.desktop_online);
-          console.info('[ws] auth.ok via cloud bridge: desktop_online=%s server=%s', p.desktop_online, p.server_name);
+          console.info('[ws] auth.ok via %s: desktop_online=%s server=%s', this.currentEndpoint, p.desktop_online, p.server_name);
         } else {
           desktopOnline.set(null);
           console.info('[ws] auth.ok via %s: server=%s (no cloud desktop liveness)', this.currentEndpoint, p.server_name);
@@ -615,14 +667,23 @@ class RemoteClient {
       }
 
       if (msg.type === 'server.url_changed') {
-        const p = msg.payload as { cloud_host?: string };
-        if (p?.cloud_host && isCurrent()) {
-          console.info('[ws] server.url_changed: updating cloud_host=%s', p.cloud_host);
+        const p = msg.payload as { cloud_host?: string; cloud_url?: string; cloud_id?: string };
+        if (isCurrent()) {
+          const cloudUrl = p?.cloud_url ?? p?.cloud_host ?? null;
+          console.info('[ws] server.url_changed: cloud_url=%s cloud_id=%s', cloudUrl, p?.cloud_id);
           void (async () => {
             const c = await loadCredentials();
-            if (c && isCurrent()) {
-              c.cloud_host = p.cloud_host ?? c.cloud_host ?? null;
-              await saveCredentials(c);
+            if (!c || !isCurrent()) return;
+            c.cloud_host = p?.cloud_host ?? c.cloud_host ?? null;
+            c.cloud_url = cloudUrl ?? c.cloud_url ?? null;
+            c.cloud_id = p?.cloud_id ?? c.cloud_id ?? null;
+            await saveCredentials(c);
+            // If the desktop just told us it has a cloud bridge and we're NOT
+            // currently using it, switch to the bridge so library/queue/lists
+            // (and live control, when the desktop is online) go through it.
+            if (cloudUrl && this.currentEndpoint !== 'bridge') {
+              console.info('[ws] server gained cloud bridge — reconnecting to it');
+              void this.reconnectActive();
             }
           })();
         }
@@ -631,12 +692,12 @@ class RemoteClient {
 
       if (msg.type === 'server.status_changed') {
         // Desktop liveness on the cloud bridge flipped (e.g. the live desktop
-        // went offline or came back, via /api/heartbeat). Only meaningful while
-        // we're on the cloud bridge.
-        if (isCurrent() && this.currentEndpoint === 'cloud') {
+        // went offline or came back, via /api/heartbeat or TTL expiry). Only
+        // meaningful while we're connected through a cloud path.
+        if (isCurrent() && (this.currentEndpoint === 'bridge' || this.currentEndpoint === 'cloud')) {
           const p = msg.payload as { desktop_online?: boolean };
           if (typeof p.desktop_online === 'boolean') {
-            console.info('[ws] desktop_online changed -> %s (cloud bridge)', p.desktop_online);
+            console.info('[ws] desktop_online changed -> %s (%s)', p.desktop_online, this.currentEndpoint);
             desktopOnline.set(p.desktop_online);
           }
         }
@@ -725,6 +786,60 @@ class RemoteClient {
     if (this.heartbeatTimer !== null) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
+    }
+  }
+
+  // ── Cloud bridge status probe ──────────────────────────────────────
+  // Every STATUS_PROBE_MS we GET {cloud_url}/api/status. This keeps the
+  // per-server status dot in Settings accurate and lets the LIVE tab disable
+  // its buttons when the desktop is offline, even if we're connected through
+  // a different transport (desktop tunnel / LAN) right now.
+  private async startStatusProbe(myGen: number): Promise<void> {
+    this.stopStatusProbe();
+    const creds = await loadCredentials();
+    if (!creds || !creds.cloud_url) return;
+    const cloudUrl = creds.cloud_url;
+    const serverKey = creds.server_key;
+    const apply = async () => {
+      if (this.gen !== myGen) return;
+      await this.probeCloudStatus(cloudUrl, serverKey);
+    };
+    await apply();
+    this.statusProbeTimer = window.setInterval(apply, RemoteClient.STATUS_PROBE_MS);
+  }
+
+  private stopStatusProbe(): void {
+    if (this.statusProbeTimer !== null) {
+      clearInterval(this.statusProbeTimer);
+      this.statusProbeTimer = null;
+    }
+  }
+
+  private async probeCloudStatus(cloudUrl: string, serverKey: string | undefined): Promise<void> {
+    try {
+      const res = await fetch(`https://${cloudUrl}/api/status`, {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) {
+        await setServerCloudStatus(serverKey ?? '', 'offline');
+        return;
+      }
+      const data = (await res.json()) as {
+        online?: boolean;
+        desktop_online?: boolean;
+        server_ts?: number;
+      };
+      const bridgeUp = data.online !== false;
+      await setServerCloudStatus(serverKey ?? '', bridgeUp ? 'online' : 'offline');
+      // If we're currently connected through a cloud path, reflect the
+      // desktop liveness the bridge reports.
+      if (this.currentEndpoint === 'bridge' || this.currentEndpoint === 'cloud') {
+        desktopOnline.set(data.desktop_online === true);
+      }
+    } catch {
+      // Network error reaching the bridge — cloud itself is unreachable.
+      await setServerCloudStatus(serverKey ?? '', 'offline');
     }
   }
 }
