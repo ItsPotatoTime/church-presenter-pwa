@@ -561,8 +561,13 @@ class RemoteClient {
           paired_at: creds.paired_at ?? Date.now(),
           can_edit_keys: !!p.can_edit_keys,
           can_edit_songs: !!p.can_edit_songs,
-          cloud_host: cloudUrlFromAuth ?? creds.cloud_host ?? null,
-          cloud_url: cloudUrlFromAuth ?? creds.cloud_url ?? null,
+          // cloud_host is the desktop's OWN tunnel (scanned from the QR `c`
+          // param) — a distinct host from the cloud bridge (`cloud_url`). The
+          // cloud server only knows its own public URL, so it must NOT be
+          // allowed to overwrite cloud_host with it. Keep the tunnel if we have
+          // one; only fall back to the cloud URL if we genuinely have no tunnel.
+          cloud_host: creds.cloud_host || cloudUrlFromAuth || null,
+          cloud_url: p.cloud_url ?? creds.cloud_url ?? null,
           cloud_id: p.cloud_id ?? creds.cloud_id ?? null,
         };
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
@@ -851,11 +856,29 @@ class RemoteClient {
             c.cloud_url = cloudUrl ?? c.cloud_url ?? null;
             c.cloud_id = p?.cloud_id ?? c.cloud_id ?? null;
             await saveCredentials(c);
-            // If the desktop just told us it has a cloud bridge and we're NOT
-            // currently using it, switch to the bridge so library/queue/lists
-            // (and live control, when the desktop is online) go through it.
+            // If the desktop just told us it has a cloud bridge, switch to the
+            // bridge so library/queue/lists (and live control, when the desktop
+            // is online) go through it — BUT only when we are not already on
+            // that same bridge host. Reconnecting to the identical host every
+            // time this message arrives is what caused the old bridge↔cloud
+            // ping-pong: server.url_changed flipped us to the bridge, then
+            // alternateNext (set on close) flipped us straight back to the
+            // tunnel, which re-sent server.url_changed, and so on forever.
             if (cloudUrl && this.currentEndpoint !== 'bridge') {
-              console.info('[ws] server gained cloud bridge — reconnecting to it');
+              const current = this.ws?.url ? normalizeWsHost(this.ws.url).host.toLowerCase() : '';
+              const target = normalizeWsHost(cloudUrl).host.toLowerCase();
+              if (current === target) {
+                // Same host we're already connected to — nothing to do. Keep the
+                // bridge as the preferred endpoint so alternateNext doesn't
+                // bounce us back to the tunnel on the next reconnect.
+                console.info('[ws] server.url_changed: already on bridge host %s — staying put', target);
+                this.currentEndpoint = 'bridge';
+                this.alternateNext = false;
+                return;
+              }
+              console.info('[ws] server gained cloud bridge on new host %s — reconnecting to it', target);
+              this.currentEndpoint = 'bridge';
+              this.alternateNext = false;
               void this.reconnectActive();
             }
           })();
@@ -917,7 +940,14 @@ class RemoteClient {
     if (this.gen !== myGen) return; // superseded; do nothing
     const delay = RECONNECT_BACKOFF_MS[Math.min(this.backoffIdx, RECONNECT_BACKOFF_MS.length - 1)];
     this.backoffIdx += 1;
-    this.alternateNext = this.backoffIdx % 2 === 0;
+    // Only flip to an alternate endpoint when the socket we just lost was a
+    // FALLBACK (desktop tunnel / LAN), so we migrate back toward the preferred
+    // cloud bridge. If we were already on the bridge, never flip to the tunnel
+    // — that was the old bridge<->cloud ping-pong: a bridge close with even
+    // backoff parity flipped us to the tunnel, which re-sent server.url_changed,
+    // flipping us back to the bridge, forever. A healthy bridge that drops
+    // should simply be retried, not bounce to the tunnel.
+    this.alternateNext = this.currentEndpoint !== 'bridge' && this.backoffIdx % 2 === 0;
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = null;
       if (this.gen !== myGen) return;
