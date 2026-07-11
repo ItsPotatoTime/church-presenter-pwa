@@ -103,6 +103,10 @@ export async function syncNow(): Promise<void> {
     getBibleVersion(),
   ]);
   const needsBibleSnapshot = bibleBooks.length === 0 || bibleVerses.length === 0;
+  console.info(
+    '[sync] syncNow: lastSyncTs=%s needsBibleSnapshot=%s cachedBibleVersion=%s',
+    lastSyncTs, needsBibleSnapshot, bibleVersion,
+  );
   return _doSync(needsBibleSnapshot ? 0 : lastSyncTs, bibleVersion);
 }
 
@@ -151,6 +155,7 @@ export async function flushPendingLists(): Promise<void> {
 
 async function _doSync(since: number, cachedBibleVersion: string | null = null): Promise<void> {
   syncStatus.set('syncing');
+  console.info('[sync] Starting sync: since_ts=%s bible_version=%s', since, cachedBibleVersion);
   try {
     const resp = await requestSync(since, cachedBibleVersion);
     let songs: LibrarySong[] = [];
@@ -161,12 +166,20 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
 
     if (resp.type === 'sync.full') {
       const p = resp.payload as SyncFull;
+      console.info(
+        '[sync] Received sync.full: songs=%d lists=%d bible=%s server_ts=%s',
+        p.songs?.length ?? 0, p.lists?.length ?? 0,
+        p.bible ? p.bible.version : 'null', p.server_ts,
+      );
       // Optimize full sync removal: only delete songs that vanished from the server
       const incomingPaths = new Set(p.songs.map((s) => s.path));
       const currentPaths = await getAllSongPaths();
       const toDelete = currentPaths.filter((x) => !incomingPaths.has(x));
-      if (toDelete.length) await deleteSongsByPath(toDelete);
-      
+      if (toDelete.length) {
+        console.info('[sync] Removing %d local songs missing from server', toDelete.length);
+        await deleteSongsByPath(toDelete);
+      }
+
       await putSongs(p.songs);
       lists = await mergeServerLists(p.lists);
       await clearBibleBooks();
@@ -179,17 +192,29 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         bibleBooks = p.bible.books;
         bibleVerses = sortedVerses;
         bibleVersion = p.bible.version;
+        console.info('[sync] Bible written: books=%d verses=%d version=%s', bibleBooks.length, bibleVerses.length, bibleVersion);
       } else {
         bibleVersion = await getBibleVersion();
         bibleBooks = [];
         bibleVerses = [];
+        console.info('[sync] sync.full carried no bible payload');
       }
       await setLastSyncTs(p.server_ts);
+      console.info('[sync] sync.full applied: new lastSyncTs=%s', p.server_ts);
     } else if (resp.type === 'sync.delta') {
       const p = resp.payload as SyncDelta;
+      console.info(
+        '[sync] Received sync.delta: songs_changed=%d songs_removed=%d lists=%s bible=%s server_ts=%s',
+        p.songs_changed?.length ?? 0, p.songs_removed?.length ?? 0,
+        p.lists !== null ? `full(${p.lists.length})` : 'null',
+        p.bible ? p.bible.version : 'null', p.server_ts,
+      );
       if (p.songs_changed.length) await putSongs(p.songs_changed);
       // Remove only the songs the server journaled as deleted since our last sync
-      if (p.songs_removed?.length) await deleteSongsByPath(p.songs_removed);
+      if (p.songs_removed?.length) {
+        console.info('[sync] Removing %d deleted songs: %s', p.songs_removed.length, p.songs_removed.join(', '));
+        await deleteSongsByPath(p.songs_removed);
+      }
       if (p.lists !== null) {
         lists = await mergeServerLists(p.lists);
       } else {
@@ -203,13 +228,16 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         bibleBooks = p.bible.books;
         bibleVerses = sortedVerses;
         bibleVersion = p.bible.version;
+        console.info('[sync] Bible updated: books=%d verses=%d version=%s', bibleBooks.length, bibleVerses.length, bibleVersion);
       } else {
         bibleBooks = await loadAllBibleBooks();
         bibleVerses = await loadAllBibleVerses();
         bibleVersion = await getBibleVersion();
       }
       await setLastSyncTs(p.server_ts);
+      console.info('[sync] sync.delta applied: new lastSyncTs=%s', p.server_ts);
     } else {
+      console.error('[sync] Unexpected sync response type: %s', resp.type);
       throw new Error('unexpected sync response: ' + resp.type);
     }
 
@@ -223,11 +251,12 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
     bibleBooksStore.set(bibleBooks);
     bibleVersesStore.set(bibleVerses);
     bibleVersionStore.set(bibleVersion);
+    console.info('[sync] Sync complete: %d songs in store, status=idle', songs.length);
     syncStatus.set('idle');
 
   } catch (e: any) {
     syncStatus.set('error');
-    console.warn('[sync]', e?.message ?? e);
+    console.warn('[sync] Sync failed:', e?.message ?? e);
   }
 }
 

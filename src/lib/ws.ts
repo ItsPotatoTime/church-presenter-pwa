@@ -251,14 +251,23 @@ class RemoteClient {
     if (this.alternateNext) {
       this.alternateNext = false;
       if (this.currentEndpoint === 'cloud' && creds.lan_host && !pageIsHttps) {
+        console.info('[ws] endpoint: falling back to LAN %s', creds.lan_host);
         return { host: creds.lan_host, kind: 'lan' };
       }
       if (this.currentEndpoint === 'lan' && creds.cloud_host) {
+        console.info('[ws] endpoint: switching back to cloud %s', creds.cloud_host);
         return { host: creds.cloud_host, kind: 'cloud' };
       }
     }
-    if (creds.cloud_host) return { host: creds.cloud_host, kind: 'cloud' };
-    if (creds.lan_host && !pageIsHttps) return { host: creds.lan_host, kind: 'lan' };
+    if (creds.cloud_host) {
+      console.info('[ws] endpoint: using cloud %s', creds.cloud_host);
+      return { host: creds.cloud_host, kind: 'cloud' };
+    }
+    if (creds.lan_host && !pageIsHttps) {
+      console.info('[ws] endpoint: using LAN %s', creds.lan_host);
+      return { host: creds.lan_host, kind: 'lan' };
+    }
+    console.warn('[ws] endpoint: no usable endpoint (cloud_host=%s lan_host=%s pageHttps=%s)', creds.cloud_host, creds.lan_host, pageIsHttps);
     return null;
   }
 
@@ -312,6 +321,7 @@ class RemoteClient {
         clearTimeout(this.connectTimer);
         this.connectTimer = null;
       }
+      console.info('[ws] socket opened to %s (%s)', pick.host, pick.kind);
       connStatus.set('authenticating');
       const payload = pairToken
         ? {
@@ -377,8 +387,10 @@ class RemoteClient {
         // present (cloud), reflect desktop liveness, else mark unknown.
         if (this.currentEndpoint === 'cloud' && typeof p.desktop_online === 'boolean') {
           desktopOnline.set(p.desktop_online);
+          console.info('[ws] auth.ok via cloud bridge: desktop_online=%s server=%s', p.desktop_online, p.server_name);
         } else {
           desktopOnline.set(null);
+          console.info('[ws] auth.ok via %s: server=%s (no cloud desktop liveness)', this.currentEndpoint, p.server_name);
         }
         this.backoffIdx = 0;
 
@@ -582,6 +594,7 @@ class RemoteClient {
       }
 
       if (msg.type === 'library.changed') {
+        console.info('[ws] library.changed received — triggering syncNow()');
         import('./sync').then(({ syncNow }) => {
           void syncNow();
         });
@@ -604,6 +617,7 @@ class RemoteClient {
       if (msg.type === 'server.url_changed') {
         const p = msg.payload as { cloud_host?: string };
         if (p?.cloud_host && isCurrent()) {
+          console.info('[ws] server.url_changed: updating cloud_host=%s', p.cloud_host);
           void (async () => {
             const c = await loadCredentials();
             if (c && isCurrent()) {
@@ -622,6 +636,7 @@ class RemoteClient {
         if (isCurrent() && this.currentEndpoint === 'cloud') {
           const p = msg.payload as { desktop_online?: boolean };
           if (typeof p.desktop_online === 'boolean') {
+            console.info('[ws] desktop_online changed -> %s (cloud bridge)', p.desktop_online);
             desktopOnline.set(p.desktop_online);
           }
         }
