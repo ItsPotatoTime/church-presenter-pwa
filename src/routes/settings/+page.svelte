@@ -32,6 +32,7 @@
     debugMode,
     managerAccessCountdown,
     setManagerAccessDuration,
+    cloudDiagnostics,
   } from '$lib/stores';
 
   let creds = $state<Credentials | null>(null);
@@ -287,6 +288,30 @@
       return 'Cloud: unknown';
     }
     return s.cloud_host ?? s.lan_host ?? 'No endpoint saved';
+  }
+
+  // Mirrors the PWA's URL normalization so the Settings screen can show exactly
+  // what WebSocket/HTTP URL will be built — helps diagnose "Cloud: offline".
+  function stripScheme(u: string | null | undefined): string {
+    if (!u) return '';
+    const i = u.indexOf('://');
+    return i >= 0 ? u.slice(i + 3) : u;
+  }
+  function resolveCloudWs(u: string | null | undefined): string {
+    const host = stripScheme(u);
+    if (!host) return '—';
+    // cloudflared/wss or https -> secure bridge; plain http -> ws:// bridge.
+    const isSecure = !!u && /^(https|wss):/i.test(u);
+    return `${isSecure ? 'wss' : 'ws'}://${host}`;
+  }
+  // The status probe uses the cloud's *HTTP* scheme (the bridge is a plain
+  // http.createServer), not wss. Mirror that here so the displayed Probe URL
+  // matches what probeCloudStatus actually fetches.
+  function resolveCloudProbe(u: string | null | undefined): string {
+    const host = stripScheme(u);
+    if (!host) return '—';
+    const isSecure = !!u && /^(https|wss):/i.test(u);
+    return `${isSecure ? 'https' : 'http'}://${host}/api/status`;
   }
 
   // Dot class for the active-server "Status" row (creds optional before
@@ -565,6 +590,20 @@
     <span class="muted">Cloud</span>
     <span class="mono" title={creds?.cloud_url ?? creds?.cloud_host ?? ''}>{creds?.cloud_url ?? creds?.cloud_host ?? '—'}</span>
   </div>
+  {#if creds?.cloud_url}
+    <div class="row">
+      <span class="muted">Bridge WS</span>
+      <span class="mono" title="WebSocket URL the app builds to reach the cloud bridge">
+        {resolveCloudWs(creds.cloud_url)}
+      </span>
+    </div>
+    <div class="row">
+      <span class="muted">Probe URL</span>
+      <span class="mono" title="HTTP URL probed for cloud liveness">
+        {resolveCloudProbe(creds.cloud_url)}
+      </span>
+    </div>
+  {/if}
   <div class="row">
     <span class="muted">LAN</span>
     <span class="mono">{creds?.lan_host ?? '—'}</span>
@@ -711,6 +750,30 @@
   </p>
   <button class="ghost fw" onclick={doBackup}>Export Backup</button>
   <button class="ghost fw" onclick={doImport}>Import Backup</button>
+</section>
+
+<section class="panel" style="margin-top:12px;">
+  <h2>Cloud diagnostics</h2>
+  <p class="muted small" style="margin:0 0 8px;">
+    Recent cloud bridge events. Use these to confirm the URL the app builds and
+    why a probe succeeded or failed.
+  </p>
+  {#if $cloudDiagnostics.length === 0}
+    <p class="muted small">No cloud events recorded yet.</p>
+  {:else}
+    <div class="diag-list">
+      {#each $cloudDiagnostics as d (d.ts)}
+        <div class="diag-row diag-{d.kind}">
+          <span class="diag-time">{new Date(d.ts).toLocaleTimeString()}</span>
+          <span class="diag-kind">{d.kind}</span>
+          <span class="diag-msg">{d.message}</span>
+          {#if d.detail}
+            <span class="diag-detail">{d.detail}</span>
+          {/if}
+        </div>
+      {/each}
+    </div>
+  {/if}
 </section>
 
 {#if importDialog}
@@ -1085,5 +1148,52 @@
 
   .notice-actions {
     margin-top: 16px;
+  }
+
+  .diag-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 280px;
+    overflow-y: auto;
+    background: var(--elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px;
+  }
+  .diag-row {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    gap: 8px;
+    align-items: baseline;
+    font-size: 12px;
+    line-height: 1.35;
+    padding: 3px 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  }
+  .diag-row:last-of-type { border-bottom: none; }
+  .diag-time {
+    color: var(--text-secondary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    opacity: 0.7;
+  }
+  .diag-kind {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+  }
+  .diag-endpoint .diag-kind { color: var(--accent, #4f8cff); }
+  .diag-status .diag-kind { color: var(--success, #22c55e); }
+  .diag-error .diag-kind { color: var(--danger, #ef4444); }
+  .diag-info .diag-kind { color: var(--text-secondary); }
+  .diag-msg { min-width: 0; overflow-wrap: anywhere; }
+  .diag-detail {
+    grid-column: 1 / -1;
+    color: var(--text-secondary);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    opacity: 0.8;
+    overflow-wrap: anywhere;
   }
 </style>

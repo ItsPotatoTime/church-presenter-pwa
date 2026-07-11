@@ -70,6 +70,31 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// ── Cloud bridge diagnostics ────────────────────────────────────────
+// Ring buffer of the last cloud-probe / bridge-selection events so the user can
+// diagnose "Cloud: offline" from the Settings page instead of guessing. Each
+// entry records what URL was *built* (after scheme normalization) and why the
+// probe succeeded or failed. Kept small (latest first).
+export interface CloudDiagnostic {
+  ts: number;
+  kind: 'endpoint' | 'ws' | 'status' | 'error' | 'info';
+  message: string;
+  detail?: string;
+}
+
+export const cloudDiagnostics: Writable<CloudDiagnostic[]> = writable([]);
+
+const CLOUD_DIAG_MAX = 40;
+
+export function pushCloudDiagnostic(
+  kind: CloudDiagnostic['kind'],
+  message: string,
+  detail?: string,
+): void {
+  const entry: CloudDiagnostic = { ts: Date.now(), kind, message, detail };
+  cloudDiagnostics.update((list) => [entry, ...list].slice(0, CLOUD_DIAG_MAX));
+}
+
 /** True when a *different* phone holds exclusive control — this phone is view-only. */
 export const isViewOnly: Readable<boolean> = derived(
   [exclusiveDeviceId, myDeviceId],

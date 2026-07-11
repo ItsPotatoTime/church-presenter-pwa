@@ -46,7 +46,27 @@ import {
   serverName,
   canEditKeys,
   canEditSongs,
+  pushCloudDiagnostic,
 } from './stores';
+
+// Normalize a host that may or may not carry a scheme. The desktop sends
+// `cloud_url`/`cloud_host` already *with* a scheme (e.g. `http://host:port`
+// from cloud_sync._normalize_cloud_url, or a `wss://`/cloudflared host), so we
+// must strip any existing scheme before prepending the one this transport needs.
+// Otherwise we'd build `wss://http://host` and the browser would fail to parse
+// the WebSocket URL (this was the "Cloud: offline" bug).
+function normalizeWsHost(host: string): { host: string; scheme: 'wss' | 'ws' | null } {
+  let h = host.trim();
+  const idx = h.indexOf('://');
+  let scheme: 'wss' | 'ws' | null = null;
+  if (idx >= 0) {
+    const s = h.slice(0, idx).toLowerCase();
+    // Secure source scheme -> secure ws; everything else -> plain ws.
+    scheme = s === 'https' || s === 'wss' ? 'wss' : 'ws';
+    h = h.slice(idx + 3);
+  }
+  return { host: h, scheme };
+}
 import { handleSyncMessage } from './sync';
 
 const RECONNECT_BACKOFF_MS = [250, 500, 1000, 2000, 4000, 8000, 15000];
@@ -248,11 +268,20 @@ class RemoteClient {
     this.backoffIdx = 0;
   }
 
-  private buildUrl(host: string, endpoint: 'cloud' | 'lan' | 'bridge'): string {
+  private buildUrl(rawHost: string, endpoint: 'cloud' | 'lan' | 'bridge'): { url: string; scheme: 'wss' | 'ws'; host: string } {
     // bridge/cloud = wss (TLS-terminated by the cloud proxy / Cloudflare).
     // lan = ws (plain origin, skipped on HTTPS pages).
-    const scheme = endpoint === 'lan' ? 'ws' : 'wss';
-    return `${scheme}://${host}`;
+    // The desktop sends cloud_url/cloudflared hosts *with* a scheme; strip it
+    // first and re-derive the correct scheme from the endpoint so we never emit
+    // a double scheme like `wss://http://host`.
+    const { host: clean, scheme: sourceScheme } = normalizeWsHost(rawHost);
+    const wantWss = endpoint !== 'lan';
+    // If the source carried an explicit scheme, prefer its security (a plain
+    // http:// cloud is still ws://, an https/wss cloudflared host stays wss).
+    let scheme: 'wss' | 'ws' = wantWss ? 'wss' : 'ws';
+    if (sourceScheme) scheme = sourceScheme;
+    else if (!wantWss) scheme = 'ws';
+    return { url: `${scheme}://${clean}`, scheme, host: clean };
   }
 
   private pickEndpoint(creds: Credentials): { host: string; kind: 'cloud' | 'lan' | 'bridge' } | null {
@@ -268,10 +297,6 @@ class RemoteClient {
     //   3. lan_host (same WiFi) — 0-latency fallback.
     // We prefer the bridge so phones keep working (and can reach the live
     // desktop) even when the desktop's tunnel/LAN is unreachable.
-    const preferBridge =
-      (this.currentEndpoint === 'bridge') ||
-      (this.alternateNext && this.currentEndpoint !== 'bridge') ||
-      (!this.alternateNext && !creds.cloud_url);
 
     if (this.alternateNext) {
       this.alternateNext = false;
@@ -329,11 +354,15 @@ class RemoteClient {
 
     let ws: WebSocket;
     let authenticated = false;
+    const built = this.buildUrl(pick.host, pick.kind);
     try {
-      ws = new WebSocket(this.buildUrl(pick.host, pick.kind));
+      console.info('[ws] building %s socket -> %s (host=%s)', pick.kind, built.url, built.host);
+      pushCloudDiagnostic('endpoint', `Connecting via ${pick.kind}`, `ws=${built.url}`);
+      ws = new WebSocket(built.url);
     } catch (e: any) {
       connStatus.set('error');
       connError.set(e?.message ?? 'WebSocket failed to open');
+      pushCloudDiagnostic('error', `Failed to open ${pick.kind} socket`, e?.message ?? String(e));
       this.scheduleReconnect(creds, myGen);
       return;
     }
@@ -824,12 +853,27 @@ class RemoteClient {
   }
 
   private async probeCloudStatus(cloudUrl: string, serverKey: string | undefined): Promise<void> {
+    // cloudUrl arrives *with* a scheme (desktop sends `http://host:port` from
+    // cloud_sync._normalize_cloud_url, or a `wss://`/cloudflared host). The
+    // cloud server is a plain `http.createServer`, so a scheme-less or `http://`
+    // cloud must be probed over `http://` — NOT `https://`. Building the probe
+    // from the source scheme (via normalizeWsHost) means a plain-HTTP cloud is
+    // probed over http and a cloudflared/wss cloud over https. We also append
+    // `server_id` so the bridge can report whether the *desktop* is live.
+    const { host, scheme } = normalizeWsHost(cloudUrl);
+    const httpScheme = scheme === 'wss' ? 'https' : 'http';
+    const serverId = (await loadCredentials())?.server_id ?? '';
+    const query = serverId ? `?server_id=${encodeURIComponent(serverId)}` : '';
+    const probeUrl = `${httpScheme}://${host}/api/status${query}`;
     try {
-      const res = await fetch(`https://${cloudUrl}/api/status`, {
+      console.info('[ws] probing cloud status -> %s', probeUrl);
+      pushCloudDiagnostic('status', `Probing ${probeUrl}`);
+      const res = await fetch(probeUrl, {
         method: 'GET',
         headers: { Accept: 'application/json' },
       });
       if (!res.ok) {
+        pushCloudDiagnostic('error', `Cloud status probe returned HTTP ${res.status}`, probeUrl);
         await setServerCloudStatus(serverKey ?? '', 'offline');
         return;
       }
@@ -840,13 +884,16 @@ class RemoteClient {
       };
       const bridgeUp = data.online !== false;
       await setServerCloudStatus(serverKey ?? '', bridgeUp ? 'online' : 'offline');
+      pushCloudDiagnostic('status', `Cloud status OK (online=${bridgeUp}, desktop_online=${data.desktop_online})`, probeUrl);
       // If we're currently connected through a cloud path, reflect the
       // desktop liveness the bridge reports.
       if (this.currentEndpoint === 'bridge' || this.currentEndpoint === 'cloud') {
         desktopOnline.set(data.desktop_online === true);
       }
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       // Network error reaching the bridge — cloud itself is unreachable.
+      pushCloudDiagnostic('error', `Cloud status probe failed: ${msg}`, probeUrl);
       await setServerCloudStatus(serverKey ?? '', 'offline');
     }
   }
