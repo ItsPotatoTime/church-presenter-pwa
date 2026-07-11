@@ -77,7 +77,14 @@ const AUTH_TIMEOUT_MS = 6000;
 // 'connecting' forever. This forces a close -> normal reconnect path.
 // 8s keeps the "pairing…" spinner from hanging for the full 12s+ before the
 // user can re-scan. The pair page also has its own 20s overall safety net.
+//
+// For the *reconnect* path (already paired) we give the handshake more grace:
+// a Cloudflare-fronted WSS upgrade can take several seconds on a cold TLS
+// session, and force-closing at 8s before onopen fires is exactly what produced
+// the endless bridge/cloud flap after cloud sync was enabled. The pair page's
+// own 20s safety net still bounds the first-pair case.
 const CONNECT_TIMEOUT_MS = 8000;
+const CONNECT_TIMEOUT_MS_RECONNECT = 15000;
 
 export type PairParams = {
   server_key: string;
@@ -310,24 +317,67 @@ class RemoteClient {
     //   3. lan_host (same WiFi) — 0-latency fallback.
     // We prefer the bridge so phones keep working (and can reach the live
     // desktop) even when the desktop's tunnel/LAN is unreachable.
+    //
+    // CRITICAL: the desktop used to echo the cloud URL into BOTH cloud_url and
+    // cloud_host. That made the two "endpoints" the *same host*, so the
+    // alternateNext flip below would ping-pong between two identical sockets and
+    // never settle into a stable open connection ("not connecting after cloud").
+    // We now strip any scheme and treat two endpoints as distinct only if their
+    // normalized host differs — so a bridge->cloud flip that leads back to the
+    // same host is a no-op and we stay put (retry same host) instead of looping.
+
+    const normHost = (h: string | null | undefined): string => {
+      if (!h) return '';
+      const { host } = normalizeWsHost(h);
+      return host.toLowerCase();
+    };
+    const bridgeHost = normHost(creds.cloud_url);
+    const cloudHost = normHost(creds.cloud_host);
+    const lanHost = normHost(creds.lan_host);
+
+    // When the alternateNext flip would just send us to an endpoint whose host
+    // equals the one we're already on, do NOT switch — pick the still-available
+    // distinct fallback instead, or (if none) stay on the current host.
+    const distinctHosts = [bridgeHost, cloudHost].filter((h, i, a) => h && a.indexOf(h) === i);
+    const bridgeIsDistinct = !!bridgeHost && distinctHosts.length > 1;
+    const cloudIsDistinct = !!cloudHost && distinctHosts.length > 1;
 
     if (this.alternateNext) {
       this.alternateNext = false;
-      if (this.currentEndpoint === 'bridge' && creds.cloud_host) {
+      // Bridge -> desktop cloud, but only if the desktop cloud is a DIFFERENT
+      // host (otherwise we'd just reconnect to the same place).
+      if (this.currentEndpoint === 'bridge' && creds.cloud_host && cloudIsDistinct) {
         console.info('[ws] endpoint: falling back from bridge to desktop cloud %s', creds.cloud_host);
         return { host: creds.cloud_host, kind: 'cloud' };
       }
-      if (this.currentEndpoint === 'cloud' && creds.lan_host && !pageIsHttps) {
+      // Desktop cloud -> LAN (distinct only if LAN is a different host).
+      if (this.currentEndpoint === 'cloud' && creds.lan_host && !pageIsHttps && lanHost !== cloudHost) {
         console.info('[ws] endpoint: falling back to LAN %s', creds.lan_host);
         return { host: creds.lan_host, kind: 'lan' };
       }
-      if (this.currentEndpoint === 'lan' && creds.cloud_host) {
+      // LAN -> back to desktop cloud (distinct).
+      if (this.currentEndpoint === 'lan' && creds.cloud_host && lanHost !== cloudHost) {
         console.info('[ws] endpoint: switching back to desktop cloud %s', creds.cloud_host);
         return { host: creds.cloud_host, kind: 'cloud' };
       }
-      if (this.currentEndpoint === 'lan' && creds.cloud_url) {
+      // LAN -> back to bridge (distinct).
+      if (this.currentEndpoint === 'lan' && creds.cloud_url && lanHost !== bridgeHost) {
         console.info('[ws] endpoint: switching back to cloud bridge %s', creds.cloud_url);
         return { host: creds.cloud_url, kind: 'bridge' };
+      }
+      // Both cloud endpoints are the same host: alternateNext should NOT move us
+      // to the identical host. Re-open the current (or bridge) endpoint so the
+      // retry makes progress instead of looping forever.
+      if (creds.cloud_url && !this._bridgeBlocked) {
+        console.info('[ws] endpoint: bridge/cloud share a host — staying on cloud bridge %s', creds.cloud_url);
+        return { host: creds.cloud_url, kind: 'bridge' };
+      }
+      if (creds.cloud_host) {
+        console.info('[ws] endpoint: staying on desktop cloud %s', creds.cloud_host);
+        return { host: creds.cloud_host, kind: 'cloud' };
+      }
+      if (creds.lan_host && !pageIsHttps) {
+        return { host: creds.lan_host, kind: 'lan' };
       }
     }
 
@@ -343,14 +393,16 @@ class RemoteClient {
 
     if (bridgeCoolingDown) {
       console.info('[ws] endpoint: bridge recently revoked (cooldown) — using desktop fallback');
-      if (creds.cloud_host) {
+      // Only fall back to cloud_host if it's a DIFFERENT host than the bridge;
+      // otherwise we'd still be retrying the (revoked) cloud.
+      if (creds.cloud_host && cloudHost !== bridgeHost) {
         return { host: creds.cloud_host, kind: 'cloud' };
       }
-      if (creds.lan_host && !pageIsHttps) {
+      if (creds.lan_host && !pageIsHttps && lanHost !== bridgeHost) {
         return { host: creds.lan_host, kind: 'lan' };
       }
-      // No desktop fallback at all: the bridge is the only path, so we must try
-      // it (better a retry than a permanent dead-end). Don't hard-block.
+      // No distinct desktop fallback at all: the bridge is the only path, so we
+      // must try it (better a retry than a permanent dead-end). Don't hard-block.
       if (this._bridgeBlocked) {
         return { host: bridgeUrl, kind: 'bridge' };
       }
@@ -420,6 +472,11 @@ class RemoteClient {
     // delivering onopen OR onclose), force the socket closed so onclose runs
     // the normal reconnect path. Without this, connStatus sticks at
     // 'connecting' indefinitely and connect() short-circuits on every retry.
+    // Reconnects (already-paired, holding a device token) get more grace than
+    // first-pair: a cold Cloudflare TLS handshake can take seconds, and
+    // force-closing it prematurely is what caused the endless bridge/cloud flap.
+    const handshakeTimeout =
+      pairToken == null ? CONNECT_TIMEOUT_MS_RECONNECT : CONNECT_TIMEOUT_MS;
     if (this.connectTimer !== null) clearTimeout(this.connectTimer);
     this.connectTimer = window.setTimeout(() => {
       if (!isCurrent()) return;
@@ -427,7 +484,7 @@ class RemoteClient {
       console.warn('[ws] Connect handshake timed out; closing to trigger reconnect.');
       connError.set('Connection timed out');
       try { ws.close(); } catch { /* ignore */ }
-    }, CONNECT_TIMEOUT_MS);
+    }, handshakeTimeout);
 
     ws.onopen = () => {
       if (!isCurrent()) return;
