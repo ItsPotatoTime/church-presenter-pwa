@@ -131,6 +131,14 @@ class RemoteClient {
   private _lastBridgeRevoked = 0;
   private static readonly BRIDGE_REVOKED_COOLDOWN_MS = 30_000;
 
+  // Set when the cloud tells us a server has been *deliberately unregistered*
+  // (the desktop disabled cloud sync). This is NOT a transient miss — the
+  // bridge will keep rejecting us with `server_unregistered` until the server
+  // re-registers. So we permanently skip the bridge and use the desktop's own
+  // stored Cloudflare/LAN fallback instead. Cleared on a successful auth (so a
+  // later re-enable that re-registers the server resumes using the bridge).
+  private _serverUnregistered = false;
+
   constructor() {
     // iOS Safari kills WebSockets when the PWA moves to background.
     // On return to foreground, reconnect immediately instead of waiting for the backoff timer.
@@ -368,7 +376,7 @@ class RemoteClient {
       // Both cloud endpoints are the same host: alternateNext should NOT move us
       // to the identical host. Re-open the current (or bridge) endpoint so the
       // retry makes progress instead of looping forever.
-      if (creds.cloud_url && !this._bridgeBlocked) {
+      if (creds.cloud_url && !this._bridgeBlocked && !this._serverUnregistered) {
         console.info('[ws] endpoint: bridge/cloud share a host — staying on cloud bridge %s', creds.cloud_url);
         return { host: creds.cloud_url, kind: 'bridge' };
       }
@@ -512,7 +520,12 @@ class RemoteClient {
       if (this.authTimer !== null) clearTimeout(this.authTimer);
       this.authTimer = window.setTimeout(() => {
         if (!isCurrent()) return;
-        connError.set('Auth timed out');
+        // Silent auth timeout (auth sent, no auth.ok/auth.fail reply) is the
+        // signature of a server that never decoded our frame. Surface it so a
+        // future hang is self-explanatory instead of an infinite "Authenticating".
+        console.warn('[ws] auth timed out on %s (%s) — sent auth but got no reply in %dms', pick.host, pick.kind, AUTH_TIMEOUT_MS);
+        pushCloudDiagnostic('error', `Auth timed out on ${pick.kind}`, `Sent auth to ${pick.host} but received no reply in ${AUTH_TIMEOUT_MS}ms — server may not be decoding frames`);
+        connError.set('Authentication timed out — server did not respond');
         try { ws.close(); } catch { /* ignore */ }
       }, AUTH_TIMEOUT_MS);
     };
@@ -524,6 +537,9 @@ class RemoteClient {
       try {
         msg = JSON.parse(typeof ev.data === 'string' ? ev.data : '');
       } catch {
+        // Malformed server reply — log it so we can see what the server sent.
+        const snippet = typeof ev.data === 'string' ? ev.data.slice(0, 200) : `[${typeof ev.data}]`;
+        console.warn('[ws] received non-JSON message from %s (%s): %s', pick?.host ?? this.currentEndpoint, this.currentEndpoint, snippet);
         return;
       }
 
@@ -541,6 +557,14 @@ class RemoteClient {
           console.info('[ws] auth.ok cleared bridge-revoked block (endpoint=%s)', this.currentEndpoint);
           this._bridgeBlocked = false;
           this._lastBridgeRevoked = 0;
+        }
+        // A successful bridge auth proves the server re-registered with the
+        // cloud — resume using the bridge (drop the unregistered block). A
+        // success on the desktop tunnel doesn't prove re-registration, so only
+        // clear this on the bridge.
+        if (this._serverUnregistered && this.currentEndpoint === 'bridge') {
+          console.info('[ws] auth.ok (bridge) cleared server-unregistered block');
+          this._serverUnregistered = false;
         }
         // Successful auth — clear any prior wrong_server switch attempts so a
         // future wrong_server (in a later session) can try the same server again.
@@ -638,7 +662,22 @@ class RemoteClient {
       if (msg.type === 'auth.fail') {
         if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
         const p = (msg.payload ?? {}) as AuthFail;
-        if (p.reason === 'revoked') {
+        if (p.reason === 'server_unregistered') {
+          // The desktop deliberately unregistered from the cloud (cloud sync
+          // disabled). The bridge will keep rejecting us until it re-registers,
+          // so stop using the bridge and rotate to our stored Cloudflare/LAN
+          // fallback — keeping the pairing intact (unlike `revoked`). This is
+          // the desired swap from "Desktop is offline" to the live desktop.
+          console.warn('[ws] server unregistered from cloud — blocking bridge + using desktop fallback');
+          this._serverUnregistered = true;
+          this._bridgeBlocked = true;
+          this._lastBridgeRevoked = Date.now();
+          this.forceClose = true;
+          try { ws.close(); } catch { /* ignore */ }
+          connStatus.set('connecting');
+          connError.set(null);
+          void this.reconnectActive();
+        } else if (p.reason === 'revoked') {
           // Server explicitly kicked this device. There are two very different
           // situations here:
           //   1. The device was genuinely removed from the desktop's paired
@@ -899,6 +938,24 @@ class RemoteClient {
         }
         return;
       }
+
+      if (msg.type === 'server.unregistered') {
+        // The desktop just disabled cloud sync. We're currently on the bridge
+        // (or cloud path), so rotate NOW to the stored Cloudflare/LAN fallback
+        // before the bridge closes under us — keeping the pairing intact.
+        if (isCurrent() && (this.currentEndpoint === 'bridge' || this.currentEndpoint === 'cloud')) {
+          console.warn('[ws] server.unregistered broadcast — rotating to desktop fallback');
+          this._serverUnregistered = true;
+          this._bridgeBlocked = true;
+          this._lastBridgeRevoked = Date.now();
+          this.forceClose = true;
+          try { ws.close(); } catch { /* ignore */ }
+          connStatus.set('connecting');
+          desktopOnline.set(null);
+          void this.reconnectActive();
+        }
+        return;
+      }
     };
 
     ws.onerror = () => {
@@ -906,7 +963,7 @@ class RemoteClient {
       connError.set('Connection error');
     };
 
-    ws.onclose = () => {
+    ws.onclose = (ev?: CloseEvent) => {
       // Stale close (from a previous socket we superseded): ignore completely.
       if (!isCurrent()) return;
       if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
@@ -929,6 +986,14 @@ class RemoteClient {
       if (this.forceClose) {
         connStatus.set('closed');
         return;
+      }
+      // Surface the close code/reason so a flapping socket is diagnosable
+      // instead of a silent infinite "reconnecting" spin. 1000 = clean,
+      // 1006 = abnormal (proxy/TLS dropped the upgrade — the classic
+      // nginx-without-Upgrade-headers symptom).
+      const code = ev?.code;
+      if (code !== undefined && code !== 1000 && code !== 1005) {
+        connError.set(`Connection closed (code ${code}${ev?.reason ? ': ' + ev.reason : ''}) — retrying`);
       }
       connStatus.set('closed');
       this.scheduleReconnect(creds, myGen);
@@ -1040,6 +1105,10 @@ class RemoteClient {
       });
       if (!res.ok) {
         pushCloudDiagnostic('error', `Cloud status probe returned HTTP ${res.status}`, probeUrl);
+        // A probe miss must NEVER tear down an established socket — that's what
+        // made the phone appear to "reconnect forever" when only the probe path
+        // was unhealthy. The live connection is the source of truth for usability.
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
         await setServerCloudStatus(serverKey ?? '', 'offline');
         return;
       }
@@ -1060,6 +1129,9 @@ class RemoteClient {
       const msg = err instanceof Error ? err.message : String(err);
       // Network error reaching the bridge — cloud itself is unreachable.
       pushCloudDiagnostic('error', `Cloud status probe failed: ${msg}`, probeUrl);
+      // Don't flip the status dot to offline if a real socket is live; the probe
+      // path can fail independently of the control socket.
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
       await setServerCloudStatus(serverKey ?? '', 'offline');
     }
   }

@@ -54,6 +54,7 @@ export interface AuthFail {
     | 'revoked'
     | 'bad_token'
     | 'banned'
+    | 'server_unregistered'
     | 'wrong_server';
   // Server includes its own identity in every auth.fail so the phone can
   // auto-switch to the right stored server entry on wrong_server, and
