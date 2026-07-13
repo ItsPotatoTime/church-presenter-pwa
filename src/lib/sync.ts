@@ -171,20 +171,31 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         p.songs?.length ?? 0, p.lists?.length ?? 0,
         p.bible ? p.bible.version : 'null', p.server_ts,
       );
-      // Optimize full sync removal: only delete songs that vanished from the server
-      const incomingPaths = new Set(p.songs.map((s) => s.path));
-      const currentPaths = await getAllSongPaths();
-      const toDelete = currentPaths.filter((x) => !incomingPaths.has(x));
-      if (toDelete.length) {
-        console.info('[sync] Removing %d local songs missing from server', toDelete.length);
-        await deleteSongsByPath(toDelete);
+      // Optimize full sync removal: only delete songs that vanished from the server.
+      // Guard against an empty/partial payload: if the server sent no songs (or the
+      // message was truncated) we must NOT wipe the entire local library.
+      const incomingPaths = new Set((p.songs || []).map((s) => s.path));
+      if (p.songs && p.songs.length) {
+        const currentPaths = await getAllSongPaths();
+        const toDelete = currentPaths.filter((x) => !incomingPaths.has(x));
+        if (toDelete.length) {
+          console.info('[sync] Removing %d local songs missing from server', toDelete.length);
+          await deleteSongsByPath(toDelete);
+        }
+      } else {
+        console.warn('[sync] sync.full carried no songs — skipping local deletion to avoid wiping library');
       }
 
-      await putSongs(p.songs);
+      await putSongs(p.songs || []);
       lists = await mergeServerLists(p.lists);
-      await clearBibleBooks();
-      await clearBibleVerses();
-      if (p.bible) {
+      // Only rewrite the Bible when the incoming version actually differs from what
+      // we already have. The ~10 MB Bible is otherwise re-shipped and re-written on
+      // every full sync, which is the main cause of slow phone syncs.
+      const incomingVersion = p.bible ? p.bible.version : null;
+      if (p.bible && incomingVersion !== cachedBibleVersion) {
+        console.info('[sync] Bible version changed (%s -> %s): rewriting', cachedBibleVersion, incomingVersion);
+        await clearBibleBooks();
+        await clearBibleVerses();
         const sortedVerses = sortBibleVerses(p.bible.verses);
         await putBibleBooks(p.bible.books);
         await putBibleVerses(sortedVerses);
@@ -193,6 +204,12 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         bibleVerses = sortedVerses;
         bibleVersion = p.bible.version;
         console.info('[sync] Bible written: books=%d verses=%d version=%s', bibleBooks.length, bibleVerses.length, bibleVersion);
+      } else if (p.bible) {
+        // Same version as cached: keep what we have, no rewrite.
+        bibleVersion = await getBibleVersion();
+        bibleBooks = await loadAllBibleBooks();
+        bibleVerses = await loadAllBibleVerses();
+        console.info('[sync] Bible version unchanged (%s) — skipped rewrite', cachedBibleVersion);
       } else {
         bibleVersion = await getBibleVersion();
         bibleBooks = [];

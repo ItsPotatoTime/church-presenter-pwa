@@ -67,10 +67,14 @@ function normalizeWsHost(host: string): { host: string; scheme: 'wss' | 'ws' | n
   }
   return { host: h, scheme };
 }
-import { handleSyncMessage } from './sync';
+import { handleSyncMessage, syncNow } from './sync';
 
 const RECONNECT_BACKOFF_MS = [250, 500, 1000, 2000, 4000, 8000, 15000];
 const AUTH_TIMEOUT_MS = 6000;
+// Coalesce bursts of `library.changed` (the desktop emits many during a single
+// cloud push) into a single delta sync instead of one full sync per event.
+const LIBRARY_CHANGED_DEBOUNCE_MS = 400;
+let libraryChangedTimer: ReturnType<typeof setTimeout> | null = null;
 // Deadline for the WSS handshake itself (new WebSocket() -> onopen).
 // Through a cloudflared tunnel in a bad state the upgrade can hang without
 // ever firing onopen OR onclose/onerror, leaving connStatus stuck at
@@ -863,10 +867,18 @@ class RemoteClient {
       }
 
       if (msg.type === 'library.changed') {
-        console.info('[ws] library.changed received — triggering syncNow()');
-        import('./sync').then(({ syncNow }) => {
-          void syncNow();
-        });
+        // Debounce: the desktop fires library.changed many times during a cloud
+        // push, each of which previously triggered a full sync round-trip. Collapse
+        // them into a single sync. syncNow() already requests a delta (since_ts =
+        // last) when the Bible is cached, so this stays incremental/fast.
+        if (libraryChangedTimer) clearTimeout(libraryChangedTimer);
+        libraryChangedTimer = setTimeout(() => {
+          libraryChangedTimer = null;
+          console.info('[ws] library.changed (debounced) — triggering syncNow()');
+          syncNow().catch((e) =>
+            console.warn('[ws] library.changed sync failed: %s', String(e)),
+          );
+        }, LIBRARY_CHANGED_DEBOUNCE_MS);
         return;
       }
 
