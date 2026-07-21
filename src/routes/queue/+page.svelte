@@ -117,7 +117,7 @@
   let dragging = $state<number | null>(null);
   let insertAt = $state<number | null>(null);
   let ghostStyle = $state('');
-  let ghostItem = $state<{ name: string; folder?: string; is_merged?: boolean; is_bible?: boolean } | null>(null);
+  let ghostItem = $state<{ name: string; path?: string; folder?: string; is_merged?: boolean; is_bible?: boolean } | null>(null);
 
   // Cached at drag-start (viewport-relative, before any drag transforms).
   let _tops: number[] = [];
@@ -155,7 +155,7 @@
     insertAt  = i;
     queueDragActive.set(true);
     const qi = $queueState?.items[i];
-    ghostItem = { name: qi?.name ?? '', folder: qi?.folder, is_merged: qi?.is_merged, is_bible: qi?.is_bible };
+    ghostItem = { name: qi?.name ?? '', path: qi?.path, folder: qi?.folder, is_merged: qi?.is_merged, is_bible: qi?.is_bible };
     ghostStyle = `top:${rect.top}px;left:${rect.left}px;width:${rect.width}px;height:${rect.height}px`;
 
     window.addEventListener('pointermove', onDragMove, { passive: false });
@@ -259,7 +259,7 @@
         >⋮⋮</span>
         <button class="label" onclick={() => tapJump(i)}>
           <div class="name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
-            <div class="name">{item.name || 'Untitled'}</div>
+            <div class="name">{item.name || songByPath.get(item.path)?.name || 'Untitled'}</div>
             {#if !item.is_bible && !item.is_merged && songKeyMap.get(item.path)}
               <span class="key-badge">{songKeyMap.get(item.path)}</span>
             {/if}
@@ -287,7 +287,7 @@
   <div class="drag-ghost" style={ghostStyle}>
     <span class="grip">⋮⋮</span>
     <div class="ghost-label">
-      <div class="name">{ghostItem.name || 'Untitled'}</div>
+      <div class="name">{ghostItem.name || songByPath.get(ghostItem.path ?? '')?.name || 'Untitled'}</div>
       {#if ghostItem.is_bible}
         <div class="muted small">📖 Bible</div>
       {:else if ghostItem.is_merged}

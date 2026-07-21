@@ -42,7 +42,8 @@
 
   async function addToQueue(path: string) {
     if ($isViewOnly) return;
-    const cmd = { type: 'queue.add', payload: { song_path: path } } as const;
+    const song = $songsStore.find((s) => s.path === path);
+    const cmd = { type: 'queue.add', payload: { song_path: path, name: song?.name, folder: song?.folder } } as const;
     if ($connStatus === 'open') {
       remote.send(cmd);
       return;

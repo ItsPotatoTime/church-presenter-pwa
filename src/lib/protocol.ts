@@ -219,7 +219,7 @@ export type ClientCommand =
   | { type: 'live.chorus' }
   | { type: 'live.goto'; payload: { song_index: number; slide_index: number } }
   | { type: 'live.follow'; payload: { enabled: boolean } }
-  | { type: 'queue.add'; payload: { song_path: string; position?: number } }
+  | { type: 'queue.add'; payload: { song_path: string; position?: number; name?: string; folder?: string } }
   | { type: 'queue.add_bible_verse'; payload: { book: string; chapter: number; verse: number; position?: number } }
   | { type: 'queue.add_bible_verses'; payload: { book: string; chapter: number; verses: number[]; position?: number } }
   | { type: 'queue.remove'; payload: { position: number } }
@@ -229,7 +229,7 @@ export type ClientCommand =
   | { type: 'list.create'; payload: { name: string } }
   | { type: 'list.delete'; payload: { name: string } }
   | { type: 'list.rename'; payload: { old: string; new: string } }
-  | { type: 'list.add_song'; payload: { list_name: string; song_path: string; position?: number } }
+  | { type: 'list.add_song'; payload: { list_name: string; song_path: string; position?: number; name?: string; folder?: string } }
   | { type: 'list.remove_song'; payload: { list_name: string; position: number } }
   | { type: 'list.reorder'; payload: { list_name: string; from: number; to: number } }
   | { type: 'list.load_to_queue'; payload: { list_name: string } }

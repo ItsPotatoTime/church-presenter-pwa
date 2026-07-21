@@ -1356,6 +1356,32 @@ export function normalizedListName(name: string): string {
   return name.trim().toLocaleLowerCase().replace(/\s+/g, ' ');
 }
 
+// Fill empty song names/folders on list entries from the local library cache.
+// A list entry can arrive with a blank name (e.g. an offline add against the
+// cloud mirror that only shipped song_path), but the phone's song cache usually
+// knows the real title — the same cache the click-to-preview modal uses. This
+// keeps list rows from rendering as "Untitled" when we could resolve them.
+async function backfillListNames(lists: LibraryList[]): Promise<LibraryList[]> {
+  const songs = await loadAllSongs();
+  const byPath = new Map(songs.map((s) => [s.path, s]));
+  let changed = false;
+  const out = lists.map((list) => {
+    const songsOut = (list.songs ?? []).map((song) => {
+      if (song.name && song.folder) return song;
+      const cached = byPath.get(song.path);
+      if (!cached) return song;
+      changed = true;
+      return {
+        path: song.path,
+        name: song.name || cached.name,
+        folder: song.folder || cached.folder,
+      };
+    });
+    return { ...list, songs: songsOut };
+  });
+  return changed ? out : lists;
+}
+
 function mergeServerListsWithPending(
   serverLists: LibraryList[],
   localLists: LibraryList[],
@@ -1516,6 +1542,7 @@ export async function mergeServerLists(lists: LibraryList[]): Promise<LibraryLis
     }
   }
 
+  merged = await backfillListNames(merged);
   await putLists(merged);
   if (confirmedKeys.size > 0) {
     await clearPendingListMutationsForListNames(confirmedKeys);

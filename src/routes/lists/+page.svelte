@@ -31,6 +31,15 @@
     previewSong = null;
   }
 
+  // Resolve a list-entry's display name. The cached list entry may carry an
+  // empty name (e.g. an offline add to the cloud mirror), so fall back to the
+  // local library cache — the same source the click-to-preview modal uses — and
+  // only then to the literal "Untitled" fallback.
+  function displayName(path: string, name: string | undefined): string {
+    if (name) return name;
+    return get(songsStore).find((s) => s.path === path)?.name || 'Untitled';
+  }
+
   // State initialized from stores to preserve tab state
   let activeTab = $state<'public' | 'private'>($listsActiveTab);
   let selectedName = $state<string | null>($listsSelectedName);
@@ -218,7 +227,7 @@
       await replaceQueueFromSongs(list.songs);
       await queueCommandForOfflineReplay({ type: 'queue.clear' });
       for (const song of list.songs) {
-        await queueCommandForOfflineReplay({ type: 'queue.add', payload: { song_path: song.path } });
+        await queueCommandForOfflineReplay({ type: 'queue.add', payload: { song_path: song.path, name: song.name, folder: song.folder } });
       }
     } else {
       return false;
@@ -305,13 +314,13 @@
         await replaceQueueFromSongs(selectedList.songs);
         await queueCommandForOfflineReplay({ type: 'queue.clear' });
         for (const song of selectedList.songs) {
-          await queueCommandForOfflineReplay({ type: 'queue.add', payload: { song_path: song.path } });
+          await queueCommandForOfflineReplay({ type: 'queue.add', payload: { song_path: song.path, name: song.name, folder: song.folder } });
         }
         return;
       }
       remote.send({ type: 'queue.clear' });
       for (const song of selectedList.songs) {
-        remote.send({ type: 'queue.add', payload: { song_path: song.path } });
+        remote.send({ type: 'queue.add', payload: { song_path: song.path, name: song.name, folder: song.folder } });
       }
     } else {
       send({ type: 'list.load_to_queue', payload: { list_name: selectedList.name } });
@@ -449,9 +458,12 @@
       void putPrivateLists(updated);
       showToast(`Added "${s.name}"`, 'success');
     } else {
+      // Include name/folder so the cloud bridge (used when the desktop is
+      // offline) stores the correct title instead of an empty one that the
+      // list row would render as "Untitled".
       send({
         type: 'list.add_song',
-        payload: { list_name: selectedList.name, song_path: s.path },
+        payload: { list_name: selectedList.name, song_path: s.path, name: s.name, folder: s.folder },
       });
       showToast(`Added "${s.name}"`, 'success');
     }
@@ -573,7 +585,7 @@
             tabindex="0"
           >
             <div class="name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
-              <div class="name">{song.name || 'Untitled'}</div>
+              <div class="name">{displayName(song.path, song.name)}</div>
               {#if songKeyMap.get(song.path)}
                 <span class="key-badge">{songKeyMap.get(song.path)}</span>
               {/if}
