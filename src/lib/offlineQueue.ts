@@ -17,6 +17,27 @@ function clampInsertPosition(position: number | undefined, length: number): numb
   return Math.max(0, Math.min(length, Math.trunc(position)));
 }
 
+// Mirror of the desktop QueueManager._adjust_index_for_reorder. Keeps the
+// current/playing pointers on the SAME song after a move instead of leaving
+// them pinned to the old numeric slot (which now holds a different song and
+// makes the phone show the wrong item as live).
+function adjustIndexForReorder(idx: number, from: number, to: number): number {
+  if (idx < 0) return idx;
+  if (idx === from) return to;
+  if (from < idx && idx <= to) return idx - 1;
+  if (to <= idx && idx < from) return idx + 1;
+  return idx;
+}
+
+// Mirror of the desktop QueueManager.remove_song index fix-up.
+function adjustIndexForRemove(idx: number, removedPos: number, newLength: number): number {
+  if (idx < 0) return idx;
+  if (newLength <= 0) return -1;
+  if (removedPos < idx) idx -= 1;
+  else if (removedPos === idx && idx >= newLength) idx = newLength - 1;
+  return Math.min(idx, newLength - 1);
+}
+
 function queueItemFromSong(song: LibrarySong): QueueItem {
   return {
     path: song.path,
@@ -94,12 +115,13 @@ export async function applyQueueCommandLocally(cmd: ClientCommand): Promise<bool
   }
 
   if (cmd.type === 'queue.remove') {
-    const items = current.items.filter((_, index) => index !== cmd.payload.position);
+    const removedPos = cmd.payload.position;
+    const items = current.items.filter((_, index) => index !== removedPos);
     await persistQueue({
       ...current,
       items,
-      current_song_index: Math.min(current.current_song_index, items.length - 1),
-      playing_song_index: Math.min(current.playing_song_index, items.length - 1),
+      current_song_index: adjustIndexForRemove(current.current_song_index, removedPos, items.length),
+      playing_song_index: adjustIndexForRemove(current.playing_song_index, removedPos, items.length),
     });
     return true;
   }
@@ -111,7 +133,12 @@ export async function applyQueueCommandLocally(cmd: ClientCommand): Promise<bool
     if (from < 0 || from >= items.length || from === to) return true;
     const [moved] = items.splice(from, 1);
     items.splice(to, 0, moved);
-    await persistQueue({ ...current, items });
+    await persistQueue({
+      ...current,
+      items,
+      current_song_index: adjustIndexForReorder(current.current_song_index, from, to),
+      playing_song_index: adjustIndexForReorder(current.playing_song_index, from, to),
+    });
     return true;
   }
 

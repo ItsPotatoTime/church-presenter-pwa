@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { get } from 'svelte/store';
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { loadCredentialsResilient } from '$lib/db';
@@ -196,16 +195,17 @@
     ghostItem = null;
     queueDragActive.set(false);
 
-    if (from !== null && to !== null && from !== to) {
-      send({ type: 'queue.reorder', payload: { from, to } });
-      // Optimistically mirror the move locally so a fast second drag starts from
-      // the correct order instead of waiting for the desktop's echo.
-      const qs = get(queueState);
-      if (qs) {
-        const items = qs.items.slice();
-        const [m] = items.splice(from, 1);
-        items.splice(to, 0, m);
-        queueState.set({ ...qs, items });
+    if (from !== null && to !== null && from !== to && !$isViewOnly) {
+      const cmd: ClientCommand = { type: 'queue.reorder', payload: { from, to } };
+      // Apply locally (adjusts the playing/current pointers so the live highlight
+      // stays on the same song) and ship to the desktop — or queue for offline
+      // replay. A single local apply replaces the old inline splice, which left
+      // the playing index pointing at the wrong song and double-moved offline.
+      void applyQueueCommandLocally(cmd);
+      if ($connStatus === 'open') {
+        remote.send(cmd);
+      } else {
+        void queueCommandForOfflineReplay(cmd);
       }
     }
   }
