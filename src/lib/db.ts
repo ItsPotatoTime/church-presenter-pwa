@@ -61,6 +61,7 @@ export interface ServerEntry {
   cloud_url?: string | null;
   cloud_id?: string | null;
   cloud_status?: 'online' | 'offline' | 'unknown';
+  desktop_online?: boolean | null;
   server_name?: string;
   server_id?: string;
   paired_at?: number;
@@ -984,6 +985,28 @@ export async function getServerCloudStatus(
 ): Promise<'online' | 'offline' | 'unknown'> {
   const entry = await _getServerByKey(serverKey);
   return entry?.cloud_status ?? 'unknown';
+}
+
+/** Update the cached desktop-online flag for a server (drives yellow vs green dot). */
+export async function setServerDesktopOnline(
+  serverKey: string,
+  online: boolean | null,
+): Promise<void> {
+  const entry = await _getServerByKey(serverKey);
+  if (!entry) return;
+  entry.desktop_online = online;
+  await _saveServer(entry);
+}
+
+/** Update the cached server display name (learned from cloud probes or auth). */
+export async function setServerName(
+  serverKey: string,
+  name: string,
+): Promise<void> {
+  const entry = await _getServerByKey(serverKey);
+  if (!entry) return;
+  entry.server_name = name;
+  await _saveServer(entry);
 }
 
 async function _removeServerCache(key: string): Promise<void> {

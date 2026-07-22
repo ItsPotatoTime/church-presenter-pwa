@@ -170,6 +170,9 @@
     servers = await loadAllServers();
     lastSyncTs = await getLastSyncTs();
     await remote.connect();
+    void remote.probeAllServers().then(async () => {
+      servers = await loadAllServers();
+    });
   });
 
   onDestroy(() => {
@@ -235,6 +238,9 @@
     await hydrateFromCache();
     lastSyncTs = await getLastSyncTs();
     void remote.reconnectActive();
+    void remote.probeAllServers().then(async () => {
+      servers = await loadAllServers();
+    });
   }
 
   const lastSyncHuman = $derived.by(() => {
@@ -275,7 +281,9 @@
     }
     // Non-active, but a cloud bridge is registered: use the probed status.
     if (s.cloud_url) {
-      if (s.cloud_status === 'online') return 'dot-online';
+      if (s.cloud_status === 'online') {
+        return s.desktop_online === false ? 'dot-cloud-only' : 'dot-online';
+      }
       if (s.cloud_status === 'offline') return 'dot-offline';
     }
     return 'dot-unknown';
@@ -283,7 +291,11 @@
 
   function serverCloudLabel(s: ServerEntry): string {
     if (s.cloud_url) {
-      if (s.cloud_status === 'online') return 'Cloud: online';
+      if (s.cloud_status === 'online') {
+        if (s.desktop_online === false) return 'Cloud: online (desktop offline)';
+        if (s.desktop_online === true) return 'Cloud: online';
+        return 'Cloud: online';
+      }
       if (s.cloud_status === 'offline') return 'Cloud: offline';
       return 'Cloud: unknown';
     }

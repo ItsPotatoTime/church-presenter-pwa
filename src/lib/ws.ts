@@ -29,6 +29,8 @@ import {
   saveCredentials,
   switchServer,
   setServerCloudStatus,
+  setServerDesktopOnline,
+  setServerName,
   type Credentials,
 } from './db';
 import {
@@ -951,6 +953,21 @@ class RemoteClient {
         return;
       }
 
+      if (msg.type === 'server.renamed') {
+        const p = msg.payload as { server_name?: string };
+        if (p.server_name) {
+          console.info('[ws] server renamed -> %s', p.server_name);
+          serverName.set(p.server_name);
+          void (async () => {
+            const creds = await loadCredentials();
+            if (creds?.server_key) {
+              await setServerName(creds.server_key, p.server_name!);
+            }
+          })();
+        }
+        return;
+      }
+
       if (msg.type === 'server.unregistered') {
         // The desktop just disabled cloud sync. We're currently on the bridge
         // (or cloud path), so rotate NOW to the stored Cloudflare/LAN fallback
@@ -1076,13 +1093,9 @@ class RemoteClient {
   // a different transport (desktop tunnel / LAN) right now.
   private async startStatusProbe(myGen: number): Promise<void> {
     this.stopStatusProbe();
-    const creds = await loadCredentials();
-    if (!creds || !creds.cloud_url) return;
-    const cloudUrl = creds.cloud_url;
-    const serverKey = creds.server_key;
     const apply = async () => {
       if (this.gen !== myGen) return;
-      await this.probeCloudStatus(cloudUrl, serverKey);
+      await this.probeAllServers();
     };
     await apply();
     this.statusProbeTimer = window.setInterval(apply, RemoteClient.STATUS_PROBE_MS);
@@ -1095,7 +1108,28 @@ class RemoteClient {
     }
   }
 
-  private async probeCloudStatus(cloudUrl: string, serverKey: string | undefined): Promise<void> {
+  /** Probe every paired server that has a cloud_url, not just the active one. */
+  async probeAllServers(): Promise<void> {
+    const all = await loadAllServers();
+    const activeCreds = await loadCredentials();
+    const activeKey = activeCreds?.server_key;
+    const promises: Promise<void>[] = [];
+    for (const s of all) {
+      if (!s.cloud_url) continue;
+      const isActive = s.server_key === activeKey;
+      promises.push(
+        this.probeCloudStatus(s.cloud_url, s.server_key, s.server_id ?? '', isActive),
+      );
+    }
+    await Promise.allSettled(promises);
+  }
+
+  private async probeCloudStatus(
+    cloudUrl: string,
+    serverKey: string | undefined,
+    serverId?: string,
+    isActive?: boolean,
+  ): Promise<void> {
     // cloudUrl arrives *with* a scheme (desktop sends `http://host:port` from
     // cloud_sync._normalize_cloud_url, or a `wss://`/cloudflared host). The
     // cloud server is a plain `http.createServer`, so a scheme-less or `http://`
@@ -1105,8 +1139,8 @@ class RemoteClient {
     // `server_id` so the bridge can report whether the *desktop* is live.
     const { host, scheme } = normalizeWsHost(cloudUrl);
     const httpScheme = scheme === 'wss' ? 'https' : 'http';
-    const serverId = (await loadCredentials())?.server_id ?? '';
-    const query = serverId ? `?server_id=${encodeURIComponent(serverId)}` : '';
+    const sid = serverId || (await loadCredentials())?.server_id || '';
+    const query = sid ? `?server_id=${encodeURIComponent(sid)}` : '';
     const probeUrl = `${httpScheme}://${host}/api/status${query}`;
     try {
       console.info('[ws] probing cloud status -> %s', probeUrl);
@@ -1120,21 +1154,28 @@ class RemoteClient {
         // A probe miss must NEVER tear down an established socket — that's what
         // made the phone appear to "reconnect forever" when only the probe path
         // was unhealthy. The live connection is the source of truth for usability.
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+        if (isActive && this.ws && this.ws.readyState === WebSocket.OPEN) return;
         await setServerCloudStatus(serverKey ?? '', 'offline');
         return;
       }
       const data = (await res.json()) as {
         online?: boolean;
         desktop_online?: boolean;
+        server_name?: string;
         server_ts?: number;
       };
       const bridgeUp = data.online !== false;
       await setServerCloudStatus(serverKey ?? '', bridgeUp ? 'online' : 'offline');
+      if (typeof data.desktop_online === 'boolean') {
+        await setServerDesktopOnline(serverKey ?? '', data.desktop_online);
+      }
+      if (data.server_name) {
+        await setServerName(serverKey ?? '', data.server_name);
+      }
       pushCloudDiagnostic('status', `Cloud status OK (online=${bridgeUp}, desktop_online=${data.desktop_online})`, probeUrl);
       // If we're currently connected through a cloud path, reflect the
       // desktop liveness the bridge reports.
-      if (this.currentEndpoint === 'bridge' || this.currentEndpoint === 'cloud') {
+      if (isActive && (this.currentEndpoint === 'bridge' || this.currentEndpoint === 'cloud')) {
         desktopOnline.set(data.desktop_online === true);
       }
     } catch (err) {
@@ -1143,7 +1184,7 @@ class RemoteClient {
       pushCloudDiagnostic('error', `Cloud status probe failed: ${msg}`, probeUrl);
       // Don't flip the status dot to offline if a real socket is live; the probe
       // path can fail independently of the control socket.
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+      if (isActive && this.ws && this.ws.readyState === WebSocket.OPEN) return;
       await setServerCloudStatus(serverKey ?? '', 'offline');
     }
   }
