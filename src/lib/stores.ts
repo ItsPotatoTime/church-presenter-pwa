@@ -59,6 +59,7 @@ export const serverName: Writable<string> = writable('ChurchPresenter');
 
 export const canEditKeys: Writable<boolean> = writable(false);
 export const canEditSongs: Writable<boolean> = writable(false);
+export const canEditDisplays: Writable<boolean> = writable(false);
 
 export const debugMode: Writable<boolean> = writable(
   typeof window !== 'undefined' ? localStorage.getItem('debug_mode') === 'true' : false

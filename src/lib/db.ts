@@ -49,6 +49,7 @@ export interface Credentials {
   server_key?: string;
   can_edit_keys?: boolean;
   can_edit_songs?: boolean;
+  can_edit_displays?: boolean;
 }
 
 export interface ServerEntry {
@@ -76,6 +77,7 @@ export interface ServerEntry {
   last_sync_ts?: number;
   can_edit_keys?: boolean;
   can_edit_songs?: boolean;
+  can_edit_displays?: boolean;
 }
 
 interface ServerCacheEntry {
@@ -638,6 +640,7 @@ export async function saveCredentials(c: Credentials): Promise<void> {
           last_used: Date.now(),
           can_edit_keys: c.can_edit_keys ?? existing.can_edit_keys,
           can_edit_songs: c.can_edit_songs ?? existing.can_edit_songs,
+          can_edit_displays: c.can_edit_displays ?? existing.can_edit_displays,
         };
         await _saveServer(updated);
         await initializeServerData(activeKey);
@@ -673,6 +676,7 @@ export async function saveCredentials(c: Credentials): Promise<void> {
     last_used: Date.now(),
     can_edit_keys: c.can_edit_keys,
     can_edit_songs: c.can_edit_songs,
+    can_edit_displays: c.can_edit_displays,
   };
   await _saveServer(entry);
   await initializeServerData(serverKey);
@@ -842,6 +846,7 @@ function _entryToCredentials(e: ServerEntry): Credentials {
     server_key: e.server_key,
     can_edit_keys: e.can_edit_keys,
     can_edit_songs: e.can_edit_songs,
+    can_edit_displays: e.can_edit_displays,
   };
 }
 

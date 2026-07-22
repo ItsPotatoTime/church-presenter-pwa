@@ -30,6 +30,7 @@ export interface AuthOk {
   exclusive_device_id?: string | null;
   can_edit_keys?: boolean;
   can_edit_songs?: boolean;
+  can_edit_displays?: boolean;
   // True when the *live desktop* is up behind the cloud bridge (drives the
   // PWA "Live" vs "Cloud only" label). Only present when connected to the
   // cloud server; older desktops / direct LAN never set it.
@@ -210,6 +211,22 @@ export interface ExclusiveChanged {
   device_name: string | null;
 }
 
+// ── Display configuration (server → client) ────────────────────────
+// One physical screen the desktop can route an output window to. Mirrors the
+// data the desktop's "Output Displays" menu is built from.
+export interface DisplayScreen {
+  index: number;
+  name: string;
+  is_app_screen: boolean;
+  selected: boolean;
+}
+
+export interface DisplayConfig {
+  ok: boolean;
+  screens?: DisplayScreen[];
+  error?: string;
+}
+
 // ── Commands (client → server) ───────────────────────────────────────
 export type ClientCommand =
   | { type: 'live.next' }
@@ -250,4 +267,6 @@ export type ClientCommand =
   | { type: 'song.fetch_rc'; id?: string; payload: { url: string } }
   | { type: 'song.create'; id?: string; payload: { name: string; slide_texts: string[]; chorus_index?: number | number[] | null; folder?: string; overwrite?: boolean } }
   | { type: 'song.update'; id?: string; payload: { song_path: string; name: string; slide_texts: string[]; chorus_index?: number | null; chorus_ranges?: number[][] | null; end_slide_index?: number | null; auto_chorus_enabled?: boolean } }
-  | { type: 'song.set_key'; payload: { song_path: string; key: string | null; key_ts?: number | null } };
+  | { type: 'song.set_key'; payload: { song_path: string; key: string | null; key_ts?: number | null } }
+  | { type: 'display.get_config'; id?: string }
+  | { type: 'display.set_config'; id?: string; payload: { selected: string[] } };

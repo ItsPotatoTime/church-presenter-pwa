@@ -7,7 +7,7 @@
   import { beforeNavigate, goto } from '$app/navigation';
   import { getOrCreateDeviceId, loadCredentialsResilient } from '$lib/db';
   import { hydrateFromCache, isReducedDataConnection, syncNow } from '$lib/sync';
-  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY, canEditKeys, debugMode, managerAccessCountdown, refreshManagerAccessCountdown } from '$lib/stores';
+  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY, canEditKeys, canEditDisplays, debugMode, managerAccessCountdown, refreshManagerAccessCountdown } from '$lib/stores';
 
   let { children } = $props();
   let paired = $state(false);
@@ -215,6 +215,7 @@
     paired = !!creds && !!creds.device_token;
     if (creds) {
       canEditKeys.set(!!creds.can_edit_keys);
+      canEditDisplays.set(!!creds.can_edit_displays);
     }
     if (paired) {
       // Load library cache so Library/Queue show something even offline.

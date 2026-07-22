@@ -33,12 +33,23 @@
     managerAccessCountdown,
     setManagerAccessDuration,
     cloudDiagnostics,
+    canEditDisplays,
   } from '$lib/stores';
+  import type { DisplayScreen } from '$lib/protocol';
 
   let creds = $state<Credentials | null>(null);
   let servers = $state<ServerEntry[]>([]);
   let lastSyncTs = $state(0);
   let checkingUpdate = $state(false);
+
+  // Display configuration editor (gated by the desktop "Edit display
+  // configuration" permission). The desktop owns the physical screens; we just
+  // fetch the available/selected list and send the new selection back.
+  let displayModalOpen = $state(false);
+  let displayScreens = $state<DisplayScreen[]>([]);
+  let displayLoading = $state(false);
+  let displaySaving = $state(false);
+  let displayError = $state<string | null>(null);
 
   type NoticeTone = 'info' | 'success' | 'warning' | 'danger';
   type AppNotice = {
@@ -106,6 +117,59 @@
     const s = val % 60;
     return `Access active: ${m}:${s.toString().padStart(2, '0')}`;
   });
+
+  async function openDisplayConfig() {
+    displayModalOpen = true;
+    displayLoading = true;
+    displayError = null;
+    try {
+      const res = await remote.sendRequest('display.get_config', {});
+      if (!res?.ok) {
+        displayError = res?.error === 'not_authorized'
+          ? 'This phone no longer has permission to edit displays.'
+          : (res?.error ?? 'Could not load display configuration.');
+        displayScreens = [];
+      } else {
+        displayScreens = (res.screens ?? []) as DisplayScreen[];
+      }
+    } catch (e: any) {
+      displayError = e?.message ?? String(e);
+      displayScreens = [];
+    } finally {
+      displayLoading = false;
+    }
+  }
+
+  function closeDisplayConfig() {
+    if (displaySaving) return;
+    displayModalOpen = false;
+  }
+
+  function toggleDisplayScreen(name: string) {
+    displayScreens = displayScreens.map((s) =>
+      s.name === name ? { ...s, selected: !s.selected } : s,
+    );
+  }
+
+  async function saveDisplayConfig() {
+    displaySaving = true;
+    displayError = null;
+    try {
+      const selected = displayScreens.filter((s) => s.selected).map((s) => s.name);
+      const res = await remote.sendRequest('display.set_config', { selected });
+      if (!res?.ok) {
+        displayError = res?.error === 'not_authorized'
+          ? 'This phone no longer has permission to edit displays.'
+          : (res?.error ?? 'Could not save display configuration.');
+      } else {
+        displayModalOpen = false;
+      }
+    } catch (e: any) {
+      displayError = e?.message ?? String(e);
+    } finally {
+      displaySaving = false;
+    }
+  }
 
   function handleServiceWorkerMessage(event: MessageEvent<InstallProgressMessage>) {
     const data = event.data;
@@ -725,6 +789,23 @@
   {/if}
 </section>
 
+{#if $canEditDisplays}
+  <section class="panel" style="margin-top:12px;">
+    <h2>Display configuration</h2>
+    <p class="muted small" style="margin:0 0 10px;">
+      Choose which screens the desktop shows its output on. Mirrors the
+      desktop's Output Displays menu.
+    </p>
+    <button
+      class="accent fw"
+      onclick={openDisplayConfig}
+      disabled={$connStatus !== 'open'}
+    >
+      Edit output displays
+    </button>
+  </section>
+{/if}
+
 <section class="panel" style="margin-top:12px;">
   <h2>Device</h2>
   <div class="row">
@@ -787,6 +868,64 @@
     </div>
   {/if}
 </section>
+
+{#if displayModalOpen}
+  <div
+    class="modal-back"
+    role="button"
+    tabindex="-1"
+    aria-label="Cancel"
+    onclick={closeDisplayConfig}
+    onkeydown={(e) => { if (e.key === 'Escape') closeDisplayConfig(); }}
+  >
+    <div
+      class="modal"
+      role="alertdialog"
+      aria-modal="true"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
+      <h3 style="margin:0 0 12px; font-size:17px;">Output displays</h3>
+
+      {#if displayLoading}
+        <p class="muted small">Loading screens…</p>
+      {:else if displayError}
+        <div class="warn">{displayError}</div>
+      {:else if displayScreens.length === 0}
+        <p class="muted small">No screens reported by the desktop.</p>
+      {:else}
+        <p class="muted small" style="margin:0 0 10px;">
+          Select the screens that should show the output. Select none to hide
+          all output windows.
+        </p>
+        <div class="display-list">
+          {#each displayScreens as s (s.name)}
+            <label class="display-row">
+              <input
+                type="checkbox"
+                checked={s.selected}
+                onchange={() => toggleDisplayScreen(s.name)}
+                style="width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent);"
+              />
+              <span class="display-label">
+                {s.index + 1}: {s.name}
+                {#if s.is_app_screen}<span class="muted small"> (this app)</span>{/if}
+              </span>
+            </label>
+          {/each}
+        </div>
+      {/if}
+
+      <div class="modal-btns" style="margin-top:14px;">
+        <button class="ghost" onclick={closeDisplayConfig} disabled={displaySaving}>Cancel</button>
+        <button class="accent" onclick={saveDisplayConfig} disabled={displaySaving || displayLoading}>
+          {displaySaving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if importDialog}
   <div
@@ -1049,6 +1188,29 @@
     font-size: 14px;
     margin-top: 8px;
   }
+
+  .display-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 320px;
+    overflow-y: auto;
+    background: var(--elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px;
+  }
+  .display-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  .display-row:hover { background: var(--panel); }
+  .display-label { min-width: 0; overflow-wrap: anywhere; }
 
   .notice-back {
     z-index: 120;

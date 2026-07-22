@@ -48,6 +48,7 @@ import {
   serverName,
   canEditKeys,
   canEditSongs,
+  canEditDisplays,
   pushCloudDiagnostic,
 } from './stores';
 
@@ -188,6 +189,7 @@ class RemoteClient {
     }
     canEditKeys.set(!!creds.can_edit_keys);
     canEditSongs.set(!!creds.can_edit_songs);
+    canEditDisplays.set(!!creds.can_edit_displays);
     this.openSocket(creds, null);
   }
 
@@ -591,6 +593,7 @@ class RemoteClient {
           paired_at: creds.paired_at ?? Date.now(),
           can_edit_keys: !!p.can_edit_keys,
           can_edit_songs: !!p.can_edit_songs,
+          can_edit_displays: !!p.can_edit_displays,
           // cloud_host is the desktop's OWN tunnel (scanned from the QR `c`
           // param) — a distinct host from the cloud bridge (`cloud_url`). The
           // cloud server only knows its own public URL, so it must NOT be
@@ -605,6 +608,7 @@ class RemoteClient {
         serverName.set(p.server_name || 'ChurchPresenter');
         canEditKeys.set(!!p.can_edit_keys);
         canEditSongs.set(!!p.can_edit_songs);
+        canEditDisplays.set(!!p.can_edit_displays);
         // Cloud bridge tells us whether the live desktop is up. `connEndpoint`
         // is 'bridge' when we reached the cloud "big server" and 'cloud' when
         // we reached the desktop's own tunnel. In both cloud cases the field
@@ -835,14 +839,16 @@ class RemoteClient {
       }
 
       if (msg.type === 'device.permission_changed') {
-        const p = msg.payload as { can_edit_keys: boolean; can_edit_songs: boolean };
+        const p = msg.payload as { can_edit_keys: boolean; can_edit_songs: boolean; can_edit_displays: boolean };
         canEditKeys.set(!!p.can_edit_keys);
         canEditSongs.set(!!p.can_edit_songs);
+        canEditDisplays.set(!!p.can_edit_displays);
         void (async () => {
           const c = await loadCredentials();
           if (c && isCurrent()) {
             c.can_edit_keys = !!p.can_edit_keys;
             c.can_edit_songs = !!p.can_edit_songs;
+            c.can_edit_displays = !!p.can_edit_displays;
             await saveCredentials(c);
           }
         })();
