@@ -488,8 +488,12 @@ let query = $state('');
       });
       if (res.ok) {
         showOverwriteConfirm = false;
-        await syncNow();
+        // The song is already saved server-side once res.ok arrives. Close the
+        // menu immediately and refresh the library in the background — awaiting
+        // a full sync round-trip here left the dialog stuck on "Saving" (the
+        // cloud `library.changed` broadcast also triggers this same sync).
         goto('?', { replaceState: true, keepFocus: true, noScroll: true });
+        void syncNow();
       } else if (res.error === 'already_exists') {
         showOverwriteConfirm = true;
       } else {
