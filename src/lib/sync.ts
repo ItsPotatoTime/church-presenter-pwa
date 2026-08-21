@@ -249,7 +249,7 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
       }
 
       await putSongs(p.songs || []);
-      lists = await mergeServerLists(p.lists);
+      lists = await mergeServerLists(p.lists ?? []);
       // Only rewrite the Bible when the incoming version actually differs from what
       // we already have. The ~10 MB Bible is otherwise re-shipped and re-written on
       // every full sync, which is the main cause of slow phone syncs.
@@ -282,20 +282,26 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
       console.info('[sync] sync.full applied: new lastSyncTs=%s', p.server_ts);
     } else if (resp.type === 'sync.delta') {
       const p = resp.payload as SyncDelta;
+      // The cloud bridge omits optional fields (serde skip_serializing_if) when
+      // they carry no changes, so they arrive as undefined — not null. Default
+      // everything before use or `.length` access throws.
+      const songsChanged = p.songs_changed ?? [];
+      const songsRemoved = p.songs_removed ?? [];
+      const listsPayload = p.lists ?? null;
       console.info(
         '[sync] Received sync.delta: songs_changed=%d songs_removed=%d lists=%s bible=%s server_ts=%s',
-        p.songs_changed?.length ?? 0, p.songs_removed?.length ?? 0,
-        p.lists !== null ? `full(${p.lists.length})` : 'null',
+        songsChanged.length, songsRemoved.length,
+        listsPayload !== null ? `full(${listsPayload.length})` : 'null',
         p.bible ? p.bible.version : 'null', p.server_ts,
       );
-      if (p.songs_changed.length) await putSongs(p.songs_changed);
+      if (songsChanged.length) await putSongs(songsChanged);
       // Remove only the songs the server journaled as deleted since our last sync
-      if (p.songs_removed?.length) {
-        console.info('[sync] Removing %d deleted songs: %s', p.songs_removed.length, p.songs_removed.join(', '));
-        await deleteSongsByPath(p.songs_removed);
+      if (songsRemoved.length) {
+        console.info('[sync] Removing %d deleted songs: %s', songsRemoved.length, songsRemoved.join(', '));
+        await deleteSongsByPath(songsRemoved);
       }
-      if (p.lists !== null) {
-        lists = await mergeServerLists(p.lists);
+      if (listsPayload !== null) {
+        lists = await mergeServerLists(listsPayload);
       } else {
         lists = await loadAllLists();
       }

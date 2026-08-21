@@ -172,7 +172,7 @@ export interface SyncFull {
 export interface SyncDelta {
   songs_changed: LibrarySong[];
   songs_removed: string[];     // paths deleted since since_ts — removal detection
-  lists: LibraryList[] | null; // null means no list changes
+  lists?: LibraryList[] | null; // null/omitted means no list changes (bridge omits it)
   all_list_names: string[];
   bible?: BibleSyncData | null;
   server_ts: number;
