@@ -121,6 +121,8 @@ class RemoteClient {
   private pendingRequests = new Map<string, (payload: any) => void>();
   private heartbeatTimer: number | null = null;
   private lastMessageTime = 0;
+  /** Set when a live control is sent; the next live.state logs the round-trip. */
+  private lastLiveCmdAt = 0;
   // When the socket last reached `open`+auth. Used to shorten the handshake
   // timeout right after a healthy connection (the network was just proven
   // good, so a hanging upgrade should fail fast) while keeping generous
@@ -280,6 +282,11 @@ class RemoteClient {
     return !!this.ws && this.ws.readyState === WebSocket.OPEN;
   }
 
+  /** Record that a live control was just sent (for echo-delay diagnostics). */
+  markLiveCommand(): void {
+    this.lastLiveCmdAt = Date.now();
+  }
+
   /** The transport currently in use (or null when disconnected). */
   currentEndpointKind(): 'cloud' | 'lan' | 'bridge' | null {
     return this.currentEndpoint;
@@ -294,8 +301,12 @@ class RemoteClient {
     if (this.currentEndpoint !== 'bridge') return null;
     const url = this.ws?.url;
     if (!url) return null;
+    // A trailing slash here would turn `/api/db/full` into `//api/db/full`,
+    // which the Axum router answers with 404 even though the route exists
+    // (the WebSocket handshake tolerates the same slash, hiding the problem).
     const { host, scheme } = normalizeWsHost(url);
-    return `${scheme === 'wss' ? 'https' : 'http'}://${host}`;
+    const cleanHost = host.replace(/\/+$/, '');
+    return `${scheme === 'wss' ? 'https' : 'http'}://${cleanHost}`;
   }
 
   // ── Internal ─────────────────────────────────────────────────────
@@ -584,13 +595,23 @@ class RemoteClient {
       if (!isCurrent()) return;
       this.lastMessageTime = Date.now();
       let msg: Envelope;
+      const raw = typeof ev.data === 'string' ? ev.data : '';
+      const parseStart = performance.now();
       try {
-        msg = JSON.parse(typeof ev.data === 'string' ? ev.data : '');
+        msg = JSON.parse(raw);
       } catch {
         // Malformed server reply — log it so we can see what the server sent.
         const snippet = typeof ev.data === 'string' ? ev.data.slice(0, 200) : `[${typeof ev.data}]`;
         console.warn('[ws] received non-JSON message from %s (%s): %s', pick?.host ?? this.currentEndpoint, this.currentEndpoint, snippet);
         return;
+      }
+      // Large or slow frames block the main thread while parsing, which is
+      // exactly what makes live controls feel dead for seconds.
+      const parseMs = performance.now() - parseStart;
+      if (raw.length > 32768 || parseMs > 100) {
+        console.warn(
+          `[ws] big frame: type=${msg.type} size=${Math.round(raw.length / 1024)}KB parse=${Math.round(parseMs)}ms`,
+        );
       }
 
       if (msg.type === 'pong') {
@@ -849,6 +870,13 @@ class RemoteClient {
       }
 
       if (msg.type === 'live.state') {
+        if (this.lastLiveCmdAt !== 0) {
+          const delay = Date.now() - this.lastLiveCmdAt;
+          this.lastLiveCmdAt = 0;
+          if (delay > 500) {
+            console.warn(`[live] state echo delayed ${delay}ms after command`);
+          }
+        }
         liveState.set(msg.payload as LiveState);
         return;
       }

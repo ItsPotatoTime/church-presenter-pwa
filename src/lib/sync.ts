@@ -49,6 +49,19 @@ type PendingResolver = (msg: { type: string; payload: any }) => void;
 
 const pending = new Map<string, PendingResolver>();
 
+// The deployed cloud may predate the gzip bulk REST endpoints (/api/db/* with
+// bulk_token). Those requests 404 harmlessly but burn a bulk-token round-trip
+// on every sync cycle. After a failure, stop trying against that base for a
+// while; the WS path is always the fallback and works against every build.
+const httpSyncBlockedUntil = new Map<string, number>();
+const HTTP_SYNC_BACKOFF_MS = 15 * 60 * 1000;
+// Minimum gap between incremental syncs. Bursts of library.changed from the
+// desktop used to trigger back-to-back full store rebuilds on the phone,
+// which is exactly the multi-second main-thread stall that froze live
+// controls.
+let lastDeltaSyncCompletedAt = 0;
+const MIN_DELTA_SYNC_GAP_MS = 2000;
+
 /** Called by ws.ts whenever a sync.* message arrives. */
 export function handleSyncMessage(msg: { type: string; id?: string; payload: any }): void {
   if (!msg.id) return; // unsolicited — ignore
@@ -108,6 +121,8 @@ async function tryHttpSync(
   try {
     const base = remote.cloudHttpBase();
     if (!base) return null;
+    const blockedUntil = httpSyncBlockedUntil.get(base) ?? 0;
+    if (Date.now() < blockedUntil) return null;
     const creds = await loadCredentials();
     // Prefer the bridge host we're actually connected to over the stored one.
     const httpBase = base || httpBaseFromCloudUrl(creds?.cloud_url ?? null);
@@ -130,13 +145,18 @@ async function tryHttpSync(
       headers: { Accept: 'application/json' },
     });
     if (!res.ok) {
-      console.warn('[sync] HTTP bulk sync got HTTP %d — falling back to WS', res.status);
+      console.warn(
+        `[sync] HTTP bulk sync got HTTP ${res.status} for ${httpBase}${path}?${params} — falling back to WS (bulk disabled on this host for ${Math.round(HTTP_SYNC_BACKOFF_MS / 60000)} min)`,
+      );
+      httpSyncBlockedUntil.set(base, Date.now() + HTTP_SYNC_BACKOFF_MS);
       return null;
     }
     const payload = await res.json();
     return { type: sinceTs <= 0 ? 'sync.full' : 'sync.delta', payload };
   } catch (e) {
     console.warn('[sync] HTTP bulk sync failed — falling back to WS:', e instanceof Error ? e.message : e);
+    const base = remote.cloudHttpBase();
+    if (base) httpSyncBlockedUntil.set(base, Date.now() + HTTP_SYNC_BACKOFF_MS);
     return null;
   }
 }
@@ -213,6 +233,12 @@ export async function flushPendingLists(): Promise<void> {
 }
 
 async function _doSync(since: number, cachedBibleVersion: string | null = null): Promise<void> {
+  // Collapse bursts: an incremental sync that just ran is good enough for any
+  // library.changed that arrives right behind it.
+  if (since > 0 && Date.now() - lastDeltaSyncCompletedAt < MIN_DELTA_SYNC_GAP_MS) {
+    console.info(`[sync] syncNow skipped: delta synced less than ${MIN_DELTA_SYNC_GAP_MS}ms ago`);
+    return;
+  }
   syncStatus.set('syncing');
   console.info('[sync] Starting sync: since_ts=%s bible_version=%s', since, cachedBibleVersion);
   try {
@@ -294,6 +320,17 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
         listsPayload !== null ? `full(${listsPayload.length})` : 'null',
         p.bible ? p.bible.version : 'null', p.server_ts,
       );
+      // Nothing applicable arrived (pure cursor advance): skip all the work.
+      // This is the common case when only server-side bookkeeping changed,
+      // and rebuilding every song in memory is what stalled live controls for
+      // seconds at a time.
+      if (!songsChanged.length && !songsRemoved.length && listsPayload === null && !p.bible) {
+        await setLastSyncTs(p.server_ts);
+        lastDeltaSyncCompletedAt = Date.now();
+        console.info('[sync] Empty delta — skipping library reload');
+        syncStatus.set('idle');
+        return;
+      }
       if (songsChanged.length) await putSongs(songsChanged);
       // Remove only the songs the server journaled as deleted since our last sync
       if (songsRemoved.length) {
@@ -338,6 +375,7 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
     bibleVersionStore.set(bibleVersion);
     console.info('[sync] Sync complete: %d songs in store, status=idle', songs.length);
     syncStatus.set('idle');
+    lastDeltaSyncCompletedAt = Date.now();
 
   } catch (e: any) {
     syncStatus.set('error');

@@ -35,12 +35,13 @@
     // Don't disconnect on page nav — user is still using the app.
   });
 
-  function next()  { remote.send({ type: 'live.next' }); }
-  function prev()  { remote.send({ type: 'live.prev' }); }
-  function blank() { remote.send({ type: 'live.blank' }); }
-  function chorus() { remote.send({ type: 'live.chorus' }); }
+  function next()  { remote.markLiveCommand(); remote.send({ type: 'live.next' }); }
+  function prev()  { remote.markLiveCommand(); remote.send({ type: 'live.prev' }); }
+  function blank() { remote.markLiveCommand(); remote.send({ type: 'live.blank' }); }
+  function chorus() { remote.markLiveCommand(); remote.send({ type: 'live.chorus' }); }
 
   function togglePresenting() {
+    remote.markLiveCommand();
     remote.send({ type: 'live.toggle_present' });
   }
 
