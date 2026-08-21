@@ -2,7 +2,7 @@
 // a request-id so the response can be awaited. Applies results to IndexedDB
 // + Svelte stores.
 
-import { remote } from './ws';
+import { remote, normalizeWsHost } from './ws';
 import { get } from 'svelte/store';
 import { sortBibleVerses } from './bible';
 import {
@@ -21,6 +21,7 @@ import {
   loadAllPrivateLists,
   loadAllSongs,
   clearPendingListMutations,
+  loadCredentials,
   mergeServerLists,
   normalizedListName,
   putBibleBooks,
@@ -87,6 +88,64 @@ function requestSync(
       reject(e);
     }
   });
+}
+
+/**
+ * Bulk sync over gzip-compressed REST instead of WS text frames.
+ *
+ * When we're connected through the cloud bridge we can mint a one-shot bulk
+ * token over the socket and GET /api/db/full or /api/db/delta directly — the
+ * server compresses the response and the browser decompresses it
+ * transparently. This turns a multi-megabyte first sync (whole library +
+ * ~10 MB Bible) from a slow uncompressed WS round-trip into a fast gzip
+ * download. Returns null when the transport isn't the cloud bridge or the
+ * HTTP path fails, so the caller falls back to the WS request.
+ */
+async function tryHttpSync(
+  sinceTs: number,
+  bibleVersion: string | null,
+): Promise<{ type: string; payload: any } | null> {
+  try {
+    const base = remote.cloudHttpBase();
+    if (!base) return null;
+    const creds = await loadCredentials();
+    // Prefer the bridge host we're actually connected to over the stored one.
+    const httpBase = base || httpBaseFromCloudUrl(creds?.cloud_url ?? null);
+    if (!httpBase) return null;
+
+    const ack = await remote.sendRequest('bulk.token', {}, 8000);
+    const token = ack?.bulk_token;
+    if (!token) return null;
+
+    const params = new URLSearchParams({ bulk_token: token });
+    let path: string;
+    if (sinceTs <= 0) {
+      path = '/api/db/full';
+    } else {
+      path = '/api/db/delta';
+      params.set('since_ts', String(sinceTs));
+      if (bibleVersion) params.set('bible_version', bibleVersion);
+    }
+    const res = await fetch(`${httpBase}${path}?${params.toString()}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) {
+      console.warn('[sync] HTTP bulk sync got HTTP %d — falling back to WS', res.status);
+      return null;
+    }
+    const payload = await res.json();
+    return { type: sinceTs <= 0 ? 'sync.full' : 'sync.delta', payload };
+  } catch (e) {
+    console.warn('[sync] HTTP bulk sync failed — falling back to WS:', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+function httpBaseFromCloudUrl(cloudUrl: string | null | undefined): string | null {
+  if (!cloudUrl) return null;
+  const { host, scheme } = normalizeWsHost(cloudUrl);
+  if (!host) return null;
+  return `${scheme === 'wss' ? 'https' : 'http'}://${host}`;
 }
 
 /** Force a full resync regardless of cached timestamp — use when slides look stale. */
@@ -157,7 +216,10 @@ async function _doSync(since: number, cachedBibleVersion: string | null = null):
   syncStatus.set('syncing');
   console.info('[sync] Starting sync: since_ts=%s bible_version=%s', since, cachedBibleVersion);
   try {
-    const resp = await requestSync(since, cachedBibleVersion);
+    // Prefer gzip-compressed HTTP bulk transfer through the cloud bridge;
+    // fall back to the WS request/response path (LAN/tunnel or on any error).
+    const resp =
+      (await tryHttpSync(since, cachedBibleVersion)) ?? (await requestSync(since, cachedBibleVersion));
     let songs: LibrarySong[] = [];
     let lists: LibraryList[] = [];
     let bibleBooks: BibleBook[] = [];

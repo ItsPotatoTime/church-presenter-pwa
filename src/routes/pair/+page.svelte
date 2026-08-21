@@ -15,6 +15,12 @@
   let cloudHost = $state<string | null>(null);
   let lanHost = $state<string | null>(null);
   let serverId = $state<string | null>(null);
+  // Cloud bridge info from the QR (`cu`/`ci`/`cpt`): lets the phone pair
+  // straight through the always-on cloud bridge even when the desktop's
+  // tunnel and LAN are unreachable.
+  let cloudUrl = $state<string | null>(null);
+  let cloudId = $state<string | null>(null);
+  let cloudPairToken = $state<string | null>(null);
   let error = $state<string | null>(null);
   let phase: 'idle' | 'pairing' | 'done' = $state('idle');
 
@@ -40,6 +46,9 @@
     cloudHost = qs.get('c');
     lanHost = qs.get('l');
     serverId = qs.get('sid');
+    cloudUrl = qs.get('cu');
+    cloudId = qs.get('ci');
+    cloudPairToken = qs.get('cpt');
 
     const isIOS =
       /iPad|iPhone|iPod/.test(navigator.userAgent) && !('MSStream' in window);
@@ -88,6 +97,9 @@
     cloudHost = c;
     lanHost = l;
     serverId = sid;
+    cloudUrl = url.searchParams.get('cu');
+    cloudId = url.searchParams.get('ci');
+    cloudPairToken = url.searchParams.get('cpt');
     return true;
   }
 
@@ -183,6 +195,9 @@
       device_name: finalName,
       cloud_host: cloudHost,
       lan_host: lanHost,
+      cloud_url: cloudUrl,
+      cloud_id: cloudId,
+      cloud_pair_token: cloudPairToken,
       last_used: Date.now(),
     };
     await saveServer(provisional);
@@ -222,7 +237,16 @@
     });
 
     await remote.pair(
-      { server_key: serverKey, server_id: serverId ?? undefined, pair_token: pairToken, cloud_host: cloudHost, lan_host: lanHost },
+      {
+        server_key: serverKey,
+        server_id: serverId ?? undefined,
+        pair_token: pairToken,
+        cloud_host: cloudHost,
+        lan_host: lanHost,
+        cloud_url: cloudUrl,
+        cloud_id: cloudId,
+        cloud_pair_token: cloudPairToken,
+      },
       finalName
     );
 

@@ -42,6 +42,10 @@ export interface Credentials {
   // forwards live control when the desktop is online.
   cloud_url?: string | null;
   cloud_id?: string | null;
+  // Cloud-minted pair token from the QR (`cpt`). Single-use: consumed when the
+  // first bridge auth succeeds, letting a phone pair through the cloud even
+  // when the desktop's tunnel/LAN are unreachable.
+  cloud_pair_token?: string | null;
   cloud_status?: 'online' | 'offline' | 'unknown';
   server_name?: string;
   server_id?: string;
@@ -61,6 +65,7 @@ export interface ServerEntry {
   lan_host: string | null;
   cloud_url?: string | null;
   cloud_id?: string | null;
+  cloud_pair_token?: string | null;
   cloud_status?: 'online' | 'offline' | 'unknown';
   desktop_online?: boolean | null;
   server_name?: string;

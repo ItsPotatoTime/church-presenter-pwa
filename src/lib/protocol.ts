@@ -269,4 +269,7 @@ export type ClientCommand =
   | { type: 'song.update'; id?: string; payload: { song_path: string; name: string; slide_texts: string[]; chorus_index?: number | null; chorus_ranges?: number[][] | null; end_slide_index?: number | null; auto_chorus_enabled?: boolean } }
   | { type: 'song.set_key'; payload: { song_path: string; key: string | null; key_ts?: number | null } }
   | { type: 'display.get_config'; id?: string }
-  | { type: 'display.set_config'; id?: string; payload: { selected: string[] } };
+  | { type: 'display.set_config'; id?: string; payload: { selected: string[] } }
+  // Cloud bridge only: mint a one-shot token for gzip-compressed HTTP bulk
+  // syncs (GET /api/db/full, /api/db/delta?bulk_token=...).
+  | { type: 'bulk.token'; id?: string };

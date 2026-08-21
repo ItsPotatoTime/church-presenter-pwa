@@ -58,7 +58,7 @@ import {
 // must strip any existing scheme before prepending the one this transport needs.
 // Otherwise we'd build `wss://http://host` and the browser would fail to parse
 // the WebSocket URL (this was the "Cloud: offline" bug).
-function normalizeWsHost(host: string): { host: string; scheme: 'wss' | 'ws' | null } {
+export function normalizeWsHost(host: string): { host: string; scheme: 'wss' | 'ws' | null } {
   let h = host.trim();
   const idx = h.indexOf('://');
   let scheme: 'wss' | 'ws' | null = null;
@@ -72,7 +72,11 @@ function normalizeWsHost(host: string): { host: string; scheme: 'wss' | 'ws' | n
 }
 import { handleSyncMessage, syncNow } from './sync';
 
-const RECONNECT_BACKOFF_MS = [250, 500, 1000, 2000, 4000, 8000, 15000];
+// Aggressive reconnect curve: the phone should be live again well under a
+// second after a clean drop and within ~5 s worst-case. Jitter (applied in
+// scheduleReconnect) prevents thundering-herd reconnects after a server
+// restart drops many phones at once.
+const RECONNECT_BACKOFF_MS = [250, 500, 1000, 2000, 5000];
 const AUTH_TIMEOUT_MS = 6000;
 // Coalesce bursts of `library.changed` (the desktop emits many during a single
 // cloud push) into a single delta sync instead of one full sync per event.
@@ -101,6 +105,7 @@ export type PairParams = {
   lan_host: string | null;
   cloud_url?: string | null;
   cloud_id?: string | null;
+  cloud_pair_token?: string | null;
 };
 
 class RemoteClient {
@@ -116,11 +121,17 @@ class RemoteClient {
   private pendingRequests = new Map<string, (payload: any) => void>();
   private heartbeatTimer: number | null = null;
   private lastMessageTime = 0;
+  // When the socket last reached `open`+auth. Used to shorten the handshake
+  // timeout right after a healthy connection (the network was just proven
+  // good, so a hanging upgrade should fail fast) while keeping generous
+  // grace for cold TLS sessions.
+  private lastOpenAt = 0;
   // Periodic probe of the cloud bridge's /api/status so the per-server dot in
   // Settings reflects reality (and the LIVE tab can disable when the desktop
   // is offline) even if we're currently connected via LAN/tunnel.
   private statusProbeTimer: number | null = null;
   private static readonly STATUS_PROBE_MS = 20_000;
+  private static readonly STATUS_PROBE_STABLE_MS = 60_000;
   // Tracks server_keys we've already tried auto-switching to after a
   // wrong_server, so a stale stored entry can't cause an infinite switch loop.
   private _wrongServerTried: Set<string> = new Set();
@@ -205,6 +216,7 @@ class RemoteClient {
       lan_host: params.lan_host,
       cloud_url: params.cloud_url ?? null,
       cloud_id: params.cloud_id ?? null,
+      cloud_pair_token: params.cloud_pair_token ?? null,
       server_id: params.server_id,
     };
     this.openSocket(provisional, params.pair_token);
@@ -266,6 +278,24 @@ class RemoteClient {
 
   isOpen(): boolean {
     return !!this.ws && this.ws.readyState === WebSocket.OPEN;
+  }
+
+  /** The transport currently in use (or null when disconnected). */
+  currentEndpointKind(): 'cloud' | 'lan' | 'bridge' | null {
+    return this.currentEndpoint;
+  }
+
+  /**
+   * HTTP base of the cloud bridge (`http(s)://host`) when we are connected
+   * through it, else null. Lets sync.ts pull bulk data over gzip-compressed
+   * REST instead of uncompressed WS text frames.
+   */
+  cloudHttpBase(): string | null {
+    if (this.currentEndpoint !== 'bridge') return null;
+    const url = this.ws?.url;
+    if (!url) return null;
+    const { host, scheme } = normalizeWsHost(url);
+    return `${scheme === 'wss' ? 'https' : 'http'}://${host}`;
   }
 
   // ── Internal ─────────────────────────────────────────────────────
@@ -483,16 +513,22 @@ class RemoteClient {
       desktopOnline.set(null);
     }
 
-    // Handshake deadline: if onopen doesn't fire within CONNECT_TIMEOUT_MS
-    // (e.g. a cloudflared tunnel that accepts the upgrade then stalls, never
+    // Handshake deadline: if onopen doesn't fire within the timeout (e.g. a
+    // cloudflared tunnel that accepts the upgrade then stalls, never
     // delivering onopen OR onclose), force the socket closed so onclose runs
     // the normal reconnect path. Without this, connStatus sticks at
     // 'connecting' indefinitely and connect() short-circuits on every retry.
-    // Reconnects (already-paired, holding a device token) get more grace than
-    // first-pair: a cold Cloudflare TLS handshake can take seconds, and
-    // force-closing it prematurely is what caused the endless bridge/cloud flap.
-    const handshakeTimeout =
-      pairToken == null ? CONNECT_TIMEOUT_MS_RECONNECT : CONNECT_TIMEOUT_MS;
+    //
+    // The timeout is dynamic for reconnects: right after a healthy connection
+    // (last open < 60 s ago) the network was just proven good, so fail a hung
+    // upgrade fast (8 s). For cold sessions (app start, long background,
+    // first pair) keep generous grace — a cold Cloudflare TLS handshake can
+    // take several seconds, and force-closing it prematurely is exactly what
+    // caused the endless bridge/cloud flap.
+    const recentlyHealthy = Date.now() - this.lastOpenAt < 60_000;
+    const handshakeTimeout = pairToken != null
+      ? CONNECT_TIMEOUT_MS
+      : (recentlyHealthy ? CONNECT_TIMEOUT_MS : CONNECT_TIMEOUT_MS_RECONNECT);
     if (this.connectTimer !== null) clearTimeout(this.connectTimer);
     this.connectTimer = window.setTimeout(() => {
       if (!isCurrent()) return;
@@ -511,9 +547,15 @@ class RemoteClient {
       }
       console.info('[ws] socket opened to %s (%s)', pick.host, pick.kind);
       connStatus.set('authenticating');
-      const payload = pairToken
+      // When pairing through the cloud bridge, prefer the cloud-minted pair
+      // token (`cpt` from the QR): the desktop's own token isn't known to the
+      // cloud, so using it there would fail with pair_token_expired. The
+      // desktop token still applies to tunnel/LAN endpoints.
+      const effectivePairToken =
+        pick.kind === 'bridge' && creds.cloud_pair_token ? creds.cloud_pair_token : pairToken;
+      const payload = effectivePairToken
         ? {
-            pair_token: pairToken,
+            pair_token: effectivePairToken,
             device_id: creds.device_id,
             device_name: creds.device_name,
             platform: navigator.platform || 'web',
@@ -557,6 +599,7 @@ class RemoteClient {
 
       if (msg.type === 'auth.ok') {
         authenticated = true;
+        this.lastOpenAt = Date.now();
         if (this.authTimer !== null) { clearTimeout(this.authTimer); this.authTimer = null; }
         // Successful auth clears any bridge-revoked block: now that this
         // endpoint accepted us, the cloud knows the device, so future bridge
@@ -602,6 +645,9 @@ class RemoteClient {
           cloud_host: creds.cloud_host || cloudUrlFromAuth || null,
           cloud_url: p.cloud_url ?? creds.cloud_url ?? null,
           cloud_id: p.cloud_id ?? creds.cloud_id ?? null,
+          // The cloud pair token is single-use — consumed by this successful
+          // bridge auth. Drop it so a later reconnect uses the device token.
+          cloud_pair_token: null,
         };
         exclusiveDeviceId.set(p.exclusive_device_id ?? null);
         exclusiveDeviceName.set(null);
@@ -1028,7 +1074,9 @@ class RemoteClient {
       // nginx-without-Upgrade-headers symptom).
       const code = ev?.code;
       if (code !== undefined && code !== 1000 && code !== 1005) {
-        connError.set(`Connection closed (code ${code}${ev?.reason ? ': ' + ev.reason : ''}) — retrying`);
+        const detail = `code ${code}${ev?.reason ? ': ' + ev.reason : ''}`;
+        connError.set(`Connection closed (${detail}) — retrying`);
+        pushCloudDiagnostic('error', `${pick.kind} socket closed`, detail);
       }
       connStatus.set('closed');
       this.scheduleReconnect(creds, myGen);
@@ -1038,8 +1086,11 @@ class RemoteClient {
   private scheduleReconnect(creds: Credentials, myGen: number): void {
     if (this.forceClose) return;
     if (this.gen !== myGen) return; // superseded; do nothing
-    const delay = RECONNECT_BACKOFF_MS[Math.min(this.backoffIdx, RECONNECT_BACKOFF_MS.length - 1)];
+    const base = RECONNECT_BACKOFF_MS[Math.min(this.backoffIdx, RECONNECT_BACKOFF_MS.length - 1)];
     this.backoffIdx += 1;
+    // Jitter (±30%) so many phones dropped by a server restart don't all
+    // reconnect in the same instant.
+    const delay = Math.round(base * (0.7 + Math.random() * 0.6));
     // Only flip to an alternate endpoint when the socket we just lost was a
     // FALLBACK (desktop tunnel / LAN), so we migrate back toward the preferred
     // cloud bridge. If we were already on the bridge, never flip to the tunnel
@@ -1093,23 +1144,45 @@ class RemoteClient {
   }
 
   // ── Cloud bridge status probe ──────────────────────────────────────
-  // Every STATUS_PROBE_MS we GET {cloud_url}/api/status. This keeps the
-  // per-server status dot in Settings accurate and lets the LIVE tab disable
-  // its buttons when the desktop is offline, even if we're connected through
-  // a different transport (desktop tunnel / LAN) right now.
+  // Periodically GET {cloud_url}/api/status for every paired server that has
+  // a cloud_url. This keeps the per-server status dot in Settings accurate
+  // and lets the LIVE tab disable its buttons when the desktop is offline,
+  // even if we're connected through a different transport right now.
+  //
+  // The interval adapts: 20 s while anything looks unhealthy (connecting,
+  // errored, or the last probe failed) so status flips are noticed fast, and
+  // 60 s once everything is stable — saving battery/data on long-lived
+  // connections where nothing changes.
   private async startStatusProbe(myGen: number): Promise<void> {
     this.stopStatusProbe();
-    const apply = async () => {
+    let consecutiveOk = 0;
+    const scheduleNext = () => {
       if (this.gen !== myGen) return;
-      await this.probeAllServers();
+      const stable = this.isOpen() && consecutiveOk >= 2;
+      const delay = stable ? RemoteClient.STATUS_PROBE_STABLE_MS : RemoteClient.STATUS_PROBE_MS;
+      this.statusProbeTimer = window.setTimeout(async () => {
+        if (this.gen !== myGen) return;
+        try {
+          await this.probeAllServers();
+          consecutiveOk += 1;
+        } catch {
+          consecutiveOk = 0;
+        }
+        scheduleNext();
+      }, delay);
     };
-    await apply();
-    this.statusProbeTimer = window.setInterval(apply, RemoteClient.STATUS_PROBE_MS);
+    try {
+      await this.probeAllServers();
+      consecutiveOk += 1;
+    } catch {
+      consecutiveOk = 0;
+    }
+    scheduleNext();
   }
 
   private stopStatusProbe(): void {
     if (this.statusProbeTimer !== null) {
-      clearInterval(this.statusProbeTimer);
+      clearTimeout(this.statusProbeTimer);
       this.statusProbeTimer = null;
     }
   }
