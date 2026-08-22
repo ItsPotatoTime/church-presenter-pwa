@@ -541,6 +541,9 @@ async function clearAllServerScopedStores(): Promise<void> {
 // ── Credentials (single-server shim delegates to servers store) ──
 
 let _credCache: Credentials | null | undefined = undefined;
+// In-flight dedup for loadCredentialsResilient (see its doc comment). Any
+// mutation of _credCache must reset this so the next read re-fetches.
+let _credCachePromise: Promise<Credentials | null> | null = null;
 
 export async function loadCredentials(): Promise<Credentials | null> {
   if (_credCache !== undefined) return _credCache;
@@ -551,6 +554,7 @@ export async function loadCredentials(): Promise<Credentials | null> {
       const entry = await _getServerByKey(activeKey);
       if (entry?.device_token) {
         _credCache = _entryToCredentials(entry);
+        _credCachePromise = null;
         return _credCache;
       }
     }
@@ -561,6 +565,7 @@ export async function loadCredentials(): Promise<Credentials | null> {
       await setMeta('active_server_key', only.server_key);
       await initializeServerData(only.server_key);
       _credCache = _entryToCredentials(only);
+      _credCachePromise = null;
       return _credCache;
     }
 
@@ -584,6 +589,7 @@ export async function loadCredentials(): Promise<Credentials | null> {
       await initializeServerData(serverKey);
       await setMeta('active_server_key', serverKey);
       _credCache = _entryToCredentials(entry);
+      _credCachePromise = null;
       return _credCache;
     }
   } catch (err) {
@@ -592,25 +598,50 @@ export async function loadCredentials(): Promise<Credentials | null> {
   }
 
   _credCache = null;
+  _credCachePromise = null;
   return null;
 }
 
 export async function loadCredentialsResilient(maxAttempts = 3, delays = [150, 300]): Promise<Credentials | null> {
-  let creds = null;
-  let attempts = 0;
-  while (attempts < maxAttempts) {
-    try {
-      creds = await loadCredentials();
-      if (creds && creds.device_token) return creds;
-    } catch (err) {
-      console.warn(`[db] loadCredentials failed (attempt ${attempts + 1}):`, err);
+  // In-flight promise memoization: every tab's onMount calls this, and the
+  // retry loop (up to 3 attempts with delays) previously re-read IndexedDB
+  // on EVERY tab switch even when the credentials were already loaded. Once
+  // a successful read lands, later callers reuse it; any writer that mutates
+  // _credCache resets _credCachePromise so the next call re-reads fresh data.
+  if (_credCache !== undefined) return _credCache;
+  if (_credCachePromise !== null) return _credCachePromise;
+
+  const attempt: Promise<Credentials | null> = (async () => {
+    let creds = null;
+    let attempts = 0;
+    while (attempts < maxAttempts) {
+      try {
+        creds = await loadCredentials();
+        if (creds && creds.device_token) return creds;
+      } catch (err) {
+        console.warn(`[db] loadCredentials failed (attempt ${attempts + 1}):`, err);
+      }
+      if (attempts < maxAttempts - 1) {
+        await new Promise((resolve) => setTimeout(resolve, delays[attempts]));
+      }
+      attempts++;
     }
-    if (attempts < maxAttempts - 1) {
-      await new Promise((resolve) => setTimeout(resolve, delays[attempts]));
-    }
-    attempts++;
-  }
-  return creds;
+    return creds;
+  })();
+
+  _credCachePromise = attempt
+    .then((result) => {
+      // Keep the resolved value around only when useful; failures stay
+      // retryable because loadCredentials() leaves _credCache undefined
+      // until it definitively reads "no credentials".
+      if (_credCache !== undefined) _credCachePromise = null;
+      return result;
+    })
+    .catch(() => {
+      _credCachePromise = null;
+      return null;
+    });
+  return _credCachePromise;
 }
 
 export async function saveCredentials(c: Credentials): Promise<void> {
@@ -650,6 +681,7 @@ export async function saveCredentials(c: Credentials): Promise<void> {
         await _saveServer(updated);
         await initializeServerData(activeKey);
         _credCache = _entryToCredentials(updated);
+        _credCachePromise = null;
         return;
       }
 
@@ -687,6 +719,7 @@ export async function saveCredentials(c: Credentials): Promise<void> {
   await initializeServerData(serverKey);
   await setMeta('active_server_key', serverKey);
   _credCache = _entryToCredentials(entry);
+  _credCachePromise = null;
 }
 
 export async function clearCredentials(): Promise<void> {
@@ -696,6 +729,7 @@ export async function clearCredentials(): Promise<void> {
     await clearAllServerData(activeKey);
   }
   _credCache = null;
+  _credCachePromise = null;
   await deleteMeta('creds');
 
   const remaining = await _loadAllServers();
@@ -704,9 +738,11 @@ export async function clearCredentials(): Promise<void> {
     await setMeta('active_server_key', next.server_key);
     await initializeServerData(next.server_key);
     _credCache = _entryToCredentials(next);
+    _credCachePromise = null;
   } else {
     await deleteMeta('active_server_key');
     _credCache = null;
+    _credCachePromise = null;
   }
 }
 
@@ -734,9 +770,11 @@ export async function removeServer(serverKey: string): Promise<void> {
       await setMeta('active_server_key', next.server_key);
       await initializeServerData(next.server_key);
       _credCache = _entryToCredentials(next);
+      _credCachePromise = null;
     } else {
       await deleteMeta('active_server_key');
       _credCache = null;
+      _credCachePromise = null;
     }
   }
 }
@@ -755,6 +793,7 @@ export async function switchServer(serverKey: string): Promise<Credentials | nul
   await initializeServerData(serverKey);
   await setMeta('active_server_key', serverKey);
   _credCache = _entryToCredentials(updated);
+  _credCachePromise = null;
   return _credCache;
 }
 
@@ -780,6 +819,7 @@ export async function migrateServerKey(
       };
       await _saveServer(updated);
       _credCache = _entryToCredentials(updated);
+      _credCachePromise = null;
     }
     await initializeServerData(targetKey);
     await setMeta('active_server_key', targetKey);
@@ -822,6 +862,7 @@ export async function migrateServerKey(
   await initializeServerData(targetKey);
   await setMeta('active_server_key', targetKey);
   _credCache = _entryToCredentials(mergedEntry);
+  _credCachePromise = null;
 }
 
 export async function initializeServerData(serverKey: string): Promise<void> {
@@ -1934,6 +1975,7 @@ export async function importBackup(data: BackupData): Promise<void> {
   else await deleteMeta('active_server_key');
   if (data.device_id) await setMeta('device_id', data.device_id);
   _credCache = undefined;
+  _credCachePromise = null;
 }
 
 async function loadServerData(serverKey: string): Promise<ServerDataBackup> {

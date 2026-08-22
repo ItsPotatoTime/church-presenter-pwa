@@ -6,12 +6,9 @@
   import { applyQueueCommandLocally, queueCommandForOfflineReplay } from '$lib/offlineQueue';
   import type { ClientCommand, LibrarySong } from '$lib/protocol';
   import { remote } from '$lib/ws';
-  import { connStatus, isViewOnly, queueState, queueDragActive, liveState, songsStore, activeModals } from '$lib/stores';
+  import { connStatus, isViewOnly, queueState, queueDragActive, liveState, songsByPath, songKeysByPath, activeModals } from '$lib/stores';
   import SongPreviewModal from '$lib/SongPreviewModal.svelte';
   import SongTitleRow from '$lib/SongTitleRow.svelte';
-
-  const songByPath = $derived.by(() => new Map($songsStore.map((song) => [song.path, song])));
-  const songKeyMap = $derived.by(() => new Map($songsStore.map((song) => [song.path, song.key])));
 
   let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
   let previewSong = $state<LibrarySong | null>(null);
@@ -63,7 +60,7 @@
     if (dragging !== null) return; // swallow taps that end a drag
 
     const item = $queueState?.items[i];
-    const song = item && !item.is_bible && !item.is_merged ? (songByPath.get(item.path) ?? null) : null;
+    const song = item && !item.is_bible && !item.is_merged ? ($songsByPath.get(item.path) ?? null) : null;
     if (song) {
       // Open the phone-only song preview menu. Nothing is sent to the desktop
       // until the user Confirm's in that menu (see confirmPreviewSwitch).
@@ -260,8 +257,8 @@
         >⋮⋮</span>
         <button class="label" onclick={() => tapJump(i)}>
           <SongTitleRow
-            name={item.name || songByPath.get(item.path)?.name || 'Untitled'}
-            songKey={item.is_bible || item.is_merged ? null : songKeyMap.get(item.path)}
+            name={item.name || $songsByPath.get(item.path)?.name || 'Untitled'}
+            songKey={item.is_bible || item.is_merged ? null : $songKeysByPath.get(item.path)}
           >
             {#snippet meta()}
               {#if item.is_bible}
@@ -289,7 +286,7 @@
   <div class="drag-ghost" style={ghostStyle}>
     <span class="grip">⋮⋮</span>
     <div class="ghost-label">
-      <div class="name">{ghostItem.name || songByPath.get(ghostItem.path ?? '')?.name || 'Untitled'}</div>
+      <div class="name">{ghostItem.name || $songsByPath.get(ghostItem.path ?? '')?.name || 'Untitled'}</div>
       {#if ghostItem.is_bible}
         <div class="muted small">📖 Bible</div>
       {:else if ghostItem.is_merged}

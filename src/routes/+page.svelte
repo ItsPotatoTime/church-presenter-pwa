@@ -12,7 +12,17 @@
   import { hydrateFromCache } from '$lib/sync';
   import { exclusiveDeviceId, exclusiveDeviceName, liveState, serverName } from '$lib/stores';
   import { remote } from '$lib/ws';
-  import jsQR from 'jsqr';
+  import { resolvePairCode } from '$lib/pairCode';
+
+  // jsqr is ~100KB of parse work on low-end phones; loaded lazily the first
+  // time the camera scanner actually starts instead of weighing down this
+  // (root) route chunk, which every fresh visitor lands on.
+  type JsQR = (data: Uint8ClampedArray, w: number, h: number, opts?: { inversionAttempts?: 'dontInvert' | 'onlyInvert' | 'attemptBoth' }) => { data: string } | null;
+  let jsQR: JsQR | null = null;
+  async function loadJsQR(): Promise<JsQR> {
+    if (!jsQR) jsQR = (await import('jsqr')).default as JsQR;
+    return jsQR;
+  }
 
   let checked = $state(false);
   let paired = $state(false);
@@ -138,6 +148,85 @@
     handlePairUrl(pasteUrl);
   }
 
+  // ── 6-digit code entry (same UX as pair/+page.svelte) ────────────
+  let codeDigits = $state<string[]>(['', '', '', '', '', '']);
+  let codeInputs: (HTMLInputElement | null)[] = $state([]);
+  let codeResolving = $state(false);
+  let codeErr = $state<string | null>(null);
+
+  /** Fill the boxes from a raw string, then focus the next empty box. */
+  function setCodeFromString(raw: string): boolean {
+    const digits = raw.replace(/\D/g, '').slice(0, 6).split('');
+    if (!digits.length) return false;
+    for (let i = 0; i < 6; i++) codeDigits[i] = digits[i] ?? '';
+    const next = Math.min(digits.length, 5);
+    codeInputs[next]?.focus();
+    return true;
+  }
+
+  function onCodeInput(i: number, e: Event) {
+    codeErr = null;
+    const input = e.currentTarget as HTMLInputElement;
+    // A paste or autofill can drop multiple characters into one box.
+    const value = input.value.replace(/\D/g, '');
+    if (value.length > 1) {
+      input.value = value[0];
+      if (setCodeFromString(codeDigits.join('') + value)) {
+        return;
+      }
+    }
+    codeDigits[i] = value.slice(-1);
+    input.value = codeDigits[i];
+    if (codeDigits[i] && i < 5) codeInputs[i + 1]?.focus();
+    // Auto-submit once all six digits are in.
+    if (codeDigits.every((d) => d !== '')) void submitCode();
+  }
+
+  function onCodeKeydown(i: number, e: KeyboardEvent) {
+    if (e.key === 'Backspace' && !codeDigits[i] && i > 0) {
+      codeDigits[i - 1] = '';
+      codeInputs[i - 1]?.focus();
+      e.preventDefault();
+    } else if (e.key === 'ArrowLeft' && i > 0) {
+      codeInputs[i - 1]?.focus();
+      e.preventDefault();
+    } else if (e.key === 'ArrowRight' && i < 5) {
+      codeInputs[i + 1]?.focus();
+      e.preventDefault();
+    }
+  }
+
+  function onCodePaste(e: ClipboardEvent) {
+    e.preventDefault();
+    const text = e.clipboardData?.getData('text') ?? '';
+    // Accept either a bare 6-digit code or a full pair URL pasted into a
+    // digit box (common when users long-press the iOS camera banner).
+    if (!setCodeFromString(text)) {
+      handlePairUrl(text.trim());
+    }
+  }
+
+  async function submitCode() {
+    if (codeResolving) return;
+    codeErr = null;
+    const joined = codeDigits.join('');
+    if (joined.length !== 6) {
+      codeErr = 'Enter the full 6-digit code.';
+      return;
+    }
+    codeResolving = true;
+    try {
+      const target = await resolvePairCode(joined);
+      goto(target);
+    } catch (err: any) {
+      codeErr = err?.message ?? 'Could not resolve that code.';
+      const idx = codeDigits.findIndex((d) => d === '');
+      codeInputs[idx >= 0 ? idx : 0]?.focus();
+    } finally {
+      codeResolving = false;
+    }
+  }
+
   async function chooseServer(serverKey: string) {
     selectingServerKey = serverKey;
     const selected = await switchServer(serverKey);
@@ -163,6 +252,9 @@
     }
     scanning = true;
     try {
+      // Kick off the decoder download in parallel with camera permission;
+      // tick() skips frames until it arrives.
+      void loadJsQR();
       scanStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
         audio: false,
@@ -202,6 +294,7 @@
         canvasEl.height = videoEl.videoHeight;
         ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
         const imageData = ctx.getImageData(0, 0, canvasEl.width, canvasEl.height);
+        if (!jsQR) return; // decoder still loading; next frame retries
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: 'attemptBoth',
         });
@@ -283,34 +376,69 @@
   <section class="panel" style="margin-top:16px;">
     <h2>Pair this phone</h2>
     <p class="muted">
-      On the desktop, click <b>📱 Phone Remote</b> in the toolbar to show the QR.
+      On the desktop, click <b>📱 Phone Remote</b> in the toolbar, then scan the
+      QR or type the 6-digit code it shows.
     </p>
 
     {#if scanSupported}
-      <button class="accent fw" onclick={startScan}>📷 Scan QR code</button>
-      {#if scanErr}<p class="err small">{scanErr}</p>{/if}
-      <div class="or">— or —</div>
-    {/if}
-
-    <form onsubmit={onPasteSubmit}>
-      <label for="paste">Paste the pair link from the QR</label>
-      <input
-        id="paste"
-        type="url"
-        autocomplete="off"
-        autocapitalize="none"
-        autocorrect="off"
-        placeholder="https://…/pair/?pt=…"
-        bind:value={pasteUrl}
-      />
-      {#if pasteErr}<p class="err small">{pasteErr}</p>{/if}
-      <button class="accent fw" type="submit" style="margin-top: 12px;" disabled={!pasteUrl.trim()}>
-        Pair with this link
+      <button class="accent fw scan-btn" onclick={startScan}>
+        <span class="scan-ico">📷</span>
+        <span class="scan-txt">
+          <b>Scan QR code</b>
+          <span class="scan-sub">Point your camera at the desktop</span>
+        </span>
       </button>
-    </form>
+      {#if scanErr}<p class="err small">{scanErr}</p>{/if}
+    {/if}
+  </section>
+
+  <section class="panel">
+    <h2>Or enter the code</h2>
+    <div class="code-row" role="group" aria-label="6-digit pair code">
+      {#each codeDigits as digit, i (i)}
+        <input
+          class="code-box"
+          type="text"
+          inputmode="numeric"
+          autocomplete={i === 0 ? 'one-time-code' : 'off'}
+          maxlength="1"
+          aria-label={'Digit ' + (i + 1)}
+          bind:value={codeDigits[i]}
+          bind:this={codeInputs[i]}
+          oninput={(e) => onCodeInput(i, e)}
+          onkeydown={(e) => onCodeKeydown(i, e)}
+          onpaste={onCodePaste}
+          onfocus={(e) => e.currentTarget.select()}
+        />
+      {/each}
+    </div>
+    {#if codeErr}
+      <p class="err small">{codeErr}</p>
+    {/if}
+    <button
+      class="ghost fw"
+      onclick={submitCode}
+      disabled={codeResolving || !codeDigits.every((d) => d !== '')}
+    >
+      {codeResolving ? 'Looking up code…' : 'Pair with code'}
+    </button>
 
     <details class="tip">
-      <summary class="muted small">How to get the link on iOS</summary>
+      <summary class="muted small">Have a pairing link instead?</summary>
+      <form onsubmit={onPasteSubmit} style="margin-top: 8px;">
+        <input
+          type="url"
+          autocomplete="off"
+          autocapitalize="none"
+          autocorrect="off"
+          placeholder="https://…/pair/?pt=…"
+          bind:value={pasteUrl}
+        />
+        {#if pasteErr}<p class="err small">{pasteErr}</p>{/if}
+        <button class="ghost fw" type="submit" style="margin-top: 10px;" disabled={!pasteUrl.trim()}>
+          Pair with this link
+        </button>
+      </form>
       <p class="muted small">
         In the iPhone Camera app, point at the QR on the desktop. A yellow banner appears —
         <b>long-press it</b>, choose <b>Copy Link</b>, then switch back here and paste.
@@ -372,10 +500,46 @@
   .steps li { margin-bottom: 4px; }
  
   form { display: block; margin-top: 4px; }
-  label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
  
   button.fw { width: 100%; padding: 14px; margin-top: 12px; font-size: 15px; }
-  .or { text-align: center; color: var(--text-secondary); font-size: 12px; margin: 14px 0 4px; }
+
+  /* Primary scan action: icon + two-line label */
+  .scan-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    width: 100%;
+    margin-top: 14px;
+    padding: 14px;
+    font-size: 16px;
+  }
+  .scan-ico { font-size: 24px; line-height: 1; }
+  .scan-txt { display: flex; flex-direction: column; gap: 2px; }
+  .scan-sub { font-size: 12px; font-weight: 400; opacity: 0.85; }
+
+  /* Six OTP-style code boxes */
+  .code-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 4px;
+  }
+  .code-box {
+    width: 46px;
+    height: 56px;
+    text-align: center;
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    padding: 0;
+    caret-color: var(--accent);
+  }
+  .code-box:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 1px var(--accent);
+  }
  
   .err { color: var(--danger); font-size: 12px; margin: 6px 0 0; }
   .small { font-size: 12px; }

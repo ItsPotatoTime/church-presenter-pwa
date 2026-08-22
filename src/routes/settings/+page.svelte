@@ -30,8 +30,6 @@
     songsStore,
     serverName,
     debugMode,
-    managerAccessCountdown,
-    setManagerAccessDuration,
     cloudDiagnostics,
     canEditDisplays,
   } from '$lib/stores';
@@ -89,15 +87,19 @@
     appNotice = null;
   }
 
+  // Phone Manager access is a persistent grant on the desktop: unlock until
+  // explicitly revoked. No countdown anywhere.
+  let managerAccessActive = $state(false);
+
   async function grantManagerAccess() {
     try {
       await remote.sendRequest('device.grant_manager_access', {});
-      setManagerAccessDuration(300);
+      managerAccessActive = true;
       showNotice({
         tone: 'success',
-        title: 'Temporary Access Enabled',
-        message: 'Phone Manager access is open for the next 5 minutes.',
-        detail: 'The desktop settings menu will accept changes from this phone until the timer expires.',
+        title: 'Phone Manager Unlocked',
+        message: 'The desktop Phone Manager menu is now open.',
+        detail: 'Access stays on until you revoke it here (or from the desktop).',
         closeLabel: 'Done',
       });
     } catch (e: any) {
@@ -110,13 +112,19 @@
     }
   }
 
-  const formatCountdown = $derived.by(() => {
-    const val = $managerAccessCountdown;
-    if (val <= 0) return '';
-    const m = Math.floor(val / 60);
-    const s = val % 60;
-    return `Access active: ${m}:${s.toString().padStart(2, '0')}`;
-  });
+  async function revokeManagerAccess() {
+    try {
+      await remote.sendRequest('device.revoke_manager_access', {});
+      managerAccessActive = false;
+    } catch (e: any) {
+      showNotice({
+        tone: 'danger',
+        title: 'Revoke Failed',
+        message: 'Phone Manager access could not be revoked.',
+        detail: e?.message ?? String(e),
+      });
+    }
+  }
 
   async function openDisplayConfig() {
     displayModalOpen = true;
@@ -773,12 +781,19 @@
 <section class="panel" style="margin-top:12px;">
   <h2>Phone Manager Access</h2>
   <p class="muted small" style="margin:0 0 10px;">
-    Grant temporary access (5 minutes) to the desktop Phone Manager menu.
+    Unlock the desktop's Phone Manager menu from here. Access stays on until
+    you revoke it.
   </p>
-  {#if $managerAccessCountdown > 0}
-    <div class="access-active-banner">
-      🟢 {formatCountdown}
-    </div>
+  {#if managerAccessActive}
+    <div class="access-active-banner">🟢 Phone Manager unlocked</div>
+    <button
+      class="ghost fw"
+      style="width: 100%; margin-top: 8px;"
+      onclick={revokeManagerAccess}
+      disabled={$connStatus !== 'open'}
+    >
+      Revoke access
+    </button>
   {:else}
     <button
       class="accent fw"
@@ -786,7 +801,7 @@
       onclick={grantManagerAccess}
       disabled={$connStatus !== 'open'}
     >
-      Enable temporary Phone Manager access
+      Unlock Phone Manager on desktop
     </button>
   {/if}
 </section>

@@ -8,6 +8,7 @@
   import { get } from 'svelte/store';
   import {
     connStatus, isViewOnly, listsStore, privateListsStore, songsStore, canEditKeys, activeModals,
+    songKeysByPath,
     listsActiveTab, listsSelectedName, listsShowPicker, listsPickerRawQuery, listsPickerSearchSlides, listsScrollY,
     listsSortMode, listsRawQuery, pendingSyncError
   } from '$lib/stores';
@@ -518,8 +519,6 @@
   });
   const pickerSearchPending = $derived(localPickerSearch.pending);
 
-  const songKeyMap = $derived.by(() => new Map($songsStore.map((song) => [song.path, song.key])));
-
   let toast = $state<{ message: string; type: 'success' | 'warning' } | null>(null);
   let toastTimer: number | null = null;
 
@@ -678,7 +677,7 @@
     list={selectedList}
     canEdit={activeTab === 'private' || !$isViewOnly}
     canLoad={!$isViewOnly}
-    songKeyMap={songKeyMap}
+    songKeyMap={$songKeysByPath}
     resolveName={displayName}
     onclose={closeList}
     onrename={renameList}

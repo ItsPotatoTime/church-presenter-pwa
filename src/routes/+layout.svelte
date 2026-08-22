@@ -7,7 +7,7 @@
   import { beforeNavigate, goto, preloadData } from '$app/navigation';
   import { getOrCreateDeviceId, loadCredentialsResilient } from '$lib/db';
   import { hydrateFromCache, isReducedDataConnection, syncNow } from '$lib/sync';
-  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY, canEditKeys, canEditDisplays, debugMode, managerAccessCountdown, refreshManagerAccessCountdown } from '$lib/stores';
+  import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY, canEditKeys, canEditDisplays, debugMode } from '$lib/stores';
 
   let { children } = $props();
   let paired = $state(false);
@@ -179,18 +179,26 @@
     }
   }
 
-  // Warm every tab's route chunk during idle time after startup, so the
-  // FIRST visit to each tab doesn't stall on a network fetch mid-tap.
+  // Warm every tab's route chunk right after first paint instead of waiting
+  // for the idle callback: on slow phones requestIdleCallback can fire late
+  // (or its 4s timeout lands after the user has already tapped a tab), and a
+  // cold chunk fetch mid-tap is exactly the tab-switch lag we are killing.
+  // The rAF guarantees the work starts only after the current frame is done,
+  // so it cannot delay that first paint.
   function preloadTabRoutes() {
     const warm = () => {
       for (const t of tabs) {
         void preloadData(t.href).catch(() => { /* best effort */ });
       }
     };
-    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      requestIdleCallback(warm, { timeout: 4000 });
-    } else {
-      setTimeout(warm, 1500);
+    if (typeof window !== 'undefined') {
+      requestAnimationFrame(() => {
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(warm, { timeout: 800 });
+        } else {
+          setTimeout(warm, 120);
+        }
+      });
     }
   }
 
@@ -250,28 +258,6 @@
     ready = true;
   });
 
-  let countdownInterval: any = null;
-  $effect(() => {
-    refreshManagerAccessCountdown();
-    const val = $managerAccessCountdown;
-    if (val > 0) {
-      if (!countdownInterval) {
-        countdownInterval = setInterval(() => {
-          const remaining = refreshManagerAccessCountdown();
-          if (remaining <= 0) {
-            clearInterval(countdownInterval);
-            countdownInterval = null;
-          }
-        }, 1000);
-      }
-    } else {
-      if (countdownInterval) {
-        clearInterval(countdownInterval);
-        countdownInterval = null;
-      }
-    }
-  });
-
   onDestroy(() => {
     if (typeof window !== 'undefined') {
       window.removeEventListener('error', handleChunkError, true);
@@ -283,9 +269,6 @@
     }
     if (updateReloadTimer !== null) {
       clearTimeout(updateReloadTimer);
-    }
-    if (countdownInterval) {
-      clearInterval(countdownInterval);
     }
   });
 
@@ -308,6 +291,14 @@
       }
     } else {
       hasTriggeredSync = false;
+      // A revoke (device.revoked / auth.fail revoked) clears credentials and
+      // drops the socket to idle/error — re-check storage so `paired` flips
+      // back to false and the UI returns to the server chooser without a reload.
+      if ($connStatus === 'idle' || $connStatus === 'error') {
+        void loadCredentialsResilient().then((c) => {
+          paired = !!c && !!c.device_token;
+        });
+      }
     }
   });
 
@@ -378,15 +369,10 @@
         View-only — another phone has exclusive control
       </div>
     {/if}
-    {#if showTabs() && $managerAccessCountdown > 0}
-      <div class="manager-access-banner" role="status">
-        🟢 Phone Manager Access: {Math.floor($managerAccessCountdown / 60)}:{($managerAccessCountdown % 60).toString().padStart(2, '0')}
-      </div>
-    {/if}
   </div>
 {/if}
 
-<main class:has-tabs={showTabs()} class:has-banner={showTabs() && ($isViewOnly || $managerAccessCountdown > 0)} class:has-double-banner={showTabs() && $isViewOnly && $managerAccessCountdown > 0}>
+<main class:has-tabs={showTabs()} class:has-banner={showTabs() && $isViewOnly}>
   {#if ready}
     {@render children()}
   {:else}
@@ -465,9 +451,6 @@
   main.has-banner {
     padding-top: calc(44px + env(safe-area-inset-top, 0));
   }
-  main.has-double-banner {
-    padding-top: calc(78px + env(safe-area-inset-top, 0));
-  }
 
   .top-banners {
     position: fixed;
@@ -478,7 +461,7 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
 
-  .view-only-banner, .manager-access-banner {
+  .view-only-banner {
     position: relative;
     width: 100%;
     text-align: center;
@@ -492,12 +475,6 @@
     background: var(--accent);
     color: #fff;
     padding: calc(10px + env(safe-area-inset-top, 0)) 12px 10px;
-  }
-
-  .manager-access-banner {
-    background: #059669;
-    color: #fff;
-    padding: 10px 12px;
   }
 
   .update-banner {

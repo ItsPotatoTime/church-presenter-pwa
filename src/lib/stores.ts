@@ -35,6 +35,29 @@ export const queueState: Writable<QueueState | null> = writable(null);
 export const queueDragActive: Writable<boolean> = writable(false);
 
 export const songsStore: Writable<LibrarySong[]> = writable([]);
+
+// Path -> song and path -> key maps shared by every page that needs to
+// resolve a queue/list entry against the library (Queue rows, Lists sheet,
+// preview modals). Computing them HERE means one rebuild per songsStore
+// change no matter how many pages are mounted; per-page $derived copies each
+// rebuilt their own 3500-entry Map on every store touch.
+export const songsByPath: Readable<Map<string, LibrarySong>> = derived(
+  songsStore,
+  (songs) => {
+    const m = new Map<string, LibrarySong>();
+    for (const s of songs) m.set(s.path, s);
+    return m;
+  },
+);
+
+export const songKeysByPath: Readable<Map<string, string | null | undefined>> = derived(
+  songsStore,
+  (songs) => {
+    const m = new Map<string, string | null | undefined>();
+    for (const s of songs) m.set(s.path, s.key);
+    return m;
+  },
+);
 export const listsStore: Writable<LibraryList[]> = writable([]);
 export const bibleBooksStore: Writable<BibleBook[]> = writable([]);
 export const bibleVersesStore: Writable<BibleVerse[]> = writable([]);
@@ -168,44 +191,3 @@ if (typeof window !== 'undefined') {
   listsSortMode.subscribe((value) => localStorage.setItem(LISTS_SORT_KEY, value));
 }
 export const listsRawQuery: Writable<string> = writable('');
-
-const MANAGER_ACCESS_EXPIRES_AT_KEY = 'manager_access_expires_at';
-
-function readManagerAccessRemaining(): number {
-  if (typeof window === 'undefined') return 0;
-  const raw = localStorage.getItem(MANAGER_ACCESS_EXPIRES_AT_KEY);
-  const expiresAt = raw ? Number(raw) : 0;
-  if (!Number.isFinite(expiresAt) || expiresAt <= 0) {
-    localStorage.removeItem(MANAGER_ACCESS_EXPIRES_AT_KEY);
-    return 0;
-  }
-  const remaining = Math.ceil((expiresAt - Date.now()) / 1000);
-  if (remaining <= 0) {
-    localStorage.removeItem(MANAGER_ACCESS_EXPIRES_AT_KEY);
-    return 0;
-  }
-  return remaining;
-}
-
-// Global countdown for temporary phone manager access (shared state across tabs)
-export const managerAccessCountdown: Writable<number> = writable(readManagerAccessRemaining());
-
-export function setManagerAccessDuration(seconds: number): void {
-  if (typeof window === 'undefined') {
-    managerAccessCountdown.set(Math.max(0, seconds));
-    return;
-  }
-  if (seconds <= 0) {
-    localStorage.removeItem(MANAGER_ACCESS_EXPIRES_AT_KEY);
-    managerAccessCountdown.set(0);
-    return;
-  }
-  localStorage.setItem(MANAGER_ACCESS_EXPIRES_AT_KEY, String(Date.now() + seconds * 1000));
-  managerAccessCountdown.set(readManagerAccessRemaining());
-}
-
-export function refreshManagerAccessCountdown(): number {
-  const remaining = readManagerAccessRemaining();
-  managerAccessCountdown.set(remaining);
-  return remaining;
-}

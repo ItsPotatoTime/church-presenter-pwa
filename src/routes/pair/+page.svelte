@@ -8,7 +8,16 @@
   import { hydrateFromCache } from '$lib/sync';
   import { remote } from '$lib/ws';
   import { connStatus, connError } from '$lib/stores';
-  import jsQR from 'jsqr';
+  import { resolvePairCode } from '$lib/pairCode';
+
+  // Lazy decoder (see routes/+page.svelte): ~100KB parsed only when the
+  // camera scanner starts, not on every pair-page load.
+  type JsQR = (data: Uint8ClampedArray, w: number, h: number, opts?: { inversionAttempts?: 'dontInvert' | 'onlyInvert' | 'attemptBoth' }) => { data: string } | null;
+  let jsQR: JsQR | null = null;
+  async function loadJsQR(): Promise<JsQR> {
+    if (!jsQR) jsQR = (await import('jsqr')).default as JsQR;
+    return jsQR;
+  }
 
   let deviceName = $state('Phone');
   let pairToken = $state<string | null>(null);
@@ -112,6 +121,86 @@
     }
   }
 
+  // ── 6-digit code entry ────────────────────────────────────────────
+  let codeDigits = $state<string[]>(['', '', '', '', '', '']);
+  let codeInputs: (HTMLInputElement | null)[] = $state([]);
+  let codeResolving = $state(false);
+  let codeErr = $state<string | null>(null);
+
+  /** Fill the boxes from a raw string, then focus the next empty box. */
+  function setCodeFromString(raw: string): boolean {
+    const digits = raw.replace(/\D/g, '').slice(0, 6).split('');
+    if (!digits.length) return false;
+    for (let i = 0; i < 6; i++) codeDigits[i] = digits[i] ?? '';
+    const next = Math.min(digits.length, 5);
+    codeInputs[next]?.focus();
+    return true;
+  }
+
+  function onCodeInput(i: number, e: Event) {
+    codeErr = null;
+    const input = e.currentTarget as HTMLInputElement;
+    // A paste or autofill can drop multiple characters into one box.
+    const value = input.value.replace(/\D/g, '');
+    if (value.length > 1) {
+      input.value = value[0];
+      if (setCodeFromString(codeDigits.join('') + value)) {
+        return;
+      }
+    }
+    codeDigits[i] = value.slice(-1);
+    input.value = codeDigits[i];
+    if (codeDigits[i] && i < 5) codeInputs[i + 1]?.focus();
+    // Auto-submit once all six digits are in.
+    if (codeDigits.every((d) => d !== '')) void submitCode();
+  }
+
+  function onCodeKeydown(i: number, e: KeyboardEvent) {
+    if (e.key === 'Backspace' && !codeDigits[i] && i > 0) {
+      codeDigits[i - 1] = '';
+      codeInputs[i - 1]?.focus();
+      e.preventDefault();
+    } else if (e.key === 'ArrowLeft' && i > 0) {
+      codeInputs[i - 1]?.focus();
+      e.preventDefault();
+    } else if (e.key === 'ArrowRight' && i < 5) {
+      codeInputs[i + 1]?.focus();
+      e.preventDefault();
+    }
+  }
+
+  function onCodePaste(e: ClipboardEvent) {
+    e.preventDefault();
+    const text = e.clipboardData?.getData('text') ?? '';
+    // Accept either a bare 6-digit code or a full pair URL pasted into a
+    // digit box (common when users long-press the iOS camera banner).
+    if (!setCodeFromString(text)) {
+      handlePairUrl(text.trim());
+    }
+  }
+
+  async function submitCode() {
+    if (codeResolving) return;
+    codeErr = null;
+    const joined = codeDigits.join('');
+    if (joined.length !== 6) {
+      codeErr = 'Enter the full 6-digit code.';
+      return;
+    }
+    codeResolving = true;
+    try {
+      const target = await resolvePairCode(joined);
+      goto(target);
+    } catch (err: any) {
+      codeErr = err?.message ?? 'Could not resolve that code.';
+      // Focus the first empty/incorrect box for quick correction.
+      const idx = codeDigits.findIndex((d) => d === '');
+      codeInputs[idx >= 0 ? idx : 0]?.focus();
+    } finally {
+      codeResolving = false;
+    }
+  }
+
   async function copyLink() {
     try {
       await navigator.clipboard.writeText(window.location.href);
@@ -126,6 +215,7 @@
     scanErr = null;
     scanning = true;
     try {
+      void loadJsQR();
       scanStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
         audio: false,
@@ -164,6 +254,7 @@
         canvasEl.height = videoEl.videoHeight;
         ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
         const imageData = ctx.getImageData(0, 0, canvasEl.width, canvasEl.height);
+        if (!jsQR) return; // decoder still loading; next frame retries
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
           inversionAttempts: 'attemptBoth',
         });
@@ -279,26 +370,57 @@
     </button>
   </section>
 {:else if !pairToken && !cloudHost && !lanHost}
+  <p class="muted" style="margin-top:-4px;">
+    Open the desktop app, click <b>📱 Phone Remote</b> in the toolbar, then scan
+    the QR or type the 6-digit code it shows.
+  </p>
+
   <section class="panel">
-    <h2>Scan desktop QR code</h2>
-    <p class="muted">
-      Open the desktop app, go to <b>Settings → Remote</b>, and scan the QR code shown there to link this phone.
-    </p>
-    
-    <button class="accent fw" onclick={startScan} style="margin-top: 16px;">
-      📷 Scan QR code
+    <button class="accent fw scan-btn" onclick={startScan}>
+      <span class="scan-ico">📷</span>
+      <span class="scan-txt">
+        <b>Scan QR code</b>
+        <span class="scan-sub">Point your camera at the desktop</span>
+      </span>
     </button>
-    
     {#if scanErr}
       <p class="err small" style="margin-top: 8px;">{scanErr}</p>
     {/if}
+  </section>
 
-    <div class="or">— or —</div>
+  <section class="panel">
+    <h2>Or enter the code</h2>
+    <div class="code-row" role="group" aria-label="6-digit pair code">
+      {#each codeDigits as digit, i (i)}
+        <input
+          class="code-box"
+          type="text"
+          inputmode="numeric"
+          autocomplete={i === 0 ? 'one-time-code' : 'off'}
+          maxlength="1"
+          aria-label={'Digit ' + (i + 1)}
+          bind:value={codeDigits[i]}
+          bind:this={codeInputs[i]}
+          oninput={(e) => onCodeInput(i, e)}
+          onkeydown={(e) => onCodeKeydown(i, e)}
+          onpaste={onCodePaste}
+          onfocus={(e) => e.currentTarget.select()}
+          disabled={codeResolving}
+        />
+      {/each}
+    </div>
+    {#if codeErr}
+      <p class="err small">{codeErr}</p>
+    {/if}
+    <button class="ghost fw" onclick={submitCode} disabled={codeResolving || !codeDigits.every((d) => d !== '')}>
+      {codeResolving ? 'Looking up code…' : 'Pair with code'}
+    </button>
+  </section>
 
-    <form onsubmit={onPasteSubmit}>
-      <label for="paste">Paste the pair link from the QR</label>
+  <details class="advanced">
+    <summary class="muted small">Have a pairing link instead?</summary>
+    <form onsubmit={onPasteSubmit} style="margin-top: 8px;">
       <input
-        id="paste"
         type="url"
         autocomplete="off"
         autocapitalize="none"
@@ -307,11 +429,11 @@
         bind:value={pasteUrl}
       />
       {#if pasteErr}<p class="err small">{pasteErr}</p>{/if}
-      <button class="accent fw" type="submit" style="margin-top: 12px;" disabled={!pasteUrl.trim()}>
+      <button class="ghost fw" type="submit" style="margin-top: 10px;" disabled={!pasteUrl.trim()}>
         Pair with this link
       </button>
     </form>
-  </section>
+  </details>
 {:else if error}
   <section class="panel err">
     <b>Couldn't pair</b>
@@ -395,10 +517,56 @@
   .panel.err { border-color: var(--danger); }
   button.fw { width: 100%; margin-top: 16px; padding: 14px; font-size: 16px; }
 
+  /* Primary scan action: icon + two-line label */
+  .scan-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-align: left;
+    width: 100%;
+    margin-top: 14px;
+    padding: 14px;
+    font-size: 16px;
+  }
+  .scan-ico { font-size: 24px; line-height: 1; }
+  .scan-txt { display: flex; flex-direction: column; gap: 2px; }
+  .scan-sub { font-size: 12px; font-weight: 400; opacity: 0.85; }
+
+  /* Six OTP-style code boxes */
+  .code-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 4px;
+  }
+  .code-box {
+    width: 46px;
+    height: 56px;
+    text-align: center;
+    font-size: 24px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    padding: 0;
+    caret-color: var(--accent);
+  }
+  .code-box:focus {
+    border-color: var(--accent);
+    outline: none;
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+
+  details.advanced { margin-top: 4px; }
+  details.advanced summary {
+    cursor: pointer;
+    list-style: none;
+    padding: 10px 2px;
+  }
+  details.advanced summary::before { content: '▸ '; }
+  details.advanced[open] summary::before { content: '▾ '; }
+
   .steps { margin: 8px 0 0 20px; padding: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
   .steps li { margin-bottom: 4px; }
 
-  .or { text-align: center; color: var(--text-secondary); font-size: 12px; margin: 14px 0 4px; }
   .err { color: var(--danger); font-size: 12px; margin: 6px 0 0; }
   .small { font-size: 12px; }
 

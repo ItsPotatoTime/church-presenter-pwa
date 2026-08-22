@@ -6,6 +6,8 @@
 // late event from a previous socket can never corrupt the current state.
 
 import { get } from 'svelte/store';
+import { goto } from '$app/navigation';
+import { base } from '$app/paths';
 import type {
   AuthFail,
   AuthOk,
@@ -800,6 +802,10 @@ class RemoteClient {
             try { ws.close(); } catch { /* ignore */ }
             void clearCredentials();
             connError.set('Device revoked by server');
+            // Reset live UI state so the setup screen doesn't render stale data.
+            liveState.set(null);
+            queueState.set(null);
+            void goto(`${base}/`, { replaceState: true });
           }
         } else if (p.reason === 'bad_token') {
           // Token mismatch for the selected server. Do not try other stored
@@ -981,6 +987,10 @@ class RemoteClient {
         void clearCredentials();
         connError.set('Device revoked from desktop');
         connStatus.set('error');
+        // Reset live UI state so the setup screen doesn't render stale data.
+        liveState.set(null);
+        queueState.set(null);
+        void goto(`${base}/`, { replaceState: true });
         return;
       }
 
