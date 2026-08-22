@@ -393,24 +393,23 @@ function sortSongsForDisplay(songs: LibrarySong[]): LibrarySong[] {
   });
 }
 
-/** Load whatever is in IndexedDB into the Svelte stores (for offline UI). */
+/** Load whatever is in IndexedDB into the Svelte stores (for offline UI).
+ *  Each store is populated the moment its own read lands instead of waiting
+ *  for the whole batch, so the Library can render while the large bible-verses
+ *  read is still in flight. */
 export async function hydrateFromCache(): Promise<void> {
-  const [songs, lists, privateLists, bibleBooks, bibleVerses, bibleVersion, cachedQueue] = await Promise.all([
-    loadAllSongs(),
-    loadAllLists(),
-    loadAllPrivateLists(),
-    loadAllBibleBooks(),
-    loadAllBibleVerses(),
-    getBibleVersion(),
-    getCachedQueueState(),
+  const settle = <T>(p: Promise<T>, apply: (v: T) => void): Promise<void> =>
+    p.then(apply).catch((err) => console.error('[sync] hydrate partial failed:', err));
+
+  await Promise.all([
+    settle(loadAllSongs(), (songs) => songsStore.set(sortSongsForDisplay(songs))),
+    settle(loadAllLists(), (lists) => listsStore.set(lists)),
+    settle(loadAllPrivateLists(), (privateLists) => privateListsStore.set(privateLists)),
+    settle(loadAllBibleBooks(), (bibleBooks) => bibleBooksStore.set(bibleBooks)),
+    settle(loadAllBibleVerses(), (bibleVerses) => bibleVersesStore.set(bibleVerses)),
+    settle(getBibleVersion(), (bibleVersion) => bibleVersionStore.set(bibleVersion)),
+    settle(getCachedQueueState(), (cachedQueue) => queueState.set(cachedQueue)),
   ]);
-  songsStore.set(sortSongsForDisplay(songs));
-  listsStore.set(lists);
-  privateListsStore.set(privateLists);
-  bibleBooksStore.set(bibleBooks);
-  bibleVersesStore.set(bibleVerses);
-  bibleVersionStore.set(bibleVersion);
-  queueState.set(cachedQueue);
 }
 
 /**

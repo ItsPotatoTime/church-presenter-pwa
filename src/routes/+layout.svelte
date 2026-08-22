@@ -4,7 +4,7 @@
   import { page } from '$app/stores';
   import { base } from '$app/paths';
   import { dev } from '$app/environment';
-  import { beforeNavigate, goto } from '$app/navigation';
+  import { beforeNavigate, goto, preloadData } from '$app/navigation';
   import { getOrCreateDeviceId, loadCredentialsResilient } from '$lib/db';
   import { hydrateFromCache, isReducedDataConnection, syncNow } from '$lib/sync';
   import { myDeviceId, isViewOnly, connStatus, activeModals, libraryScrollY, listsScrollY, canEditKeys, canEditDisplays, debugMode, managerAccessCountdown, refreshManagerAccessCountdown } from '$lib/stores';
@@ -21,11 +21,14 @@
   const UPDATE_RELOAD_GUARD_KEY = 'church_remote_update_reload_at';
 
   // Global debugger console logging overlay
-  let consoleLogs = $state<{ type: 'log' | 'warn' | 'error', text: string, time: string }[]>([]);
+  // Log args are captured raw and only serialized when the debug drawer
+  // actually renders or copies them: pretty-printing every object on every
+  // intercepted console call was a real main-thread tax on chatty paths.
+  let consoleLogs = $state<{ type: 'log' | 'warn' | 'error', args: any[], time: string }[]>([]);
   let showDebugDrawer = $state(false);
 
-  function addLog(type: 'log' | 'warn' | 'error', ...args: any[]) {
-    const text = args.map(arg => {
+  function formatLogArgs(args: any[]): string {
+    return args.map(arg => {
       if (typeof arg === 'object') {
         try {
           return JSON.stringify(arg, null, 2);
@@ -35,11 +38,13 @@
       }
       return String(arg);
     }).join(' ');
-    
+  }
+
+  function addLog(type: 'log' | 'warn' | 'error', ...args: any[]) {
     const time = new Date().toLocaleTimeString();
-    consoleLogs = [...consoleLogs, { type, text, time }];
+    consoleLogs.push({ type, args, time });
     if (consoleLogs.length > 200) {
-      consoleLogs = consoleLogs.slice(-200);
+      consoleLogs.shift();
     }
   }
 
@@ -174,6 +179,21 @@
     }
   }
 
+  // Warm every tab's route chunk during idle time after startup, so the
+  // FIRST visit to each tab doesn't stall on a network fetch mid-tap.
+  function preloadTabRoutes() {
+    const warm = () => {
+      for (const t of tabs) {
+        void preloadData(t.href).catch(() => { /* best effort */ });
+      }
+    };
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      requestIdleCallback(warm, { timeout: 4000 });
+    } else {
+      setTimeout(warm, 1500);
+    }
+  }
+
   onMount(async () => {
     // Register global error interceptors for chunk load failures
     window.addEventListener('error', handleChunkError, true);
@@ -219,13 +239,14 @@
     }
     if (paired) {
       // Load library cache so Library/Queue show something even offline.
-      try {
-        await hydrateFromCache();
-        hasHydrated = true;
-      } catch (err) {
-        console.error('[layout] hydrateFromCache failed:', err);
-      }
+      // Fire-and-forget: stores update reactively as each chunk lands, so
+      // first paint never waits on the full IndexedDB read (songs load
+      // before bible verses inside hydrateFromCache).
+      hydrateFromCache()
+        .then(() => { hasHydrated = true; })
+        .catch((err) => console.error('[layout] hydrateFromCache failed:', err));
     }
+    preloadTabRoutes();
     ready = true;
   });
 
@@ -400,7 +421,7 @@
       <h3 style="margin: 0; font-size: 14px;">🐛 Console Debug Logs</h3>
       <div style="display: flex; gap: 8px;">
         <button style="background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 6px 10px; border-radius: 6px; cursor: pointer;" onclick={() => {
-          const txt = consoleLogs.map(l => `[${l.time}] [${l.type.toUpperCase()}] ${l.text}`).join('\n');
+        const txt = consoleLogs.map(l => `[${l.time}] [${l.type.toUpperCase()}] ${formatLogArgs(l.args)}`).join('\n');
           navigator.clipboard.writeText(txt).then(() => alert('Copied logs to clipboard!'));
         }}>Copy</button>
         <button style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239,68,68,0.3); color: #f87171; padding: 6px 10px; border-radius: 6px; cursor: pointer;" onclick={() => consoleLogs = []}>Clear</button>
@@ -412,7 +433,7 @@
         <div style="border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px; white-space: pre-wrap; line-height: 1.3;">
           <span style="color: #6b7280; font-size: 9px; margin-right: 4px;">[{log.time}]</span>
           <span style="color: {log.type === 'error' ? '#f87171' : log.type === 'warn' ? '#fbbf24' : '#60a5fa'}; font-weight: bold; margin-right: 4px;">[{log.type.toUpperCase()}]</span>
-          <span>{log.text}</span>
+          <span>{formatLogArgs(log.args)}</span>
         </div>
       {/each}
       {#if consoleLogs.length === 0}
@@ -508,11 +529,12 @@
     z-index: 30;
     display: flex;
     justify-content: space-around;
-    background: rgba(22, 22, 30, 0.75);
+    /* Near-opaque instead of backdrop blur: the tab bar is always on screen,
+       and a persistent backdrop-filter forces compositing work every frame
+       something scrolls or animates anywhere in the app. */
+    background: rgba(20, 20, 27, 0.97);
     border-top: 1px solid rgba(48, 48, 74, 0.4);
     padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0));
-    backdrop-filter: blur(12px) saturate(180%);
-    -webkit-backdrop-filter: blur(12px) saturate(180%);
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
   }
 

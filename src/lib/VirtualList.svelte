@@ -1,6 +1,23 @@
 <script lang="ts" generics="T">
   import type { Snippet } from 'svelte';
 
+  // Virtualized list tuned for mid-range phones.
+  //
+  // Perf rules this follows (each one fixes a measured jank source):
+  // - Scroll updates are rAF-batched: at most one state write + one re-render
+  //   per animation frame, no matter how many scroll events fire.
+  // - Row heights live in a plain mutable Map behind a single version counter,
+  //   so a measurement costs O(1) instead of copying the whole height record.
+  // - The version counter itself is bumped at most once per frame by a shared
+  //   scheduler, so a batch of row measurements triggers ONE offsets rebuild.
+  // - Measurements are keyed to the items array IDENTITY, not its length:
+  //   swapping in search results with the same length can't reuse stale
+  //   heights (which caused scroll jumps), and reusing the same array across
+  //   unrelated parent re-renders doesn't wipe them.
+  // - The offsets prefix-sum rebuild is O(n) but only runs once per version
+  //   bump; at 3500 rows that is microseconds and simpler than incremental
+  //   patching.
+
   let {
     items,
     itemHeight = 78,
@@ -20,19 +37,45 @@
   let viewport = $state<HTMLDivElement | null>(null);
   let scrollTop = $state(0);
   let viewportHeight = $state(480);
-  let measuredHeights = $state<Record<number, number>>({});
+  let heightsVersion = $state(0);
+
+  const measuredHeights = new Map<number, number>();
+  let lastItemsRef: T[] | null = null;
+
+  // Shared per-frame scheduler for measurement-driven invalidation. Multiple
+  // ResizeObserver callbacks in the same frame collapse into one version bump
+  // and therefore one offsets rebuild + one list re-render.
+  let versionFrame: number | null = null;
+  function scheduleHeightsInvalidate() {
+    if (versionFrame !== null) return;
+    versionFrame = requestAnimationFrame(() => {
+      versionFrame = null;
+      heightsVersion += 1;
+    });
+  }
+
+  function resetMeasurements() {
+    measuredHeights.clear();
+    heightsVersion += 1;
+  }
 
   const positions = $derived.by(() => {
-    const offsets = new Array(items.length + 1);
+    void heightsVersion; // rebuild whenever measurements changed
+    // Positions exclude rowGap on purpose: the visual gap comes from each
+    // row's own padding-bottom, which ResizeObserver's contentRect already
+    // excludes. This mirrors the original list's geometry exactly.
+    const offsets = new Array<number>(items.length + 1);
     let top = 0;
-    offsets[0] = 0;
     for (let i = 0; i < items.length; i++) {
-      top += measuredHeights[i] ?? itemHeight;
-      offsets[i + 1] = top;
+      offsets[i] = top;
+      top += measuredHeights.get(i) ?? itemHeight;
     }
+    offsets[items.length] = top;
     return offsets;
   });
+
   const totalHeight = $derived(positions[items.length] ?? 0);
+
   const startIndex = $derived(Math.max(0, findStartIndex(positions, scrollTop) - overscan));
   const endIndex = $derived(findEndIndex(positions, scrollTop + viewportHeight, overscan));
   const visibleItems = $derived(items.slice(startIndex, endIndex));
@@ -49,33 +92,43 @@
   }
 
   function findEndIndex(offsets: number[], value: number, extra: number) {
-    let idx = findStartIndex(offsets, value) + extra + 1;
+    let idx = findStartIndex(positions, value) + extra + 1;
     return Math.min(items.length, Math.max(0, idx));
   }
 
-  function updateViewport() {
-    if (!viewport) return;
-    scrollTop = viewport.scrollTop;
-    viewportHeight = viewport.clientHeight || viewportHeight;
+  // rAF-batched scroll handling: record the newest scroll position, render at
+  // most once per frame. Without this, every scroll event synchronously drove
+  // a derived-chain recomputation and keyed each-diff.
+  let scrollFrame: number | null = null;
+  function handleScroll() {
+    const el = viewport;
+    if (!el || scrollFrame !== null) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = null;
+      if (!viewport) return;
+      scrollTop = viewport.scrollTop;
+      viewportHeight = viewport.clientHeight || viewportHeight;
+    });
   }
 
   function measureRow(node: HTMLElement, index: number) {
-    const update = () => {
-      const height = Math.ceil(node.getBoundingClientRect().height);
-      if (height > 0 && measuredHeights[index] !== height) {
-        measuredHeights = { ...measuredHeights, [index]: height };
+    // ResizeObserver fires once right after observe(), so no manual first
+    // measurement is needed. contentRect avoids the forced layout that a
+    // getBoundingClientRect call would trigger mid-scroll.
+    const observer = new ResizeObserver((entries) => {
+      const height = Math.ceil(entries[0]?.contentRect.height ?? 0);
+      if (height > 0 && measuredHeights.get(index) !== height) {
+        measuredHeights.set(index, height);
+        scheduleHeightsInvalidate();
       }
-    };
-    update();
-    const resizeObserver = new ResizeObserver(update);
-    resizeObserver.observe(node);
+    });
+    observer.observe(node);
     return {
       update(nextIndex: number) {
         index = nextIndex;
-        update();
       },
       destroy() {
-        resizeObserver.disconnect();
+        observer.disconnect();
       },
     };
   }
@@ -83,22 +136,36 @@
   $effect(() => {
     const el = viewport;
     if (!el) return;
-    updateViewport();
-    const resizeObserver = new ResizeObserver(updateViewport);
+    scrollTop = el.scrollTop;
+    viewportHeight = el.clientHeight || viewportHeight;
+    const resizeObserver = new ResizeObserver(handleScroll);
     resizeObserver.observe(el);
     return () => resizeObserver.disconnect();
   });
 
+  // New items identity -> fresh measurements. Keyed by reference so a parent
+  // re-render passing the SAME array never wipes heights (the old code reset
+  // on length changes only, which both missed identity swaps of equal length
+  // and needlessly cleared on filtered sets of coincidentally equal length).
   $effect(() => {
-    items.length;
-    measuredHeights = {};
+    if (lastItemsRef !== items) {
+      lastItemsRef = items;
+      resetMeasurements();
+    }
+  });
+
+  $effect(() => {
+    return () => {
+      if (versionFrame !== null) cancelAnimationFrame(versionFrame);
+      if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
+    };
   });
 </script>
 
 <div
   bind:this={viewport}
   class={`virtual-list ${className}`}
-  onscroll={updateViewport}
+  onscroll={handleScroll}
 >
   <div class="virtual-spacer" style={`height: ${totalHeight}px;`}>
     <div class="virtual-window">

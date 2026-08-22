@@ -18,7 +18,10 @@
       goto(`${base}/`);
       return;
     }
-    await remote.connect();
+    // Fire-and-forget: the page renders immediately and reacts to connection
+    // progress through connStatus; awaiting the handshake here delayed first
+    // paint on every tab switch.
+    void remote.connect();
   });
 
   // Re-send live.follow whenever connection opens.

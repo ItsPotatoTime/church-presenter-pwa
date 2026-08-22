@@ -233,7 +233,9 @@
     creds = c;
     servers = await loadAllServers();
     lastSyncTs = await getLastSyncTs();
-    await remote.connect();
+    // Connect + probe run in the background: the page is interactive the
+    // moment cached data is on screen instead of after a full WS handshake.
+    void remote.connect();
     void remote.probeAllServers().then(async () => {
       servers = await loadAllServers();
     });

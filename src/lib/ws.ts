@@ -171,6 +171,13 @@ class RemoteClient {
         // by connect()'s idempotency check. This is the recovery path for a
         // hung WSS handshake discovered after returning to the app.
         void this.reconnectActive();
+        // If the socket survived suspension, no reconnect happens and every
+        // live.state/queue.state pushed while we were backgrounded is simply
+        // gone. Ask the desktop for a fresh authoritative snapshot; it is
+        // idempotent for peers that did not miss anything.
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.send({ type: 'state.resync' });
+        }
       });
     }
     // When the device regains network access, reconnect immediately.
