@@ -6,6 +6,8 @@
 // into the same /pair/?... route the scanner produces, so both entry methods
 // share one pairing implementation.
 
+import { base } from '$app/paths';
+
 // Hardcoded to match the desktop's PAIR_DIRECTORY_URL.
 const PAIR_DIRECTORY_URL = 'https://cloud.itspotatotime.xyz';
 
@@ -75,5 +77,5 @@ export async function resolvePairCode(code: string): Promise<string> {
   if (!payload?.ok || typeof payload.query !== 'string' || !payload.query) {
     throw new PairCodeError('network', 'Pairing service returned an invalid response.');
   }
-  return `/pair/?${payload.query}`;
+  return `${base}/pair/?${payload.query}`;
 }
