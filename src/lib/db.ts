@@ -1382,6 +1382,9 @@ export function stripListSyncStatus(list: LibraryList): LibraryList {
       name: song.name,
       folder: song.folder,
     })),
+    // Keep the creation stamp in cached/merged copies so Newest/Oldest sorting
+    // survives syncs. Peers that don't know the field simply ignore it.
+    ...(list.created_ts !== undefined ? { created_ts: list.created_ts } : {}),
   };
 }
 

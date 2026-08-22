@@ -150,6 +150,25 @@ export const listsPickerRawQuery: Writable<string> = writable('');
 export const listsPickerSearchSlides: Writable<boolean> = persistentBoolean('lists_picker_search_slides', false);
 export const listsScrollY: Writable<number> = writable(0);
 
+// List-card ordering (Newest first by creation time is the default) and the
+// search box text; both survive navigation like the rest of the Lists state.
+export type ListSortMode = 'newest' | 'oldest' | 'az' | 'za' | 'songs';
+
+const LISTS_SORT_KEY = 'lists_sort_mode';
+const LIST_SORT_VALUES: ListSortMode[] = ['newest', 'oldest', 'az', 'za', 'songs'];
+
+function readListSortMode(): ListSortMode {
+  if (typeof window === 'undefined') return 'newest';
+  const raw = localStorage.getItem(LISTS_SORT_KEY);
+  return LIST_SORT_VALUES.includes(raw as ListSortMode) ? (raw as ListSortMode) : 'newest';
+}
+
+export const listsSortMode: Writable<ListSortMode> = writable(readListSortMode());
+if (typeof window !== 'undefined') {
+  listsSortMode.subscribe((value) => localStorage.setItem(LISTS_SORT_KEY, value));
+}
+export const listsRawQuery: Writable<string> = writable('');
+
 const MANAGER_ACCESS_EXPIRES_AT_KEY = 'manager_access_expires_at';
 
 function readManagerAccessRemaining(): number {

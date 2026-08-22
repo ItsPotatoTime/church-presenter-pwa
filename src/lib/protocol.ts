@@ -152,6 +152,10 @@ export interface LibrarySong {
 export interface LibraryList {
   name: string;
   songs: { path: string; name: string; folder: string }[];
+  // Creation time in Unix epoch milliseconds when the desktop/cloud carries
+  // one. Absent (or <= 0) on legacy peers: the Lists page then falls back to
+  // its local first-seen stamps for Newest/Oldest sorting.
+  created_ts?: number;
   sync_status?: 'pending';
 }
 
@@ -263,6 +267,10 @@ export type ClientCommand =
   | { type: 'bible.search'; id?: string; payload: { query: string; mode: 'reference' | 'text'; limit?: number } }
   | { type: 'device.rename'; payload: { new_name: string } }
   | { type: 'live.toggle_present' }
+  // Ask the desktop to re-broadcast its cached authoritative live/queue
+  // state. Sent when the PWA returns to the foreground: pushes missed while
+  // background-suspended would otherwise leave the mirror stale.
+  | { type: 'state.resync' }
   | { type: 'live.font_size'; payload: { delta: number } }
   | { type: 'song.fetch_rc'; id?: string; payload: { url: string } }
   | { type: 'song.create'; id?: string; payload: { name: string; slide_texts: string[]; chorus_index?: number | number[] | null; folder?: string; overwrite?: boolean } }
