@@ -9,13 +9,22 @@
   import {
     connStatus, isViewOnly, listsStore, privateListsStore, songsStore, canEditKeys, activeModals,
     listsActiveTab, listsSelectedName, listsShowPicker, listsPickerRawQuery, listsPickerSearchSlides, listsScrollY,
-    pendingSyncError
+    listsSortMode, listsRawQuery, pendingSyncError
   } from '$lib/stores';
   import type { LibraryList, LibrarySong } from '$lib/protocol';
   import { normalize, renderMarkdown } from '$lib/search';
+  import type { ListSortMode } from '$lib/stores';
   import type { ScoredResult } from '$lib/search';
+  import {
+    ensureListCreatedTs,
+    effectiveListCreatedTs,
+    renameListCreatedTs,
+    deleteListCreatedTs,
+  } from '$lib/listMeta';
   import { useSongSearch } from '$lib/useSearch.svelte';
   import SongPreviewModal from '$lib/SongPreviewModal.svelte';
+  import SongTitleRow from '$lib/SongTitleRow.svelte';
+  import ListDetailSheet from '$lib/ListDetailSheet.svelte';
   import VirtualList from '$lib/VirtualList.svelte';
 
   let previewSong = $state<LibrarySong | null>(null);
@@ -45,11 +54,6 @@
   let selectedName = $state<string | null>($listsSelectedName);
   let showPicker = $state($listsShowPicker);
   let rawPickerQuery = $state($listsPickerRawQuery);
-
-  let pickerQuery = $state($listsPickerRawQuery);
-  let pickerDebounceTimer: number | null = null;
-  let dragFrom = $state<number | null>(null);
-  let dragOver = $state<number | null>(null);
 
   let confirmDialog = $state<{ message: string; resolve: (v: boolean) => void } | null>(null);
   let promptDialog = $state<{ title: string; initial: string; value: string; resolve: (v: string | null) => void } | null>(null);
@@ -84,6 +88,21 @@
     if (showPicker) {
       const handleClose = () => {
         closePicker();
+        return true;
+      };
+      activeModals.update(list => [...list, handleClose]);
+      return () => {
+        activeModals.update(list => list.filter(fn => fn !== handleClose));
+      };
+    }
+  });
+
+  // Register the open list sheet for back gestures: back closes the sheet
+  // instead of navigating away from the page.
+  $effect(() => {
+    if (selectedList) {
+      const handleClose = () => {
+        closeList();
         return true;
       };
       activeModals.update(list => [...list, handleClose]);
@@ -140,6 +159,101 @@
       ? null
       : (currentLists.find((l) => l.name === selectedName) ?? null)
   );
+
+  // ── List search + sort (revamped card list) ──────────────────────────────
+  let sortMode = $state<ListSortMode>($listsSortMode);
+  $effect(() => {
+    listsSortMode.set(sortMode);
+  });
+
+  let rawQuery = $state($listsRawQuery);
+  $effect(() => {
+    listsRawQuery.set(rawQuery);
+  });
+  let searchQuery = $state('');
+  let searchDebounceTimer: number | null = null;
+  $effect(() => {
+    const value = rawQuery;
+    if (searchDebounceTimer !== null) clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = window.setTimeout(() => {
+      searchQuery = value;
+    }, 120);
+    return () => {
+      if (searchDebounceTimer !== null) clearTimeout(searchDebounceTimer);
+    };
+  });
+
+  // First-seen stamps for lists whose peer sends no created_ts (legacy
+  // desktops). The sweep only writes when a genuinely new name appears, so it
+  // is a no-op after the first run; metaVersion re-triggers age computation.
+  let metaVersion = $state(0);
+  $effect(() => {
+    if (ensureListCreatedTs(currentLists.map((l) => l.name)) > 0) metaVersion++;
+  });
+
+  // Normalized name variants per list, recomputed only when the store changes:
+  // keystrokes then filter over precomputed strings instead of re-normalizing.
+  const listHaystacks = $derived.by(() => {
+    const map = new Map<LibraryList, { norm: string; compact: string }>();
+    for (const l of currentLists) {
+      const norm = normalize(l.name);
+      map.set(l, { norm, compact: norm.replace(/\s+/g, '') });
+    }
+    return map;
+  });
+
+  const listAges = $derived.by(() => {
+    void metaVersion;
+    const map = new Map<LibraryList, number>();
+    for (const l of currentLists) {
+      const t = effectiveListCreatedTs(l.name, l.created_ts);
+      if (t !== undefined) map.set(l, t);
+    }
+    return map;
+  });
+
+  // Unknown age sinks to the END of both time orderings.
+  const ageOf = (l: LibraryList): number => listAges.get(l) ?? Number.MAX_SAFE_INTEGER;
+
+  const filteredLists = $derived.by(() => {
+    const q = normalize(searchQuery);
+    const cq = q.replace(/\s+/g, '');
+    if (!q && !cq) return currentLists;
+    const hay = listHaystacks;
+    return currentLists.filter((l) => {
+      const info = hay.get(l);
+      if (!info) return false;
+      return info.norm.includes(q) || (cq !== '' && info.compact.includes(cq));
+    });
+  });
+
+  // Romanian-aware alphabetical order; numeric suffixes sort naturally
+  // ("List 2" before "List 10").
+  const nameCollator = new Intl.Collator('ro', { sensitivity: 'base', numeric: true });
+
+  const sortedLists = $derived.by(() => {
+    const arr = [...filteredLists];
+    switch (sortMode) {
+      case 'az':
+        arr.sort((a, b) => nameCollator.compare(a.name, b.name));
+        break;
+      case 'za':
+        arr.sort((a, b) => nameCollator.compare(b.name, a.name));
+        break;
+      case 'songs':
+        arr.sort(
+          (a, b) =>
+            b.songs.length - a.songs.length || nameCollator.compare(a.name, b.name),
+        );
+        break;
+      case 'oldest':
+        arr.sort((a, b) => ageOf(a) - ageOf(b) || nameCollator.compare(a.name, b.name));
+        break;
+      default:
+        arr.sort((a, b) => ageOf(b) - ageOf(a) || nameCollator.compare(a.name, b.name));
+    }
+    return arr;
+  });
 
   async function send(cmd: { type: string; payload?: any }) {
     if ($isViewOnly) {
@@ -240,6 +354,10 @@
     selectedName = name;
   }
 
+  function closeList() {
+    selectedName = null;
+  }
+
   async function createList() {
     const name = await showPrompt('New list name:');
     if (!name || !name.trim()) return;
@@ -270,6 +388,9 @@
     if (!next || !next.trim()) return;
     const clean = next.trim().slice(0, 80);
     if (clean === selectedList.name) return;
+    // Carry the local fallback age to the new name (server stamps follow the
+    // list on their own).
+    renameListCreatedTs(selectedList.name, clean);
 
     if (activeTab === 'private') {
       if ($privateListsStore.some((l) => l.name === clean)) {
@@ -291,6 +412,7 @@
   async function deleteList() {
     if (!selectedList) return;
     if (!await showConfirm(`Delete list "${selectedList.name}"?`)) return;
+    deleteListCreatedTs(selectedList.name);
 
     if (activeTab === 'private') {
       const updated = $privateListsStore.filter((l) => l.name !== selectedList.name);
@@ -346,30 +468,15 @@
     }
   }
 
-  function onDragStart(e: DragEvent, i: number) {
-    if ($isViewOnly) return;
-    dragFrom = i;
-    if (e.dataTransfer) {
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', String(i));
-    }
-  }
-  function onDragOver(e: DragEvent, i: number) {
-    e.preventDefault();
-    dragOver = i;
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-  }
-  function onDrop(e: DragEvent, i: number) {
-    e.preventDefault();
-    const from = dragFrom;
-    dragFrom = null;
-    dragOver = null;
-    if (!selectedList || from === null || from === i) return;
+  /** Reorder from the sheet component (no DragEvent involved). */
+  function reorderSongs(from: number, to: number) {
+    if (!selectedList || from === to) return;
+    if (from < 0 || to < 0 || from >= selectedList.songs.length || to >= selectedList.songs.length) return;
 
     if (activeTab === 'private') {
       const songs = [...selectedList.songs];
       const [moved] = songs.splice(from, 1);
-      songs.splice(i, 0, moved);
+      songs.splice(to, 0, moved);
       const updated = $privateListsStore.map((l) =>
         l.name === selectedList.name ? { ...l, songs } : l
       );
@@ -378,24 +485,16 @@
     } else {
       send({
         type: 'list.reorder',
-        payload: { list_name: selectedList.name, from, to: i },
+        payload: { list_name: selectedList.name, from, to },
       });
     }
   }
-  function onDragEnd() { dragFrom = null; dragOver = null; }
 
   // ── Song picker (adds song(s) to current list) ──
 
-  $effect(() => {
-    const value = rawPickerQuery;
-    if (pickerDebounceTimer !== null) clearTimeout(pickerDebounceTimer);
-    pickerDebounceTimer = window.setTimeout(() => {
-      pickerQuery = value;
-    }, 180);
-    return () => {
-      if (pickerDebounceTimer !== null) clearTimeout(pickerDebounceTimer);
-    };
-  });
+  // rawPickerQuery feeds useSongSearch directly: the hook debounces the
+  // worker dispatch itself, so a second debounce here would double the
+  // keystroke latency (~360ms) compared to the Library page.
 
   // Unified worker-backed local search with an optional parallel server
   // race. Local results (~50ms) fill in instantly while the server request
@@ -405,7 +504,7 @@
   // gone — the user always sees something immediately.
   const localPickerSearch = useSongSearch({
     items: () => $songsStore,
-    query: () => pickerQuery,
+    query: () => rawPickerQuery.trim(),
     searchSlides: () => pickerSearchSlides,
     maxResults: 300,
     debounceMs: 180,
@@ -413,7 +512,7 @@
   });
 
   const pickerFiltered = $derived.by<ScoredResult<LibrarySong>[]>(() => {
-    const q = pickerQuery.trim();
+    const q = rawPickerQuery.trim();
     if (!q) return $songsStore.map((s) => ({ item: s, score: 0, snippet: '' }));
     return localPickerSearch.results;
   });
@@ -435,7 +534,6 @@
   function openPicker() {
     if (!selectedList) return;
     rawPickerQuery = '';
-    pickerQuery = '';
     showPicker = true;
   }
   function closePicker() { showPicker = false; }
@@ -522,86 +620,75 @@
     No {activeTab} lists yet. Tap <b>＋ New</b> to create one.
   </section>
 {:else}
-  <div class="chips">
-    {#each currentLists as l (l.name)}
-      <button
-        class="chip"
-        class:active={selectedName === l.name}
-        class:pending={l.sync_status === 'pending'}
-        onclick={() => selectList(l.name)}
-      >
-        {l.name}
-        {#if l.sync_status === 'pending'}<span class="pending-badge">PENDING SYNC</span>{/if}
-        <span class="count">{l.songs.length}</span>
-      </button>
-    {/each}
+  <div class="list-tools">
+    <div class="search-box">
+      <input
+        type="text"
+        placeholder="Search lists…"
+        bind:value={rawQuery}
+        autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
+        enterkeyhint="search"
+      />
+      {#if rawQuery}
+        <button class="clear-btn" aria-label="Clear search" onclick={() => { rawQuery = ''; }}>✕</button>
+      {/if}
+    </div>
+    <select class="sort-select" bind:value={sortMode} aria-label="Sort lists">
+      <option value="newest">Newest</option>
+      <option value="oldest">Oldest</option>
+      <option value="az">A-Z</option>
+      <option value="za">Z-A</option>
+      <option value="songs">Most songs</option>
+    </select>
   </div>
-{/if}
 
-{#if selectedList}
-  <section class="list-head">
-    <div class="list-title">
-      {selectedList.name}
-      {#if selectedList.sync_status === 'pending'}<span class="pending-badge">PENDING SYNC</span>{/if}
-    </div>
-    <div class="list-actions">
-      <button class="ghost" onclick={renameList} disabled={activeTab === 'public' && $isViewOnly}>✎ Rename</button>
-      <button class="ghost" onclick={deleteList} disabled={activeTab === 'public' && $isViewOnly}>✕ Delete</button>
-    </div>
-  </section>
-
-  <section class="row">
-    <button class="ghost" onclick={openPicker} disabled={(activeTab === 'public' && $isViewOnly) || $songsStore.length === 0}>
-      ＋ Add song
-    </button>
-    <button class="accent" onclick={loadToQueue} disabled={$isViewOnly || selectedList.songs.length === 0}>
-      ▶ Load to queue
-    </button>
-  </section>
-
-  {#if selectedList.songs.length === 0}
+  {#if sortedLists.length === 0}
     <section class="panel muted" style="margin-top:12px;">
-      No songs in this list.
+      No lists match "{normalize(searchQuery) || searchQuery}".
     </section>
   {:else}
-    <ul class="songs">
-      {#each selectedList.songs as song, i (i + ':' + song.path)}
-        <li
-          class="song-row"
-          class:drop={dragOver === i}
-          draggable={activeTab === 'private' || !$isViewOnly}
-          ondragstart={(e) => onDragStart(e, i)}
-          ondragover={(e) => onDragOver(e, i)}
-          ondrop={(e) => onDrop(e, i)}
-          ondragend={onDragEnd}
-        >
-          <span class="grip" aria-hidden="true">⋮⋮</span>
-          <!-- svelte-ignore a11y_click_events_have_key_events -->
-          <div
-            class="meta"
-            onclick={() => openSongPreview(song.path)}
-            style="cursor: pointer; flex: 1;"
-            role="button"
-            tabindex="0"
-          >
-            <div class="name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
-              <div class="name">{displayName(song.path, song.name)}</div>
-              {#if songKeyMap.get(song.path)}
-                <span class="key-badge">{songKeyMap.get(song.path)}</span>
-              {/if}
-            </div>
-            {#if song.folder}<div class="muted small">{song.folder}</div>{/if}
-          </div>
+    <ul class="list-cards">
+      {#each sortedLists as l (l.name)}
+        <li>
           <button
-            class="rm"
-            aria-label="Remove from list"
-            onclick={() => removeSong(i)}
-            disabled={activeTab === 'public' && $isViewOnly}
-          >✕</button>
+            class="list-card"
+            class:active={selectedName === l.name}
+            class:pending={l.sync_status === 'pending'}
+            onclick={() => selectList(l.name)}
+          >
+            <span class="lc-text">
+              <span class="lc-name">{l.name}</span>
+              <span class="muted small">{l.songs.length} song{l.songs.length === 1 ? '' : 's'}</span>
+            </span>
+            <span class="lc-side">
+              {#if l.sync_status === 'pending'}<span class="pending-badge">PENDING SYNC</span>{/if}
+              <span class="chev" aria-hidden="true">›</span>
+            </span>
+          </button>
         </li>
       {/each}
     </ul>
   {/if}
+{/if}
+
+{#if selectedList}
+  <ListDetailSheet
+    list={selectedList}
+    canEdit={activeTab === 'private' || !$isViewOnly}
+    canLoad={!$isViewOnly}
+    songKeyMap={songKeyMap}
+    resolveName={displayName}
+    onclose={closeList}
+    onrename={renameList}
+    ondelete={deleteList}
+    onaddsong={openPicker}
+    onloadqueue={loadToQueue}
+    onremovesong={removeSong}
+    onreorder={reorderSongs}
+    onpreviewsong={openSongPreview}
+  />
 {/if}
 
 {#if showPicker}
@@ -646,14 +733,12 @@
         <VirtualList items={pickerFiltered} itemHeight={104} class="picker-virtual-list">
           {#snippet children(sr)}
             <button class="picker-item" onclick={() => addSong(sr.item)}>
-              <div class="name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
-                <div class="name" style="font-weight: 600;">{sr.item.name}</div>
-                {#if sr.item.key}
-                  <span class="key-badge">{sr.item.key}</span>
-                {/if}
-              </div>
-              {#if sr.item.folder}<div class="muted small">{sr.item.folder}</div>{/if}
-              {#if sr.snippet}<div class="snippet">{@html renderMarkdown(sr.snippet)}</div>{/if}
+              <SongTitleRow name={sr.item.name} songKey={sr.item.key}>
+                {#snippet meta()}
+                  {#if sr.item.folder}<div class="muted small">{sr.item.folder}</div>{/if}
+                  {#if sr.snippet}<div class="snippet">{@html renderMarkdown(sr.snippet)}</div>{/if}
+                {/snippet}
+              </SongTitleRow>
             </button>
           {/snippet}
         </VirtualList>
@@ -774,30 +859,104 @@
   h1 { margin: 0; font-size: 22px; font-weight: 700; }
   .actions { display: flex; gap: 8px; }
  
-  .chips {
-    display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;
+  .list-tools {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
   }
-  .chip {
-    display: inline-flex; gap: 6px; align-items: center;
-    padding: 8px 14px;
+  .search-box {
+    position: relative;
+    flex: 1;
+    display: flex;
+  }
+  .search-box input {
+    width: 100%;
+    padding-right: 36px;
+  }
+  .clear-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: var(--border);
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1;
+  }
+  .sort-select {
+    max-width: 132px;
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 99px;
+    border-radius: 10px;
     color: var(--text-primary);
     font-size: 13px;
     font-weight: 500;
-    transition: border-color 150ms ease, color 150ms ease, background-color 150ms ease, transform 100ms ease;
+    padding: 0 8px;
   }
-  .chip:active {
-    transform: scale(0.95);
+
+  /* Vertical list of list-cards, one row per list. */
+  .list-cards {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 12px;
   }
-  .chip.active {
+  .list-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    text-align: left;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    color: var(--text-primary);
+    transition: border-color 150ms ease, background-color 150ms ease, transform 100ms ease;
+  }
+  .list-card:hover {
+    border-color: var(--border-light);
+    background: var(--panel);
+  }
+  .list-card:active {
+    transform: scale(0.98);
+  }
+  .list-card.active {
     border-color: var(--accent);
-    color: var(--accent);
     background: var(--elevated);
+    box-shadow: 0 0 0 1px var(--accent) inset;
   }
-  .chip.pending {
+  .list-card.pending {
     border-color: var(--warning);
+  }
+  .lc-text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .lc-name {
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lc-side {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .chev {
+    color: var(--text-secondary);
+    font-size: 18px;
+    line-height: 1;
   }
   .pending-badge {
     display: inline-flex;
@@ -812,91 +971,7 @@
     font-weight: 700;
     text-transform: uppercase;
   }
-  .count {
-    background: var(--border);
-    color: var(--text-secondary);
-    padding: 0 6px;
-    border-radius: 10px;
-    font-size: 11px;
-    transition: background-color 150ms ease, color 150ms ease;
-  }
-  .chip.active .count {
-    background: color-mix(in srgb, var(--accent) 15%, transparent);
-    color: var(--accent);
-  }
- 
-  .list-head {
-    display: flex; justify-content: space-between; align-items: center;
-    gap: 10px; margin-top: 8px;
-  }
-  .list-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    font-size: 16px;
-    font-weight: 700;
-  }
-  .list-actions { display: flex; gap: 6px; }
- 
-  .row { display: flex; gap: 8px; margin: 10px 0; }
-  .row > button { flex: 1; padding: 12px; }
-  button.accent {
-    background: var(--accent);
-    color: #fff;
-    font-weight: 700;
-    border: none;
-    transition: background 150ms ease, transform 100ms ease;
-  }
-  button.accent:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-  button.accent:active:not(:disabled) {
-    background: var(--accent-dim);
-    transform: scale(0.97);
-  }
-  button.ghost {
-    background: transparent;
-    color: var(--text-primary);
-    border: 1px solid var(--border);
-    transition: border-color 150ms ease, background-color 150ms ease, transform 100ms ease;
-  }
-  button.ghost:hover:not(:disabled) {
-    border-color: var(--accent);
-    background: var(--panel);
-  }
-  button.ghost:active:not(:disabled) {
-    transform: scale(0.97);
-  }
- 
-  .songs { list-style: none; padding: 0; margin: 0; }
-  .song-row {
-    display: grid;
-    grid-template-columns: 24px 1fr 44px;
-    gap: 8px;
-    align-items: center;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 8px 10px;
-    margin-bottom: 6px;
-    transition: border-color 150ms ease, background-color 150ms ease;
-  }
-  .song-row:hover {
-    border-color: var(--border-light);
-    background: var(--panel);
-  }
-  .song-row.drop { border-color: var(--accent); background: var(--elevated); }
-  .grip { color: var(--text-secondary); font-size: 14px; cursor: grab; }
-  .name { font-weight: 600; }
-  .rm {
-    width: 40px; padding: 0; font-size: 16px;
-    background: transparent; color: var(--text-secondary); border-color: var(--border);
-    transition: color 150ms ease, border-color 150ms ease, background-color 150ms ease, transform 100ms ease;
-  }
-  .rm:hover:not(:disabled) { color: var(--danger); border-color: var(--danger); }
-  .rm:active:not(:disabled) { transform: scale(0.95); background: rgba(239, 68, 68, 0.15); }
- 
+
   .small { font-size: 12px; }
  
   .modal-back {
