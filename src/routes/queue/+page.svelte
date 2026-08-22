@@ -8,6 +8,7 @@
   import { remote } from '$lib/ws';
   import { connStatus, isViewOnly, queueState, queueDragActive, liveState, songsStore, activeModals } from '$lib/stores';
   import SongPreviewModal from '$lib/SongPreviewModal.svelte';
+  import SongTitleRow from '$lib/SongTitleRow.svelte';
 
   const songByPath = $derived.by(() => new Map($songsStore.map((song) => [song.path, song])));
   const songKeyMap = $derived.by(() => new Map($songsStore.map((song) => [song.path, song.key])));
@@ -43,7 +44,8 @@
   onMount(async () => {
     const creds = await loadCredentialsResilient();
     if (!creds?.device_token) { goto(`${base}/`); return; }
-    await remote.connect();
+    // Non-blocking: renders immediately, connStatus drives the rest.
+    void remote.connect();
   });
 
   async function send(cmd: ClientCommand) {
@@ -70,9 +72,8 @@
       return;
     }
     if ($isViewOnly) return;
-    // Bible/merged items can't be previewed as a song — go live on confirm (as before).
-    const name = $queueState?.items[i]?.name || 'this song';
-    if (!await showConfirm(`Switch to "${name}"?`)) return;
+    // Bible/merged items can't be previewed as a song — switch live instantly
+    // (no confirm: the operator asked for it, and the desktop is authoritative).
     send({ type: 'live.goto', payload: { song_index: i, slide_index: 0 } });
   }
 
@@ -258,19 +259,20 @@
           onpointerdown={(e) => onGripDown(e, i)}
         >⋮⋮</span>
         <button class="label" onclick={() => tapJump(i)}>
-          <div class="name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
-            <div class="name">{item.name || songByPath.get(item.path)?.name || 'Untitled'}</div>
-            {#if !item.is_bible && !item.is_merged && songKeyMap.get(item.path)}
-              <span class="key-badge">{songKeyMap.get(item.path)}</span>
-            {/if}
-          </div>
-          {#if item.is_bible}
-            <div class="muted small bible-tag">📖 {item.bible_refs?.length ?? 0} verse{((item.bible_refs?.length ?? 0) !== 1) ? 's' : ''}</div>
-          {:else if item.is_merged}
-            <div class="muted small merged-tag">🔀 merged</div>
-          {:else if item.folder}
-            <div class="muted small">{item.folder}</div>
-          {/if}
+          <SongTitleRow
+            name={item.name || songByPath.get(item.path)?.name || 'Untitled'}
+            songKey={item.is_bible || item.is_merged ? null : songKeyMap.get(item.path)}
+          >
+            {#snippet meta()}
+              {#if item.is_bible}
+                <div class="muted small bible-tag">📖 {item.bible_refs?.length ?? 0} verse{((item.bible_refs?.length ?? 0) !== 1) ? 's' : ''}</div>
+              {:else if item.is_merged}
+                <div class="muted small merged-tag">🔀 merged</div>
+              {:else if item.folder}
+                <div class="muted small">{item.folder}</div>
+              {/if}
+            {/snippet}
+          </SongTitleRow>
         </button>
         <button class="rm" aria-label="Remove" onclick={() => remove(i)} disabled={$isViewOnly}>✕</button>
       </li>
@@ -401,7 +403,6 @@
     text-align: left; background: transparent; border: none;
     padding: 10px 4px; color: var(--text-primary); border-radius: 6px;
   }
-  .name { font-weight: 600; }
   .rm {
     width: 40px; padding: 0; font-size: 16px;
     background: transparent; color: var(--text-secondary); border-color: var(--border);

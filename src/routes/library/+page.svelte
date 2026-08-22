@@ -29,6 +29,7 @@
   } from '$lib/stores';
   import { remote } from '$lib/ws';
   import SongPreviewModal from '$lib/SongPreviewModal.svelte';
+  import SongTitleRow from '$lib/SongTitleRow.svelte';
   import VirtualList from '$lib/VirtualList.svelte';
 
   type LibraryMode = 'songs' | 'bible' | 'write_song';
@@ -63,7 +64,9 @@ let query = $state('');
       goto(`${base}/`);
       return;
     }
-    await remote.connect();
+    // Non-blocking: UI renders now, connStatus drives the rest (same pattern
+    // as the live tab).
+    void remote.connect();
     const hasAnyCache = ($songsStore?.length ?? 0) > 0 || (($bibleBooksStore?.length ?? 0) > 0 && ($bibleVersesStore?.length ?? 0) > 0);
     if ($connStatus === 'open' && !hasAnyCache) {
       hasRequestedLibrarySync = true;
@@ -589,21 +592,19 @@ let query = $state('');
         {#snippet children(result)}
           <div class="song">
             <button class="song-main" onclick={() => openPreview(result.item)}>
-              <div class="song-name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
-                <div class="song-name">{result.item.name}</div>
-                {#if result.item.key}
-                  <span class="key-badge">{result.item.key}</span>
-                {/if}
-              </div>
-              <div class="muted small song-meta-line">
-                {#if result.snippet}
-                  {@html renderMarkdown(result.snippet)}
-                {:else if result.item.slide_texts?.length}
-                  {result.item.slide_texts.length} slides
-                {:else}
-                  {result.item.folder || '-'}
-                {/if}
-              </div>
+              <SongTitleRow name={result.item.name} songKey={result.item.key} clamp>
+                {#snippet meta()}
+                  <div class="muted small song-meta-line">
+                    {#if result.snippet}
+                      {@html renderMarkdown(result.snippet)}
+                    {:else if result.item.slide_texts?.length}
+                      {result.item.slide_texts.length} slides
+                    {:else}
+                      {result.item.folder || '-'}
+                    {/if}
+                  </div>
+                {/snippet}
+              </SongTitleRow>
             </button>
             <button
               class="add"
@@ -620,15 +621,13 @@ let query = $state('');
       {#snippet children(song)}
           <div class="song">
             <button class="song-main" onclick={() => openPreview(song)}>
-              <div class="song-name-row" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
-                <div class="song-name">{song.name}</div>
-                {#if song.key}
-                  <span class="key-badge">{song.key}</span>
-                {/if}
-              </div>
-              {#if song.slide_texts?.length}
-                <div class="muted small song-meta-line">{song.slide_texts.length} slides</div>
-              {/if}
+              <SongTitleRow name={song.name} songKey={song.key} clamp>
+                {#snippet meta()}
+                  {#if song.slide_texts?.length}
+                    <div class="muted small song-meta-line">{song.slide_texts.length} slides</div>
+                  {/if}
+                {/snippet}
+              </SongTitleRow>
             </button>
             <button
               class="add"
@@ -1148,15 +1147,6 @@ let query = $state('');
   }
   .song-main:active {
     background: rgba(255, 255, 255, 0.04);
-  }
-  .song-name {
-    font-weight: 600;
-    line-height: 1.25;
-    overflow: hidden;
-    display: -webkit-box;
-    line-clamp: 2;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
   }
   .song-meta-line {
     display: block;
