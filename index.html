@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="/church-presenter-pwa/favicon-v2.png" type="image/png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f0f14" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Remote" />
+    <!-- Orientation stays "any" on purpose: rotation policy is runtime-only
+         (src/lib/orientation.ts) so it ships through the service worker and
+         never requires reinstalling the installed (Android WebAPK) shell. -->
+    <link rel="manifest" href="/church-presenter-pwa/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/church-presenter-pwa/icons/icon-192-v2.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>Remote</title>
+    <link href="/church-presenter-pwa/_app/immutable/entry/start.DcQeIkPe.js" rel="modulepreload">
+		<link href="/church-presenter-pwa/_app/immutable/chunks/BgolH_TE.js" rel="modulepreload">
+		<link href="/church-presenter-pwa/_app/immutable/chunks/heMOZS1t.js" rel="modulepreload">
+		<link href="/church-presenter-pwa/_app/immutable/entry/app.CiAX1gM0.js" rel="modulepreload">
+		<link href="/church-presenter-pwa/_app/immutable/chunks/ByOPmdz9.js" rel="modulepreload">
+		<link href="/church-presenter-pwa/_app/immutable/chunks/CWj6FrbW.js" rel="modulepreload">
+		<link href="/church-presenter-pwa/_app/immutable/chunks/CnoOchrC.js" rel="modulepreload">
+		<link href="/church-presenter-pwa/_app/immutable/nodes/0.SkPdRQxW.js" rel="modulepreload">
+		<link href="/church-presenter-pwa/_app/immutable/chunks/DO_hZW_Y.js" rel="modulepreload">
+		<link href="/church-presenter-pwa/_app/immutable/chunks/BvPkpNdg.js" rel="modulepreload">
+		<link href="/church-presenter-pwa/_app/immutable/chunks/t34OGbWm.js" rel="modulepreload">
+		<link href="/church-presenter-pwa/_app/immutable/chunks/BWWSRjLN.js" rel="modulepreload">
+		
+		<link href="/church-presenter-pwa/_app/immutable/assets/Icon.Dvow_-KA.css" rel="stylesheet">
+		<link href="/church-presenter-pwa/_app/immutable/assets/0.BF3e7HyO.css" rel="stylesheet">
+  </head>
+  <body data-sveltekit-preload-data="hover">
+    <div style="display: contents">
+			<script>
+				{
+					__sveltekit_1mc2rod = {
+						base: "/church-presenter-pwa",
+						assets: "/church-presenter-pwa"
+					};
+
+					const element = document.currentScript.parentElement;
+
+					Promise.all([
+						import("/church-presenter-pwa/_app/immutable/entry/start.DcQeIkPe.js"),
+						import("/church-presenter-pwa/_app/immutable/entry/app.CiAX1gM0.js")
+					]).then(([kit, app]) => {
+						kit.start(app, element);
+					});
+				}
+			</script>
+		</div>
+  </body>
+</html>

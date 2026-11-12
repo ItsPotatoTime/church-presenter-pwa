@@ -1,0 +1,1 @@
+const e=/[^\p{L}\p{N}\s]+/gu,n=/\s+/g,a=new RegExp("\\p{Mn}+","gu"),c=/\*\*(.+?)\*\*/g;function o(r){return r?r.normalize("NFD").toLowerCase().replace(a,"").replace(e," ").replace(n," ").trim():""}function p(r){return r?r.includes("**")?r.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(c,"<b>$1</b>"):r:""}export{o as n,p as r};
